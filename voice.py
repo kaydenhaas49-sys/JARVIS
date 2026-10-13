@@ -247,7 +247,9 @@ class WakeWordManager:
                     if not enabled:
                         break
                     if not armed:
-                        time.sleep(0.08)
+                        # Drain audio without scoring it while a response is pending,
+                        # avoiding a stale backlog when the next command is enabled.
+                        stream.read(_BLOCK_SAMPLES)
                         continue
 
                     audio, _ = stream.read(_BLOCK_SAMPLES)
