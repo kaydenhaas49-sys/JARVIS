@@ -125,6 +125,9 @@
     var pulse = .7 + (Math.sin(time * .0021) + 1) * .14;
     ctx.save();
     ctx.translate(x, y);
+    // Gentle holographic drift; the face should never look pasted in as a frozen decal.
+    ctx.rotate(Math.sin(time * .00042) * .027);
+    ctx.globalAlpha = .58;
     ctx.globalCompositeOperation = "source-over";
 
     function plate(points, fill, stroke, width) {
@@ -142,11 +145,11 @@
     }
 
     var alloy = ctx.createLinearGradient(-r * .5, -r * .6, r * .55, r * .55);
-    alloy.addColorStop(0, "rgba(190,224,242,.86)");
-    alloy.addColorStop(.22, "rgba(55,91,125,.94)");
-    alloy.addColorStop(.53, "rgba(9,18,34,.98)");
-    alloy.addColorStop(.82, "rgba(52,66,96,.97)");
-    alloy.addColorStop(1, "rgba(9,14,27,.91)");
+    alloy.addColorStop(0, "rgba(190,224,242,.6)");
+    alloy.addColorStop(.22, "rgba(55,91,125,.68)");
+    alloy.addColorStop(.53, "rgba(9,18,34,.66)");
+    alloy.addColorStop(.82, "rgba(52,66,96,.7)");
+    alloy.addColorStop(1, "rgba(9,14,27,.62)");
 
     // Angular shield shape instead of a literal character face.
     plate([[0,-.61],[-.32,-.5],[-.51,-.28],[-.43,.1],[-.27,.36],[0,.55],[.27,.36],[.43,.1],[.51,-.28],[.32,-.5]],
@@ -157,9 +160,9 @@
       "rgba(255,65,92,.24)", "rgba(" + colors.red + ",.95)", .9);
 
     var dark = ctx.createLinearGradient(0, -r * .38, 0, r * .42);
-    dark.addColorStop(0, "rgba(3,9,19,.98)");
-    dark.addColorStop(.7, "rgba(12,21,39,.98)");
-    dark.addColorStop(1, "rgba(4,8,16,.98)");
+    dark.addColorStop(0, "rgba(3,9,19,.72)");
+    dark.addColorStop(.7, "rgba(12,21,39,.7)");
+    dark.addColorStop(1, "rgba(4,8,16,.65)");
     plate([[0,-.37],[-.23,-.27],[-.27,.02],[-.16,.3],[0,.43],[.16,.3],[.27,.02],[.23,-.27]],
       dark, "rgba(" + colors.steel + ",.46)", .8);
 
@@ -226,6 +229,22 @@
       ctx.moveTo(.39*r, yy); ctx.lineTo(.31*r, yy + .015*r);
       ctx.stroke();
     }
+
+    // Moving scan pulse travels over the face surface.
+    var scanY = ((time * .00019) % .74 - .37) * r;
+    ctx.save();
+    ctx.globalAlpha = .56;
+    ctx.shadowColor = "rgba(" + colors.cyan + ",.92)";
+    ctx.shadowBlur = 9;
+    ctx.strokeStyle = "rgba(" + colors.cyan + ",.88)";
+    ctx.lineWidth = Math.max(.8, r * .009);
+    ctx.beginPath();
+    ctx.moveTo(-.24*r, scanY);
+    ctx.lineTo(.24*r, scanY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
     ctx.restore();
   }
 
@@ -472,7 +491,8 @@
   function render(time) {
     if (!ctx || !width || !height) return;
     ctx.clearRect(0, 0, width, height);
-    drawBackgroundGrid(time);
+    var animationTime = reducedMotion ? time * .42 : time;
+    drawBackgroundGrid(animationTime);
 
     // Anchor the orb to the main conversation display, not the whole window.
     var viewport = document.getElementById("conversationViewport");
@@ -489,21 +509,18 @@
     var chatLog = document.getElementById("chatLog");
     var hasConversation = !!(chatLog && chatLog.children.length);
     canvas.style.opacity = hasConversation ? (mobile ? ".18" : ".23") : (mobile ? ".78" : ".92");
-    drawSphere(x, y, r, time);
+    drawSphere(x, y, r, animationTime);
   }
 
   function tick(time) {
     raf = 0;
     if (document.hidden) return;
     render(time);
-    if (!reducedMotion) raf = window.requestAnimationFrame(tick);
+    // Reduced-motion mode still animates the core, just with a slower visual tempo.
+    raf = window.requestAnimationFrame(tick);
   }
 
   function start() {
-    if (reducedMotion) {
-      render(performance.now());
-      return;
-    }
     if (!raf && !document.hidden) raf = window.requestAnimationFrame(tick);
   }
 
