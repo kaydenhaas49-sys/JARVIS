@@ -843,7 +843,7 @@
         : "Wake word disabled; the microphone is released.");
     } catch (error) {
       await refreshWakeWordStatus(false);
-      showToast(error.message, "error");
+      showToast(wakeWordStatus?.error || error.message, "error");
     } finally {
       elements.wakeWord.disabled = false;
     }
