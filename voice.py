@@ -217,13 +217,13 @@ class WakeWordManager:
         return self.status()
 
     def _run(self) -> None:
-        import numpy as np
-        import openwakeword
-        import openwakeword.utils
-        import sounddevice as sd
-        from openwakeword.model import Model
-
         try:
+            import numpy as np
+            import openwakeword
+            import openwakeword.utils
+            import sounddevice as sd
+            from openwakeword.model import Model
+
             # The public hey_jarvis model is downloaded on first opt-in and then
             # cached locally by openWakeWord.
             openwakeword.utils.download_models(models=[_WAKE_MODEL_NAME])
