@@ -86,7 +86,6 @@ class ModelAndMemoryTests(unittest.TestCase):
         self.assertTrue(call["id"].startswith("ollama_"))
 
     def test_model_endpoint_requires_http_or_https_without_credentials(self) -> None:
-    def test_model_endpoint_requires_http_or_https_without_credentials(self) -> None:
         self.assertEqual(
             jarvis.normalize_model_base_url("http://127.0.0.1:8080/v1/"),
             "http://127.0.0.1:8080/v1",
