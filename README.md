@@ -11,6 +11,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Searchable browser-local chat history with reopen, delete, and JSON export; reopening restores saved user/assistant text context.
 - Consolidated sidebar: System Console groups system status, model configuration, and activity; Memory & archive groups AI memory, Quick Notes, and Chat History.
 - Combined Kitchen / Recipe Saver panel with groceries, pantry, meal plans, timers, searchable recipes, favorites, and JSON import/export.
+- Assistant data tools for recipes, Quick Notes, groceries, pantry, meal-plan entries, timers, memories, chat archives, activity, and dashboard status, connected to the same saved records shown in the UI.
 - Combined Memory / Quick Notes panel: AI memory stays in JARVIS's server-side data while quick notes stay in browser storage.
 - Recipe Saver with ingredients, instructions, category/search filters, favorites, servings and cooking time, and JSON import/export compatible with the older JARVIS Kitchen `recipes.json` format.
 - Live activity feed, kept in browser storage without copying full message text into the feed.
@@ -31,7 +32,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 
 The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama serve` API. JARVIS discovers models via `/api/tags` and chats via `/api/chat` (no `/v1` required). For llama.cpp or LM Studio, enter the documented OpenAI-compatible endpoint, usually ending in `/v1`.
 
-JARVIS creates `~/JARVIS-workspace` for files it can browse and edit. File tools are deliberately scoped to this workspace. Terminal actions and file writes require you to approve the exact action in the dashboard. User settings and persistent memory are saved under `~/.local/share/jarvis/`; kitchen lists, activity history, and chat archives stay in this browser's local storage. Chat archives retain the latest 25 conversations and up to 40 messages per conversation; export them before clearing browser data.
+JARVIS creates `~/JARVIS-workspace` for files it can browse and edit. Dashboard data lives in `~/.local/share/jarvis/dashboard-data.json`; on first startup, existing browser-local recipes, notes, kitchen lists, archives, and activity are migrated into this shared local store. File tools are deliberately scoped to this workspace. Terminal actions and file writes require you to approve the exact action in the dashboard. User settings and persistent memory are saved under `~/.local/share/jarvis/`; kitchen lists, activity history, and chat archives stay in this browser's local storage. Chat archives retain the latest 25 conversations and up to 40 messages per conversation; export them before clearing browser data.
 
 ## Configuration
 

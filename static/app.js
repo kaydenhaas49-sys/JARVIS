@@ -41,6 +41,13 @@
   });
   let latestModelList = null;
   let currentOrbState = "idle";
+  let dashboardDataReady = false;
+  let dashboardSyncPromise = Promise.resolve();
+  let dashboardWrites = Promise.resolve();
+  const dashboardStorageKeys = {
+    recipes: "jarvis-recipes-v1", notes: "jarvis-notes-v1", kitchen: "jarvis-kitchen-v1",
+    chat_history: chatHistoryKey, activity: "jarvis-activity-v1",
+  };
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -244,6 +251,7 @@
         logActivity("Approval requested", result.pending_action.title || "Review a proposed action", "approval");
         renderPendingAction(result.pending_action);
       }
+      await refreshDashboardDataFromServer();
     } catch (error) {
       stateLabel.textContent = "Could not complete: " + error.message;
       logActivity("Action failed", error.message, "error");
@@ -280,7 +288,9 @@
     resizeInput();
     setBusy(true);
     try {
+      await flushDashboardWrites();
       const result = await apiPost("/api/chat", { session_id: sessionId, message: text });
+      await refreshDashboardDataFromServer();
       if (result.session_id) {
         sessionId = result.session_id;
         sessionStorage.setItem(sessionKey, sessionId);
@@ -301,6 +311,74 @@
       showToast(error.message, "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+
+  function browserDashboardBuckets() {
+    const fallback = {
+      recipes: [], notes: [], chat_history: [], activity: [],
+      kitchen: { groceries: [], pantry: [], meals: {}, timers: [] },
+    };
+    const result = {};
+    Object.entries(dashboardStorageKeys).forEach(([bucket, key]) => {
+      try { result[bucket] = JSON.parse(localStorage.getItem(key) || "null") ?? fallback[bucket]; }
+      catch (_) { result[bucket] = fallback[bucket]; }
+    });
+    return result;
+  }
+
+  function applyDashboardData(data) {
+    if (!data || typeof data !== "object") return;
+    Object.entries(dashboardStorageKeys).forEach(([bucket, key]) => {
+      if (data[bucket] === undefined) return;
+      try { localStorage.setItem(key, JSON.stringify(data[bucket])); } catch (_) {}
+    });
+    chatHistory = readChatHistory();
+    activityEvents = readLocalJson("jarvis-activity-v1", []);
+    kitchenState = readLocalJson("jarvis-kitchen-v1", { groceries: [], pantry: [], meals: {}, timers: [] });
+    window.dispatchEvent(new CustomEvent("jarvis:data-updated", { detail: data }));
+    if (currentUtilityView === "history") renderHistoryPanel();
+    if (currentUtilityView === "system" && activeSystemTab === "activity") renderActivityPanel();
+  }
+
+  async function bootstrapDashboardData() {
+    try {
+      const result = await apiPost("/api/app-data/bootstrap", { buckets: browserDashboardBuckets() });
+      if (result.ok && result.data) {
+        applyDashboardData(result.data);
+        dashboardDataReady = true;
+      }
+    } catch (error) {
+      console.warn("JARVIS dashboard data sync is unavailable:", error.message);
+    }
+  }
+
+  function persistDashboardBucket(bucket, value) {
+    if (!dashboardStorageKeys[bucket]) return dashboardWrites;
+    let snapshot;
+    try { snapshot = JSON.parse(JSON.stringify(value)); } catch (_) { return dashboardWrites; }
+    dashboardWrites = dashboardWrites.catch(() => {}).then(async () => {
+      await dashboardSyncPromise;
+      if (!dashboardDataReady) return;
+      try { await apiPost("/api/app-data/sync", { bucket, value: snapshot }); }
+      catch (error) { console.warn("Could not sync JARVIS " + bucket + " data:", error.message); }
+    });
+    return dashboardWrites;
+  }
+
+  async function flushDashboardWrites() {
+    await dashboardWrites;
+  }
+
+  async function refreshDashboardDataFromServer() {
+    try {
+      await flushDashboardWrites();
+      const response = await fetch("/api/app-data", { cache: "no-store" });
+      const result = await response.json();
+      if (response.ok && result.ok && result.data) applyDashboardData(result.data);
+    } catch (error) {
+      console.warn("Could not refresh JARVIS dashboard data:", error.message);
     }
   }
 
@@ -334,11 +412,13 @@
   function saveChatHistoryStorage() {
     try {
       localStorage.setItem(chatHistoryKey, JSON.stringify(chatHistory));
+      persistDashboardBucket("chat_history", chatHistory);
       return true;
     } catch (_) {
       chatHistory = chatHistory.slice(0, Math.max(1, Math.ceil(chatHistory.length / 2)));
       try {
         localStorage.setItem(chatHistoryKey, JSON.stringify(chatHistory));
+        persistDashboardBucket("chat_history", chatHistory);
         showToast("Older chat archives were trimmed because browser storage was nearly full.", "error");
         return true;
       } catch (_) {
@@ -656,9 +736,17 @@
     } catch (_) { return fallback; }
   }
 
+  window.addEventListener("jarvis:data-updated", (event) => {
+    if (!event.detail?.kitchen) return;
+    kitchenState = event.detail.kitchen;
+    if (currentUtilityView === "kitchen") renderKitchenPanel();
+  });
+
   function saveKitchenState() {
-    try { localStorage.setItem("jarvis-kitchen-v1", JSON.stringify(kitchenState)); }
-    catch (_) { showToast("Browser storage is full; kitchen changes may not persist.", "error"); }
+    try {
+      localStorage.setItem("jarvis-kitchen-v1", JSON.stringify(kitchenState));
+      persistDashboardBucket("kitchen", kitchenState);
+    } catch (_) { showToast("Browser storage is full; kitchen changes may not persist.", "error"); }
   }
 
   function setOrbState(state) {
@@ -673,7 +761,10 @@
       time: new Date().toISOString(),
     });
     activityEvents = activityEvents.slice(0, 50);
-    try { localStorage.setItem("jarvis-activity-v1", JSON.stringify(activityEvents)); } catch (_) {}
+    try {
+      localStorage.setItem("jarvis-activity-v1", JSON.stringify(activityEvents));
+      persistDashboardBucket("activity", activityEvents);
+    } catch (_) {}
     if (currentUtilityView === "activity" || (currentUtilityView === "system" && activeSystemTab === "activity")) renderActivityPanel();
   }
 
@@ -1165,6 +1256,7 @@
     function persist() {
       try {
         localStorage.setItem("jarvis-notes-v1", JSON.stringify(notes));
+        persistDashboardBucket("notes", notes);
         return true;
       } catch (_) {
         showToast("Browser storage is full or unavailable.", "error");
@@ -1362,6 +1454,11 @@
         showToast("Notes exported as JSON.", "success");
       }
     });
+    window.addEventListener("jarvis:data-updated", (event) => {
+      if (!Array.isArray(event.detail?.notes)) return;
+      notes = event.detail.notes.filter((note) => note && typeof note.id === "string").slice(0, 100);
+      if (currentUtilityView === "quick-notes") renderPanel();
+    });
     window.addEventListener("storage", (event) => {
       if (event.key !== "jarvis-notes-v1") return;
       try {
@@ -1419,7 +1516,7 @@
 
 
     function save() {
-      try { localStorage.setItem(STORE, JSON.stringify(recipes)); return true; }
+      try { localStorage.setItem(STORE, JSON.stringify(recipes)); persistDashboardBucket("recipes", recipes); return true; }
       catch (_) { showToast("Browser storage is full or unavailable.", "error"); return false; }
     }
     function renderList() {
@@ -1602,6 +1699,11 @@
       } else recipes=before;
       renderPanel();
     });
+    window.addEventListener("jarvis:data-updated", (event) => {
+      if (!Array.isArray(event.detail?.recipes)) return;
+      recipes = event.detail.recipes.map((row) => normalize(row, true)).filter(Boolean).slice(0, MAX);
+      if (currentUtilityView === "recipes") renderPanel();
+    });
     window.addEventListener("storage", (event) => {
       if (event.key !== STORE) return;
       try {
@@ -1617,5 +1719,6 @@
 
   loadConfig();
   logActivity("JARVIS ready", "Local assistant interface initialized", "system");
+  dashboardSyncPromise = bootstrapDashboardData();
   elements.input.focus({ preventScroll: true });
 })();

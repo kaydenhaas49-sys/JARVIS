@@ -175,6 +175,67 @@ class ChatSessionRestoreTests(unittest.TestCase):
             jarvis.restore_chat_session({"session_id": "chat-test", "messages": [{"role": "user", "content": "Hi"}] * 41})
 
 
+class DashboardDataTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.path = Path(self.temporary.name) / "dashboard-data.json"
+        self.path.touch()
+        with mock.patch.object(jarvis, "APP_DATA_PATH", self.path):
+            initial = {key: jarvis._normalize_dashboard_bucket(key, default)
+                       for key, default in jarvis.APP_DATA_DEFAULTS.items()}
+            initial["initialized"] = {}
+            jarvis._write_dashboard_store(initial)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_bootstrap_migrates_once_and_later_app_writes_win(self) -> None:
+        browser = {
+            "recipes": [{"name": "Toast", "ingredients": ["Bread"], "instructions": ["Toast it"]}],
+            "notes": [{"title": "Reminder", "content": "Buy bread"}],
+            "kitchen": {"groceries": [{"text": "Milk"}], "pantry": [], "meals": {}, "timers": []},
+            "chat_history": [], "activity": [],
+        }
+        with mock.patch.object(jarvis, "APP_DATA_PATH", self.path):
+            first = jarvis.bootstrap_dashboard_data({"buckets": browser})
+            jarvis.sync_dashboard_bucket({"bucket": "recipes", "value": []})
+            second = jarvis.bootstrap_dashboard_data({"buckets": browser})
+        self.assertEqual(first["data"]["recipes"][0]["name"], "Toast")
+        self.assertEqual(second["data"]["recipes"], [])
+        self.assertEqual(second["data"]["notes"][0]["title"], "Reminder")
+
+    def test_assistant_recipe_tool_saves_into_the_same_dashboard_store(self) -> None:
+        with mock.patch.object(jarvis, "APP_DATA_PATH", self.path):
+            result = jarvis.manage_dashboard_data({
+                "action": "add_recipe",
+                "recipe": {"name": "Pancakes", "category": "Breakfast",
+                           "ingredients": ["1 cup flour", "1 egg"],
+                           "instructions": ["Mix ingredients", "Cook in pan"]},
+            })
+            data = jarvis._dashboard_data_payload()["data"]
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["recipe"]["name"], "Pancakes")
+        self.assertEqual(data["recipes"][0]["name"], "Pancakes")
+
+    def test_assistant_can_manage_notes_and_kitchen_lists(self) -> None:
+        with mock.patch.object(jarvis, "APP_DATA_PATH", self.path):
+            note = jarvis.manage_dashboard_data({"action": "add_note", "note": {"title": "Reminder", "content": "Buy milk"}})
+            grocery = jarvis.manage_dashboard_data({"action": "add_grocery", "text": "Milk"})
+            duplicate = jarvis.manage_dashboard_data({"action": "add_grocery", "text": "milk"})
+            found = jarvis.manage_dashboard_data({"action": "search_notes", "query": "milk"})
+            kitchen = jarvis.manage_dashboard_data({"action": "kitchen_overview"})
+        self.assertTrue(note["ok"])
+        self.assertTrue(grocery["ok"])
+        self.assertTrue(duplicate["duplicate"])
+        self.assertEqual(found["count"], 1)
+        self.assertEqual(kitchen["groceries"][0]["text"], "Milk")
+
+    def test_recipe_requires_ingredients_and_instructions(self) -> None:
+        with mock.patch.object(jarvis, "APP_DATA_PATH", self.path):
+            with self.assertRaisesRegex(ValueError, "at least one ingredient"):
+                jarvis.manage_dashboard_data({"action": "add_recipe", "recipe": {"name": "Empty cake"}})
+
+
 class ApprovalAndCommandTests(unittest.TestCase):
     def test_changes_require_approval(self) -> None:
         self.assertTrue(jarvis.is_approval_required("write_file"))

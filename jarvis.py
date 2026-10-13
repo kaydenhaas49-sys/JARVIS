@@ -187,6 +187,394 @@ def delete_memory_fact(item_id: str) -> dict[str, Any]:
     return {"ok": True, "deleted_id": key}
 
 
+APP_DATA_PATH = USER_DATA_DIR / "dashboard-data.json"
+APP_DATA_LOCK = threading.RLock()
+APP_DATA_BUCKETS = ("recipes", "notes", "kitchen", "chat_history", "activity")
+APP_DATA_DEFAULTS: dict[str, Any] = {
+    "recipes": [], "notes": [],
+    "kitchen": {"groceries": [], "pantry": [], "meals": {}, "timers": []},
+    "chat_history": [], "activity": [],
+}
+
+
+def _dashboard_text(value: Any, maximum: int, default: str = "") -> str:
+    return value.strip()[:maximum] if isinstance(value, str) else default
+
+
+def _dashboard_id(value: Any) -> str:
+    return value[:100] if isinstance(value, str) and value and len(value) <= 100 else secrets.token_urlsafe(12)
+
+
+def _dashboard_time(value: Any) -> int:
+    if isinstance(value, (int, float)) and 0 < value < 10**16:
+        return int(value)
+    return int(time.time() * 1000)
+
+
+def _dashboard_lines(value: Any, maximum: int = 250, line_length: int = 500) -> list[str]:
+    rows = value if isinstance(value, list) else (value.splitlines() if isinstance(value, str) else [])
+    return [item.strip()[:line_length] for item in rows
+            if isinstance(item, str) and item.strip()][:maximum]
+
+
+def _normalize_dashboard_bucket(bucket: str, value: Any) -> Any:
+    if bucket not in APP_DATA_BUCKETS:
+        raise ValueError("Unknown dashboard data section.")
+    if bucket == "kitchen":
+        value = value if isinstance(value, dict) else {}
+        def clean_items(name: str) -> list[dict[str, Any]]:
+            source = value.get(name, [])
+            if not isinstance(source, list):
+                return []
+            result = []
+            for row in source[:250]:
+                if not isinstance(row, dict):
+                    continue
+                label = _dashboard_text(row.get("text", row.get("label", "")), 180)
+                if label:
+                    result.append({"id": _dashboard_id(row.get("id")), "text": label, "done": bool(row.get("done", False))})
+            return result
+        meals = value.get("meals", {})
+        if not isinstance(meals, dict):
+            meals = {}
+        timers = []
+        raw_timers = value.get("timers", [])
+        if isinstance(raw_timers, list):
+            for row in raw_timers[:100]:
+                if isinstance(row, dict):
+                    label = _dashboard_text(row.get("label", ""), 70)
+                    if label:
+                        timers.append({"id": _dashboard_id(row.get("id")), "label": label,
+                                       "endsAt": _dashboard_time(row.get("endsAt")),
+                                       "finished": bool(row.get("finished", False))})
+        return {"groceries": clean_items("groceries"), "pantry": clean_items("pantry"),
+                "meals": {_dashboard_text(k, 40): _dashboard_text(v, 300) for k, v in meals.items()
+                          if isinstance(k, str) and isinstance(v, str)}, "timers": timers}
+
+    rows = value if isinstance(value, list) else []
+    if bucket == "recipes":
+        result = []
+        for row in rows[:500]:
+            if not isinstance(row, dict):
+                continue
+            name = _dashboard_text(row.get("name", row.get("title", "")), 160)
+            if not name:
+                continue
+            try:
+                prep = max(0, min(1440, int(row.get("prepMinutes", row.get("prep_minutes", 0)) or 0)))
+                cook = max(0, min(1440, int(row.get("cookMinutes", row.get("cook_minutes", 0)) or 0)))
+            except (TypeError, ValueError, OverflowError):
+                prep, cook = 0, 0
+            result.append({
+                "id": _dashboard_id(row.get("id")), "name": name,
+                "category": _dashboard_text(row.get("category", "Other"), 80) or "Other",
+                "description": _dashboard_text(row.get("description", ""), 800),
+                "ingredients": _dashboard_lines(row.get("ingredients", [])),
+                "instructions": _dashboard_lines(row.get("instructions", row.get("method", []))),
+                "servings": _dashboard_text(row.get("servings", ""), 40),
+                "prepMinutes": prep, "cookMinutes": cook, "notes": _dashboard_text(row.get("notes", ""), 2000),
+                "source": _dashboard_text(row.get("source", ""), 500), "favorite": bool(row.get("favorite", False)),
+                "createdAt": _dashboard_time(row.get("createdAt")), "updatedAt": _dashboard_time(row.get("updatedAt")),
+            })
+        return result
+    if bucket == "notes":
+        result = []
+        for row in rows[:100]:
+            if not isinstance(row, dict):
+                continue
+            content = _dashboard_text(row.get("content", ""), 5000)
+            if content:
+                result.append({"id": _dashboard_id(row.get("id")),
+                               "title": _dashboard_text(row.get("title", ""), 120) or content.splitlines()[0][:120],
+                               "content": content, "pinned": bool(row.get("pinned", False)),
+                               "createdAt": _dashboard_time(row.get("createdAt")),
+                               "updatedAt": _dashboard_time(row.get("updatedAt"))})
+        return result
+    if bucket == "chat_history":
+        result = []
+        for row in rows[:25]:
+            if not isinstance(row, dict) or not isinstance(row.get("messages"), list):
+                continue
+            messages = []
+            for message in row["messages"][-40:]:
+                if isinstance(message, dict) and message.get("role") in {"user", "assistant"}:
+                    content = _dashboard_text(message.get("content", ""), 4000)
+                    if content:
+                        messages.append({"role": message["role"], "content": content, "at": _dashboard_time(message.get("at"))})
+            if messages:
+                result.append({"id": _dashboard_id(row.get("id")),
+                               "title": _dashboard_text(row.get("title", "Conversation"), 100) or "Conversation",
+                               "updatedAt": _dashboard_time(row.get("updatedAt")), "messages": messages})
+        return sorted(result, key=lambda row: row["updatedAt"], reverse=True)[:25]
+    result = []
+    for row in rows[:50]:
+        if isinstance(row, dict):
+            title = _dashboard_text(row.get("title", ""), 100)
+            if title:
+                result.append({"id": _dashboard_id(row.get("id")), "title": title,
+                               "detail": _dashboard_text(row.get("detail", ""), 300),
+                               "kind": _dashboard_text(row.get("kind", "system"), 30) or "system",
+                               "time": _dashboard_text(row.get("time", ""), 80)})
+    return result
+
+
+def _read_dashboard_store() -> dict[str, Any]:
+    raw = _read_json_object(APP_DATA_PATH)
+    store: dict[str, Any] = {key: _normalize_dashboard_bucket(key, raw.get(key, default))
+                             for key, default in APP_DATA_DEFAULTS.items()}
+    initialized = raw.get("initialized", {})
+    store["initialized"] = ({key: bool(initialized.get(key, False)) for key in APP_DATA_BUCKETS}
+                            if isinstance(initialized, dict) else {})
+    return store
+
+
+def _write_dashboard_store(store: dict[str, Any]) -> None:
+    _write_json_atomically(APP_DATA_PATH, store)
+
+
+def _dashboard_data_payload(store: dict[str, Any] | None = None) -> dict[str, Any]:
+    current = store or _read_dashboard_store()
+    return {"ok": True, "data": {key: current[key] for key in APP_DATA_BUCKETS}}
+
+
+def bootstrap_dashboard_data(payload: dict[str, Any]) -> dict[str, Any]:
+    supplied = payload.get("buckets", {})
+    if not isinstance(supplied, dict):
+        raise ValueError("Dashboard data bootstrap must contain a bucket object.")
+    with APP_DATA_LOCK:
+        store = _read_dashboard_store()
+        initialized = store["initialized"]
+        for bucket in APP_DATA_BUCKETS:
+            if bucket in supplied and not initialized.get(bucket, False):
+                store[bucket] = _normalize_dashboard_bucket(bucket, supplied[bucket])
+                initialized[bucket] = True
+        store["initialized"] = initialized
+        _write_dashboard_store(store)
+        return _dashboard_data_payload(store)
+
+
+def sync_dashboard_bucket(payload: dict[str, Any]) -> dict[str, Any]:
+    bucket = payload.get("bucket")
+    if not isinstance(bucket, str) or bucket not in APP_DATA_BUCKETS or "value" not in payload:
+        raise ValueError("Choose a valid dashboard data section and value.")
+    with APP_DATA_LOCK:
+        store = _read_dashboard_store()
+        store[bucket] = _normalize_dashboard_bucket(bucket, payload["value"])
+        store["initialized"][bucket] = True
+        _write_dashboard_store(store)
+        return {"ok": True, "bucket": bucket, "value": store[bucket]}
+
+
+def _set_dashboard_bucket(bucket: str, value: Any) -> Any:
+    normalized = _normalize_dashboard_bucket(bucket, value)
+    with APP_DATA_LOCK:
+        store = _read_dashboard_store()
+        store[bucket] = normalized
+        store["initialized"][bucket] = True
+        _write_dashboard_store(store)
+    return normalized
+
+
+def _log_dashboard_tool_action(title: str, detail: str) -> None:
+    with APP_DATA_LOCK:
+        store = _read_dashboard_store()
+        events = store["activity"]
+        events.insert(0, {"id": secrets.token_urlsafe(12), "title": title[:100], "detail": detail[:300],
+                          "kind": "assistant", "time": datetime.now().astimezone().isoformat(timespec="seconds")})
+        store["activity"] = _normalize_dashboard_bucket("activity", events[:50])
+        store["initialized"]["activity"] = True
+        _write_dashboard_store(store)
+
+
+def manage_dashboard_data(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Tools for the real persisted contents of JARVIS's browser-facing modules."""
+    action = _dashboard_text(arguments.get("action", ""), 40)
+    store = _read_dashboard_store()
+    recipes, notes = store["recipes"], store["notes"]
+    kitchen, history = store["kitchen"], store["chat_history"]
+    query = _dashboard_text(arguments.get("query", ""), 200).casefold()
+
+    if action == "set_model":
+        requested_model = _dashboard_text(arguments.get("model", ""), 250) or MODEL
+        requested_endpoint = _dashboard_text(arguments.get("base_url", ""), 500) or BASE_URL
+        result = save_model_config({"model": requested_model, "base_url": requested_endpoint})
+        _log_dashboard_tool_action("Model configuration changed", result["model"])
+        return {"ok": True, "model": result["model"], "base_url": result["base_url"]}
+
+    if action == "overview":
+        return {"ok": True, "model": MODEL, "model_endpoint": BASE_URL, "workspace": str(WORKSPACE),
+                "saved_memories": len(memory_items()), "recipes": len(recipes), "notes": len(notes),
+                "groceries": len(kitchen["groceries"]), "pantry_items": len(kitchen["pantry"]),
+                "active_timers": sum(1 for row in kitchen["timers"] if not row["finished"]),
+                "saved_conversations": len(history), "recent_activity": store["activity"][:5]}
+    if action == "list_recipes":
+        return {"ok": True, "count": len(recipes), "recipes": recipes[:20], "truncated": len(recipes) > 20}
+    if action == "search_recipes":
+        if not query:
+            raise ValueError("Give a recipe name, ingredient, or category to search for.")
+        matches = [row for row in recipes if query in " ".join(
+            [row["name"], row["category"], row["description"], *row["ingredients"], *row["instructions"], row["notes"]]
+        ).casefold()]
+        return {"ok": True, "query": arguments.get("query"), "count": len(matches), "recipes": matches[:20], "truncated": len(matches) > 20}
+    if action in {"add_recipe", "update_recipe"}:
+        recipe = arguments.get("recipe")
+        if not isinstance(recipe, dict):
+            raise ValueError("Provide a recipe object with a name, ingredients, and instructions.")
+        now = int(time.time() * 1000)
+        if action == "update_recipe":
+            if not query:
+                raise ValueError("Specify the exact recipe name or ID to update.")
+            matched = [row for row in recipes if row["id"].casefold() == query or row["name"].casefold() == query]
+            if len(matched) != 1:
+                raise ValueError("Could not find one exact recipe to update. Search recipes first.")
+            old = matched[0]
+            raw = _normalize_dashboard_bucket("recipes", [{**old, **recipe, "id": old["id"],
+                                                           "createdAt": old["createdAt"], "updatedAt": now}])
+            if not raw or not raw[0]["ingredients"] or not raw[0]["instructions"]:
+                raise ValueError("A saved recipe needs at least one ingredient and one instruction.")
+            updated = [raw[0] if row["id"] == old["id"] else row for row in recipes]
+            _set_dashboard_bucket("recipes", updated)
+            _log_dashboard_tool_action("Recipe updated", raw[0]["name"])
+            return {"ok": True, "action": action, "recipe": raw[0]}
+        normalized_rows = _normalize_dashboard_bucket("recipes", [{**recipe, "createdAt": now, "updatedAt": now}])
+        normalized = normalized_rows[0] if normalized_rows else None
+        if not normalized or not normalized["ingredients"] or not normalized["instructions"]:
+            raise ValueError("A saved recipe needs a name, at least one ingredient, and at least one instruction.")
+        duplicate = next((row for row in recipes if row["name"].casefold() == normalized["name"].casefold()
+                          and [x.casefold() for x in row["ingredients"]] == [x.casefold() for x in normalized["ingredients"]]), None)
+        if duplicate:
+            return {"ok": True, "duplicate": True, "recipe": duplicate, "message": "That recipe is already saved."}
+        if len(recipes) >= 500:
+            raise ValueError("Recipe library is full (500). Export a backup or delete a recipe first.")
+        saved = [normalized, *recipes]
+        _set_dashboard_bucket("recipes", saved)
+        _log_dashboard_tool_action("Recipe saved", normalized["name"])
+        return {"ok": True, "action": action, "recipe": normalized, "count": len(saved)}
+    if action == "delete_recipe":
+        if not query:
+            raise ValueError("Specify the exact recipe name or ID to delete.")
+        matches = [row for row in recipes if row["id"].casefold() == query or row["name"].casefold() == query]
+        if len(matches) != 1:
+            raise ValueError("Could not identify one exact recipe. Search the library first.")
+        _set_dashboard_bucket("recipes", [row for row in recipes if row["id"] != matches[0]["id"]])
+        _log_dashboard_tool_action("Recipe deleted", matches[0]["name"])
+        return {"ok": True, "deleted": matches[0]["name"]}
+
+    if action == "list_notes":
+        return {"ok": True, "count": len(notes), "notes": notes[:50], "truncated": len(notes) > 50}
+    if action == "search_notes":
+        if not query:
+            raise ValueError("Give a word or phrase to search saved notes.")
+        matches = [note for note in notes if query in (note["title"] + "\n" + note["content"]).casefold()]
+        return {"ok": True, "count": len(matches), "notes": matches[:30], "truncated": len(matches) > 30}
+    if action == "add_note":
+        note = arguments.get("note")
+        if not isinstance(note, dict) or not _dashboard_text(note.get("content", ""), 5000):
+            raise ValueError("Provide a note object with non-empty content.")
+        if len(notes) >= 100:
+            raise ValueError("Quick Notes is full (100 notes). Delete an old note first.")
+        now = int(time.time() * 1000)
+        normalized = _normalize_dashboard_bucket("notes", [{**note, "createdAt": now, "updatedAt": now}])[0]
+        _set_dashboard_bucket("notes", [normalized, *notes])
+        _log_dashboard_tool_action("Quick note saved", normalized["title"])
+        return {"ok": True, "note": normalized, "count": len(notes) + 1}
+    if action == "delete_note":
+        if not query:
+            raise ValueError("Specify the exact note title or ID to delete.")
+        matches = [note for note in notes if note["id"].casefold() == query or note["title"].casefold() == query]
+        if len(matches) != 1:
+            raise ValueError("Could not identify one exact note. Search saved notes first.")
+        _set_dashboard_bucket("notes", [note for note in notes if note["id"] != matches[0]["id"]])
+        _log_dashboard_tool_action("Quick note deleted", matches[0]["title"])
+        return {"ok": True, "deleted": matches[0]["title"]}
+
+    if action == "list_memories":
+        items = memory_items()
+        return {"ok": True, "count": len(items), "memories": items[-30:]}
+    if action == "delete_memory":
+        if not query:
+            raise ValueError("Specify the exact memory text or ID to delete.")
+        matches = [item for item in memory_items() if item["id"].casefold() == query or item["fact"].casefold() == query]
+        if len(matches) != 1:
+            raise ValueError("Could not identify one exact saved memory.")
+        return delete_memory_fact(matches[0]["id"])
+
+    if action == "kitchen_overview":
+        return {"ok": True, "groceries": kitchen["groceries"], "pantry": kitchen["pantry"],
+                "meals": kitchen["meals"], "timers": kitchen["timers"]}
+    if action in {"add_grocery", "add_pantry"}:
+        label = _dashboard_text(arguments.get("text", ""), 180)
+        if not label:
+            raise ValueError("Provide the grocery or pantry item text.")
+        bucket = "groceries" if action == "add_grocery" else "pantry"
+        existing = next((row for row in kitchen[bucket] if row["text"].casefold() == label.casefold()), None)
+        if existing:
+            return {"ok": True, "duplicate": True, "item": existing, "message": "That item is already in the list."}
+        if len(kitchen[bucket]) >= 250:
+            raise ValueError("That list is full (250 items).")
+        item = {"id": secrets.token_urlsafe(12), "text": label, "done": False}
+        updated = {**kitchen, bucket: [*kitchen[bucket], item]}
+        _set_dashboard_bucket("kitchen", updated)
+        _log_dashboard_tool_action("Kitchen list updated", action.replace("_", " ") + ": " + label)
+        return {"ok": True, "item": item, "count": len(updated[bucket])}
+    if action in {"remove_grocery", "remove_pantry"}:
+        if not query:
+            raise ValueError("Specify the exact item name or ID to remove.")
+        bucket = "groceries" if action == "remove_grocery" else "pantry"
+        matches = [row for row in kitchen[bucket] if row["id"].casefold() == query or row["text"].casefold() == query]
+        if len(matches) != 1:
+            raise ValueError("Could not identify one exact list item.")
+        _set_dashboard_bucket("kitchen", {**kitchen, bucket: [row for row in kitchen[bucket] if row["id"] != matches[0]["id"]]})
+        _log_dashboard_tool_action("Kitchen list item removed", matches[0]["text"])
+        return {"ok": True, "removed": matches[0]["text"]}
+    if action == "set_meal":
+        day = _dashboard_text(arguments.get("day", ""), 40)
+        meal = _dashboard_text(arguments.get("text", ""), 300)
+        if day.casefold() not in {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}:
+            raise ValueError("Choose a weekday from Monday to Sunday.")
+        meals = dict(kitchen["meals"])
+        if meal:
+            meals[day.title()] = meal
+        else:
+            meals.pop(day.title(), None)
+        _set_dashboard_bucket("kitchen", {**kitchen, "meals": meals})
+        _log_dashboard_tool_action("Meal plan updated", day.title() + (": " + meal if meal else " cleared"))
+        return {"ok": True, "day": day.title(), "meal": meal, "meals": meals}
+    if action == "start_timer":
+        label = _dashboard_text(arguments.get("text", "Timer"), 70) or "Timer"
+        try:
+            minutes = int(arguments.get("minutes", 0))
+        except (TypeError, ValueError, OverflowError):
+            minutes = 0
+        if minutes < 1 or minutes > 720:
+            raise ValueError("Timer duration must be between 1 and 720 minutes.")
+        timer = {"id": secrets.token_urlsafe(12), "label": label,
+                 "endsAt": int(time.time() * 1000) + minutes * 60_000, "finished": False}
+        _set_dashboard_bucket("kitchen", {**kitchen, "timers": [*kitchen["timers"], timer]})
+        _log_dashboard_tool_action("Kitchen timer started", label + " · " + str(minutes) + " minutes")
+        return {"ok": True, "timer": timer}
+
+    if action == "list_chat_history":
+        return {"ok": True, "count": len(history), "conversations": [
+            {"id": row["id"], "title": row["title"], "updatedAt": row["updatedAt"],
+             "message_count": len(row["messages"]), "last_message": row["messages"][-1]["content"][:220]}
+            for row in history[:10]]}
+    if action == "search_chat_history":
+        if not query:
+            raise ValueError("Give a keyword to search saved conversations.")
+        matches = []
+        for conversation in history:
+            relevant = [message for message in conversation["messages"] if query in message["content"].casefold()]
+            if query in conversation["title"].casefold() or relevant:
+                matches.append({"id": conversation["id"], "title": conversation["title"],
+                                "message_count": len(conversation["messages"]),
+                                "matching_messages": [{"role": m["role"], "content": m["content"][:900], "at": m["at"]}
+                                                      for m in relevant[:5]]})
+        return {"ok": True, "count": len(matches), "conversations": matches[:10], "truncated": len(matches) > 10}
+    if action == "list_activity":
+        return {"ok": True, "events": store["activity"][:30], "count": len(store["activity"])}
+    raise ValueError("Unknown dashboard action. Check the dashboard data tool's supported actions.")
+
 def current_system_prompt() -> str:
     items = memory_items()
     if not items:
@@ -318,6 +706,11 @@ only directory exposed to file tools. The server is local-first and should stay 
 For coding tasks, inspect relevant files first, explain plans briefly, edit only inside the
 workspace, run focused tests, and review the result. When the user asks you to remember a preference
 or project fact, use remember_fact; the dashboard asks for approval before saving.
+Use manage_dashboard_data for actual recipes, Quick Notes, groceries, pantry items, meal-plan entries, timers,
+saved memories, chat archives, activity, model configuration and dashboard overview. Use set_model only when the user
+explicitly asks to change the active model. These are real persisted records, not pretend actions. For a requested
+recipe, include a name, ingredients and clear steps. Only say a change succeeded when the tool confirms it. Delete or
+overwrite data only on an explicit request in the current turn.
 Current workspace: """ + str(WORKSPACE)
 
 TOOL_SPECS: list[dict[str, Any]] = [
@@ -359,6 +752,34 @@ TOOL_SPECS: list[dict[str, Any]] = [
         "parameters": {"type": "object", "properties": {
             "fact": {"type": "string", "description": "One concise fact or preference to remember."},
         }, "required": ["fact"], "additionalProperties": False},
+    }},
+    {"type": "function", "function": {
+        "name": "manage_dashboard_data",
+        "description": "Read and manage actual data in JARVIS's dashboard modules. Use action=add_recipe when asked to add/save a recipe (include name, ingredients array and instruction steps array); only claim it was saved when the tool says ok=true. list_recipes/search_recipes find existing dishes. update_recipe/delete_recipe work on a uniquely identified recipe when explicitly requested. list_notes/search_notes/add_note/delete_note manage Quick Notes. list_memories/delete_memory access AI memory. kitchen_overview, add_grocery/remove_grocery, add_pantry/remove_pantry, set_meal and start_timer manage Kitchen. list_chat_history/search_chat_history inspect archived chats. list_activity reads the feed; overview returns dashboard counts, model configuration and workspace. These actions affect the actual shared records shown in the UI. Deleting or overwriting data requires an explicit user request in the current conversation.",
+        "parameters": {"type": "object", "properties": {
+            "action": {"type": "string", "enum": [
+                "overview", "set_model", "list_recipes", "search_recipes", "add_recipe", "update_recipe", "delete_recipe",
+                "list_notes", "search_notes", "add_note", "delete_note", "list_memories", "delete_memory",
+                "kitchen_overview", "add_grocery", "remove_grocery", "add_pantry", "remove_pantry",
+                "set_meal", "start_timer", "list_chat_history", "search_chat_history", "list_activity"
+            ]},
+            "query": {"type": "string", "description": "Search terms or exact recipe, note, memory, or item name/ID."},
+            "recipe": {"type": "object", "properties": {
+                "name": {"type": "string"}, "category": {"type": "string"}, "description": {"type": "string"},
+                "ingredients": {"type": "array", "items": {"type": "string"}},
+                "instructions": {"type": "array", "items": {"type": "string"}},
+                "servings": {"type": "string"}, "prepMinutes": {"type": "integer"},
+                "cookMinutes": {"type": "integer"}, "notes": {"type": "string"}, "source": {"type": "string"}
+            }, "additionalProperties": True},
+            "note": {"type": "object", "properties": {
+                "title": {"type": "string"}, "content": {"type": "string"}, "pinned": {"type": "boolean"}
+            }, "additionalProperties": True},
+            "text": {"type": "string", "description": "Item name, meal description or timer label."},
+            "model": {"type": "string", "description": "Model ID to activate for set_model."},
+            "base_url": {"type": "string", "description": "Optional HTTP(S) model API endpoint for set_model."},
+            "day": {"type": "string", "description": "Weekday for set_meal."},
+            "minutes": {"type": "integer", "description": "Timer duration between 1 and 720 minutes."}
+        }, "required": ["action"], "additionalProperties": False}
     }},
     {"type": "function", "function": {
         "name": "write_file",
@@ -598,6 +1019,8 @@ def execute_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return search_files(str(arguments.get("query", "")), str(arguments.get("file_glob", "*")))
     if tool_name == "remember_fact":
         return remember_fact(str(arguments.get("fact", "")))
+    if tool_name == "manage_dashboard_data":
+        return manage_dashboard_data(arguments)
     if tool_name == "write_file":
         return write_file(str(arguments.get("path", "")), str(arguments.get("content", "")))
     if tool_name == "run_command":
@@ -919,6 +1342,8 @@ class JarvisHandler(BaseHTTPRequestHandler):
                 return self._send_json(400, {"error": str(exc)})
         if route == "/api/memory":
             return self._send_json(200, {"items": memory_items(), "limit": 100})
+        if route == "/api/app-data":
+            return self._send_json(200, _dashboard_data_payload())
         if route == "/api/ping":
             models = available_models(BASE_URL)
             if models.get("available"):
@@ -954,6 +1379,10 @@ class JarvisHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if route == "/api/session/restore":
                 return self._send_json(200, restore_chat_session(payload))
+            if route == "/api/app-data/bootstrap":
+                return self._send_json(200, bootstrap_dashboard_data(payload))
+            if route == "/api/app-data/sync":
+                return self._send_json(200, sync_dashboard_bucket(payload))
             if route == "/api/chat":
                 return self._send_json(200, handle_chat(payload))
             if route == "/api/approve":
