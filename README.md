@@ -5,7 +5,9 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 ## Features
 
 - Chat with a local model through llama.cpp, LM Studio, or another OpenAI-compatible endpoint.
-- Voice input and spoken responses in supported browsers, with a reactive holographic core.
+- Spoken replies through browser text-to-speech, plus short local speech-to-text recordings for browsers without Web Speech recognition.
+- Opt-in local "Hey JARVIS" wake word with one-shot command capture, automatic re-arming after the answer, and a visible on/off indicator.
+- Voice input and wake-word processing can run on-device with the optional voice dependencies; microphone audio is not stored.
 - Model manager to discover compatible server models and save the selected model/endpoint locally.
 - Persistent memory injected into future chats; memory requests made in chat require approval.
 - Searchable local-file chat history with reopen, delete, and JSON export; reopening restores saved user/assistant text context.
@@ -20,7 +22,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
 - File writes and terminal commands pause for your explicit approval in the UI.
 - Local-only HTTP server by default; model API credentials remain on the server.
-- Python standard library backend with no required pip dependencies.
+- Python standard library backend with no required pip dependencies; local voice features are an optional extra.
 
 ## Quick start
 
@@ -33,6 +35,19 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama serve` API. JARVIS discovers models via `/api/tags` and chats via `/api/chat` (no `/v1` required). For llama.cpp or LM Studio, enter the documented OpenAI-compatible endpoint, usually ending in `/v1`.
 
 JARVIS creates ~/JARVIS-workspace for files it can browse and edit. Persistent application data is saved as ordinary files under ~/.local/share/jarvis/ (or the directory set by JARVIS_DATA_DIR): recipes.json, notes.json, kitchen.json, chat-history.json, activity.json, memory.json, settings.json, and system-memory.md. dashboard-index.json tracks one-time migration state. Existing browser-local data from older versions is imported once and then removed from browser storage. Older dashboard-data.json files are read as a migration source and left in place as a backup; ongoing writes go to the separate JSON files. Chat archives retain the latest 25 conversations and up to 40 messages per conversation. File tools are deliberately scoped to the workspace, while JARVIS's internal dashboard tools maintain the app's own data files. Terminal actions and workspace file writes require you to approve the exact action in the dashboard.
+
+## Optional local voice setup
+
+Voice input and the "Hey JARVIS" wake word use local speech recognition and local audio detection. Install the optional packages in a project virtual environment (on Linux, also ensure the system PortAudio library is installed):
+
+```bash
+cd ~/JARVIS
+python3 -m venv .venv
+.venv/bin/pip install -e ".[voice]"
+.venv/bin/python jarvis.py
+```
+
+Use the mic button to record a short command, then tap it again to finish; recordings stop automatically after 12 seconds. The first transcription downloads the selected Whisper model. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
 
 ## Configuration
 

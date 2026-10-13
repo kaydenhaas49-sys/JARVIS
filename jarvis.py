@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""JARVIS local-first assistant server. Python standard library only."""
+"""JARVIS local-first assistant server; voice extras are optional and run locally."""
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import mimetypes
@@ -21,6 +22,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
+
+from voice import WakeWordManager, missing_voice_packages, transcribe_audio_bytes
 
 
 def _load_env_file(path: Path) -> None:
@@ -779,11 +782,47 @@ def save_model_config(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "model": MODEL, "base_url": BASE_URL}
 
 
-MAX_BODY_BYTES = 1_000_000
+MAX_BODY_BYTES = 1_200_000
+MAX_VOICE_BYTES = 750_000
 MAX_FILE_BYTES = 200_000
 MAX_WRITE_BYTES = 500_000
 MAX_TOOL_ROUNDS = 6
 SESSION_TTL_SECONDS = 6 * 60 * 60
+
+VOICE_WAKEWORD = WakeWordManager()
+
+
+def voice_status() -> dict[str, Any]:
+    status = VOICE_WAKEWORD.status()
+    status["speech_to_text_available"] = not missing_voice_packages()
+    status["stt_model"] = os.environ.get("JARVIS_STT_MODEL", "base.en")
+    return status
+
+
+def configure_wakeword(enabled: bool) -> dict[str, Any]:
+    settings = _read_json_object(SETTINGS_PATH)
+    if enabled:
+        state = VOICE_WAKEWORD.enable()
+        if not state["enabled"]:
+            return {"ok": False, "error": state.get("error") or "Wake word could not start.", "status": state}
+        settings["wake_word_enabled"] = True
+    else:
+        state = VOICE_WAKEWORD.disable()
+        settings["wake_word_enabled"] = False
+    _write_json_atomically(SETTINGS_PATH, settings)
+    return {"ok": True, "status": state}
+
+
+def _voice_audio_suffix(mime_type: Any) -> str:
+    mime = str(mime_type or "").lower()
+    if "ogg" in mime:
+        return ".ogg"
+    if "wav" in mime:
+        return ".wav"
+    if "mp4" in mime or "m4a" in mime:
+        return ".m4a"
+    return ".webm"
+
 
 SYSTEM_PROMPT = """You are JARVIS, a practical, calm, technically capable personal assistant.
 Be friendly without being theatrical. Give useful answers, and be honest about uncertainty.
@@ -1439,6 +1478,11 @@ class JarvisHandler(BaseHTTPRequestHandler):
             return self._send_json(200, {"items": memory_items(), "limit": 100})
         if route == "/api/app-data":
             return self._send_json(200, _dashboard_data_payload())
+        if route == "/api/voice/status":
+            return self._send_json(200, voice_status())
+        if route == "/api/voice/events":
+            after = parse_qs(urlsplit(self.path).query).get("after", ["0"])[0]
+            return self._send_json(200, VOICE_WAKEWORD.events_since(after))
         if route == "/api/ping":
             models = available_models(BASE_URL)
             if models.get("available"):
@@ -1478,6 +1522,28 @@ class JarvisHandler(BaseHTTPRequestHandler):
                 return self._send_json(200, bootstrap_dashboard_data(payload))
             if route == "/api/app-data/sync":
                 return self._send_json(200, sync_dashboard_bucket(payload))
+            if route == "/api/voice/wakeword":
+                enabled = payload.get("enabled")
+                if not isinstance(enabled, bool):
+                    raise ValueError("Wake-word enabled must be true or false.")
+                result = configure_wakeword(enabled)
+                return self._send_json(200 if result["ok"] else 503, result)
+            if route == "/api/voice/rearm":
+                return self._send_json(200, {"ok": True, "status": VOICE_WAKEWORD.rearm()})
+            if route == "/api/voice/transcribe":
+                encoded = payload.get("audio_base64")
+                if not isinstance(encoded, str) or not encoded:
+                    raise ValueError("No recorded audio was uploaded.")
+                if len(encoded) > ((MAX_VOICE_BYTES + 2) // 3) * 4 + 8:
+                    raise ValueError("That voice recording is too large. Keep clips under 12 seconds.")
+                try:
+                    audio_bytes = base64.b64decode(encoded, validate=True)
+                except (ValueError, base64.binascii.Error) as exc:
+                    raise ValueError("The recorded audio was not valid base64.") from exc
+                if not audio_bytes or len(audio_bytes) > MAX_VOICE_BYTES:
+                    raise ValueError("That voice recording is empty or too large. Keep clips under 12 seconds.")
+                text = transcribe_audio_bytes(audio_bytes, _voice_audio_suffix(payload.get("mime_type")))
+                return self._send_json(200, {"ok": True, "text": text})
             if route == "/api/chat":
                 return self._send_json(200, handle_chat(payload))
             if route == "/api/approve":
@@ -1510,6 +1576,10 @@ def main() -> None:
     if not STATIC_DIR.is_dir():
         raise SystemExit("The static/ folder is missing. Please run JARVIS from its project directory.")
     server = ThreadingHTTPServer((HOST, PORT), JarvisHandler)
+    if _read_json_object(SETTINGS_PATH).get("wake_word_enabled"):
+        status = VOICE_WAKEWORD.enable()
+        if not status.get("enabled"):
+            logging.warning("Saved wake-word setting could not start: %s", status.get("error"))
     print()
     print("  J.A.R.V.I.S.  |  Local Assistant")
     print("  --------------------------------")
@@ -1524,6 +1594,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nJARVIS shutting down.")
     finally:
+        VOICE_WAKEWORD.disable()
         server.server_close()
 
 

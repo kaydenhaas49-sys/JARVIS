@@ -5,6 +5,14 @@ description = "A local-first personal AI assistant with approval-gated workspace
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+voice = [
+  "faster-whisper>=1.1.0",
+  "openwakeword>=0.6.0",
+  "sounddevice>=0.4.6",
+  "numpy>=1.24",
+]
+
 [tool.ruff]
 line-length = 110
 target-version = "py310"
