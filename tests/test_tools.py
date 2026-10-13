@@ -142,6 +142,39 @@ class ModelAndMemoryTests(unittest.TestCase):
         self.assertTrue(jarvis.is_approval_required("remember_fact"))
 
 
+class ChatSessionRestoreTests(unittest.TestCase):
+    def test_restores_plain_chat_messages_and_clears_pending_approvals(self) -> None:
+        sessions: dict[str, dict] = {}
+        pending = {"approval-1": {"session_id": "chat-test", "tool_name": "write_file"}}
+        with mock.patch.object(jarvis, "SESSIONS", sessions), \
+             mock.patch.object(jarvis, "PENDING_ACTIONS", pending):
+            result = jarvis.restore_chat_session({
+                "session_id": "chat-test",
+                "messages": [
+                    {"role": "user", "content": "Help me write a script."},
+                    {"role": "assistant", "content": "Sure, let's plan it."},
+                ],
+            })
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["message_count"], 2)
+        self.assertEqual([row["role"] for row in sessions["chat-test"]["messages"]], ["system", "user", "assistant"])
+        self.assertNotIn("approval-1", pending)
+
+    def test_rejects_invalid_session_ids_and_non_chat_roles(self) -> None:
+        with self.assertRaises(ValueError):
+            jarvis.restore_chat_session({"session_id": "../bad", "messages": [{"role": "user", "content": "Hi"}]})
+        with self.assertRaisesRegex(ValueError, "roles"):
+            jarvis.restore_chat_session({"session_id": "chat-test", "messages": [{"role": "tool", "content": "No"}]})
+
+    def test_rejects_oversized_or_empty_restore_payloads(self) -> None:
+        with self.assertRaisesRegex(ValueError, "1–40"):
+            jarvis.restore_chat_session({"session_id": "chat-test", "messages": []})
+        with self.assertRaisesRegex(ValueError, "1–4,000"):
+            jarvis.restore_chat_session({"session_id": "chat-test", "messages": [{"role": "user", "content": "x" * 4001}]})
+        with self.assertRaisesRegex(ValueError, "1–40"):
+            jarvis.restore_chat_session({"session_id": "chat-test", "messages": [{"role": "user", "content": "Hi"}] * 41})
+
+
 class ApprovalAndCommandTests(unittest.TestCase):
     def test_changes_require_approval(self) -> None:
         self.assertTrue(jarvis.is_approval_required("write_file"))

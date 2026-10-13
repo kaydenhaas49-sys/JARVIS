@@ -701,6 +701,45 @@ def _get_session(session_id: str) -> dict[str, Any]:
         return session
 
 
+def restore_chat_session(payload: dict[str, Any]) -> dict[str, Any]:
+    """Restore a browser-archived transcript as plain chat context for this session."""
+    session_id = payload.get("session_id")
+    allowed_id_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+    if (not isinstance(session_id, str) or not session_id or len(session_id) > 100
+            or any(char not in allowed_id_chars for char in session_id)):
+        raise ValueError("A valid chat session ID is required.")
+
+    raw_messages = payload.get("messages")
+    if not isinstance(raw_messages, list) or not raw_messages or len(raw_messages) > 40:
+        raise ValueError("A restored conversation must contain 1–40 saved messages.")
+
+    restored: list[dict[str, str]] = []
+    total_characters = 0
+    for message in raw_messages:
+        if not isinstance(message, dict):
+            raise ValueError("Each saved chat message must be an object.")
+        role = message.get("role")
+        content = message.get("content")
+        if role not in {"user", "assistant"}:
+            raise ValueError("Saved chat messages may only use user or assistant roles.")
+        if not isinstance(content, str) or not content.strip() or len(content) > 4_000:
+            raise ValueError("Each saved chat message must contain 1–4,000 characters.")
+        total_characters += len(content)
+        if total_characters > 160_000:
+            raise ValueError("The restored conversation is too large.")
+        restored.append({"role": role, "content": content})
+
+    with STATE_LOCK:
+        for pending_id, pending in list(PENDING_ACTIONS.items()):
+            if pending.get("session_id") == session_id:
+                PENDING_ACTIONS.pop(pending_id, None)
+        SESSIONS[session_id] = {
+            "messages": [{"role": "system", "content": current_system_prompt()}, *restored],
+            "updated_at": time.time(),
+        }
+    return {"ok": True, "session_id": session_id, "message_count": len(restored)}
+
+
 def _compact_tool_result(result: dict[str, Any]) -> str:
     return json.dumps(result, ensure_ascii=False)[:24_000]
 
@@ -913,6 +952,8 @@ class JarvisHandler(BaseHTTPRequestHandler):
         route = urlsplit(self.path).path
         try:
             payload = self._read_json()
+            if route == "/api/session/restore":
+                return self._send_json(200, restore_chat_session(payload))
             if route == "/api/chat":
                 return self._send_json(200, handle_chat(payload))
             if route == "/api/approve":

@@ -8,6 +8,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Voice input and spoken responses in supported browsers, with a reactive holographic core.
 - Model manager to discover compatible server models and save the selected model/endpoint locally.
 - Persistent memory injected into future chats; memory requests made in chat require approval.
+- Searchable browser-local chat history with reopen, delete, and JSON export; reopening restores saved user/assistant text context.
 - Combined Kitchen / Recipe Saver panel with groceries, pantry, meal plans, timers, searchable recipes, favorites, and JSON import/export.
 - Combined Memory / Quick Notes panel: AI memory stays in JARVIS's server-side data while quick notes stay in browser storage.
 - Recipe Saver with ingredients, instructions, category/search filters, favorites, servings and cooking time, and JSON import/export compatible with the older JARVIS Kitchen `recipes.json` format.
@@ -29,7 +30,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 
 The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama serve` API. JARVIS discovers models via `/api/tags` and chats via `/api/chat` (no `/v1` required). For llama.cpp or LM Studio, enter the documented OpenAI-compatible endpoint, usually ending in `/v1`.
 
-JARVIS creates `~/JARVIS-workspace` for files it can browse and edit. File tools are deliberately scoped to this workspace. Terminal actions and file writes require you to approve the exact action in the dashboard. User settings and persistent memory are saved under `~/.local/share/jarvis/`; kitchen lists and activity history stay in this browser's local storage.
+JARVIS creates `~/JARVIS-workspace` for files it can browse and edit. File tools are deliberately scoped to this workspace. Terminal actions and file writes require you to approve the exact action in the dashboard. User settings and persistent memory are saved under `~/.local/share/jarvis/`; kitchen lists, activity history, and chat archives stay in this browser's local storage. Chat archives retain the latest 25 conversations and up to 40 messages per conversation; export them before clearing browser data.
 
 ## Configuration
 

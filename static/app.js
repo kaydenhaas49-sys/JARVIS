@@ -19,6 +19,14 @@
     : String(Date.now()) + Math.random().toString(16).slice(2);
   let sessionId = sessionStorage.getItem(sessionKey) || makeId();
   sessionStorage.setItem(sessionKey, sessionId);
+  const chatHistoryKey = "jarvis-chat-history-v1";
+  const MAX_CHAT_HISTORY = 25;
+  const MAX_ARCHIVED_MESSAGES = 40;
+  const MAX_ARCHIVED_MESSAGE_CHARS = 4000;
+  let chatHistory = readChatHistory();
+  let activeTranscript = [];
+  let historySearchText = "";
+  let sessionRestorePromise = null;
   let busy = false;
   let listening = false;
   let voiceReplies = false;
@@ -97,7 +105,7 @@
     }
   }
 
-  function renderMessage(role, content) {
+  function renderMessage(role, content, options = {}) {
     elements.welcome.classList.add("hidden");
     const row = document.createElement("article");
     row.className = "message-row message-" + role;
@@ -113,7 +121,8 @@
     name.textContent = role === "user" ? "YOU" : "JARVIS";
     const time = document.createElement("time");
     time.className = "message-time";
-    time.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const messageTime = Number.isFinite(Number(options.at)) ? Number(options.at) : Date.now();
+    time.textContent = new Date(messageTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     head.append(name, time);
     const contentNode = document.createElement("div");
     contentNode.className = "message-content";
@@ -121,6 +130,10 @@
     body.append(head, contentNode);
     row.append(avatar, body);
     elements.chatLog.appendChild(row);
+    if (options.archive !== false) {
+      activeTranscript.push({ role: role === "user" ? "user" : "assistant", content: String(content ?? ""), at: Date.now() });
+      persistCurrentConversation();
+    }
     scrollToBottom();
     return row;
   }
@@ -253,6 +266,10 @@
 
   async function sendMessage(textOverride) {
     if (busy) return;
+    if (sessionRestorePromise) {
+      showToast("Still restoring the saved conversation. Try sending again in a moment.");
+      return;
+    }
     const text = String(textOverride ?? elements.input.value).trim();
     if (!text) return;
     renderMessage("user", text);
@@ -291,10 +308,206 @@
     elements.input.style.height = Math.min(elements.input.scrollHeight, 170) + "px";
   }
 
-  function newChat() {
-    if (busy) return;
+  function readChatHistory() {
+    const stored = readLocalJson("jarvis-chat-history-v1", []);
+    if (!Array.isArray(stored)) return [];
+    return stored.filter((conversation) =>
+      conversation && typeof conversation.id === "string" && conversation.id.length > 0 &&
+      conversation.id.length <= 100 && Array.isArray(conversation.messages)
+    ).map((conversation) => ({
+      id: conversation.id,
+      title: String(conversation.title || "Conversation").slice(0, 100),
+      updatedAt: Number.isFinite(Number(conversation.updatedAt)) ? Number(conversation.updatedAt) : Date.now(),
+      messages: conversation.messages.filter((message) =>
+        message && (message.role === "user" || message.role === "assistant") &&
+        typeof message.content === "string"
+      ).slice(-MAX_ARCHIVED_MESSAGES).map((message) => ({
+        role: message.role,
+        content: message.content.slice(0, MAX_ARCHIVED_MESSAGE_CHARS),
+        at: Number.isFinite(Number(message.at)) ? Number(message.at) : Date.now(),
+      })),
+    })).filter((conversation) => conversation.messages.length > 0)
+      .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CHAT_HISTORY);
+  }
+
+  function saveChatHistoryStorage() {
+    try {
+      localStorage.setItem(chatHistoryKey, JSON.stringify(chatHistory));
+      return true;
+    } catch (_) {
+      chatHistory = chatHistory.slice(0, Math.max(1, Math.ceil(chatHistory.length / 2)));
+      try {
+        localStorage.setItem(chatHistoryKey, JSON.stringify(chatHistory));
+        showToast("Older chat archives were trimmed because browser storage was nearly full.", "error");
+        return true;
+      } catch (_) {
+        showToast("Browser storage is full; this conversation may not be saved.", "error");
+        return false;
+      }
+    }
+  }
+
+  function persistCurrentConversation() {
+    if (!activeTranscript.length) return;
+    const firstUserMessage = activeTranscript.find((message) => message.role === "user");
+    const title = String(firstUserMessage?.content || "New conversation").replace(/\s+/g, " ").trim().slice(0, 84) || "New conversation";
+    const messages = activeTranscript.slice(-MAX_ARCHIVED_MESSAGES).map((message) => ({
+      role: message.role,
+      content: String(message.content || "").slice(0, MAX_ARCHIVED_MESSAGE_CHARS),
+      at: Number.isFinite(Number(message.at)) ? Number(message.at) : Date.now(),
+    }));
+    chatHistory = [{
+      id: sessionId, title, updatedAt: Date.now(), messages,
+    }, ...chatHistory.filter((conversation) => conversation.id !== sessionId)]
+      .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CHAT_HISTORY);
+    saveChatHistoryStorage();
+  }
+
+  function renderHistoryRows() {
+    const query = historySearchText.trim().toLowerCase();
+    const matching = chatHistory.filter((conversation) => {
+      if (!query) return true;
+      return conversation.title.toLowerCase().includes(query) ||
+        conversation.messages.some((message) => message.content.toLowerCase().includes(query));
+    });
+    const host = document.querySelector("[data-history-results]");
+    if (!host) return;
+    if (!matching.length) {
+      host.innerHTML = '<div class="empty-state">' + (chatHistory.length
+        ? "No saved conversations match that search."
+        : "No saved conversations yet. Start chatting and JARVIS will save them here.") + "</div>";
+    } else {
+      host.innerHTML = matching.map((conversation) => {
+        const last = conversation.messages[conversation.messages.length - 1];
+        const preview = String(last?.content || "").replace(/\s+/g, " ").slice(0, 130);
+        const updated = new Date(conversation.updatedAt).toLocaleString();
+        return '<article class="history-entry">' +
+          '<div class="history-entry-copy"><strong class="history-entry-title">' + escapeHtml(conversation.title) + '</strong>' +
+          '<div class="history-entry-meta">' + escapeHtml(updated) + " · " + conversation.messages.length + " saved messages</div>" +
+          '<p class="history-entry-preview">' + escapeHtml(preview) + '</p></div>' +
+          '<div class="history-entry-actions"><button type="button" data-utility-action="history-open" data-id="' + escapeHtml(conversation.id) + '">Open chat</button>' +
+          '<button type="button" class="history-delete" data-utility-action="history-delete" data-id="' + escapeHtml(conversation.id) + '">Delete</button></div></article>';
+      }).join("");
+    }
+    const count = document.getElementById("historyCount");
+    if (count) count.textContent = matching.length + " of " + chatHistory.length + " conversations";
+  }
+
+  function renderHistoryPanel() {
+    elements.utilityContent.innerHTML =
+      '<div class="history-toolbar"><div><p class="history-description">Your last 25 conversations, saved only in this browser. Reopen one to continue with its saved text context.</p>' +
+      '<div class="utility-muted" id="historyCount">0 conversations</div></div>' +
+      '<div class="history-toolbar-actions"><button type="button" class="history-toolbar-btn" data-utility-action="history-export">Export JSON</button>' +
+      '<button type="button" class="history-toolbar-btn history-delete" data-utility-action="history-clear">Clear history</button></div></div>' +
+      '<label class="history-search-label" for="historySearch">SEARCH SAVED CHATS</label>' +
+      '<input class="history-search" id="historySearch" type="search" data-history-search placeholder="Search titles and messages…" value="' + escapeHtml(historySearchText) + '">' +
+      '<div class="history-list" data-history-results></div>';
+    renderHistoryRows();
+  }
+
+  function downloadChatHistory() {
+    if (!chatHistory.length) {
+      showToast("There are no saved conversations to export.");
+      return;
+    }
+    const content = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), conversations: chatHistory }, null, 2) + "\n";
+    const blob = new Blob([content], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "jarvis-chat-history-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    showToast("Chat history exported as JSON.", "success");
+  }
+
+  function deleteChatHistoryEntry(id) {
+    const conversation = chatHistory.find((item) => item.id === id);
+    if (!conversation || !window.confirm('Delete "' + conversation.title + '" from saved chat history?')) return;
+    chatHistory = chatHistory.filter((item) => item.id !== id);
+    if (id === sessionId) {
+      activeTranscript = [];
+      sessionId = makeId();
+      sessionStorage.setItem(sessionKey, sessionId);
+      elements.chatLog.replaceChildren();
+      elements.welcome.classList.remove("hidden");
+    }
+    saveChatHistoryStorage();
+    renderHistoryPanel();
+    showToast("Saved conversation deleted.");
+  }
+
+  function clearChatHistory() {
+    if (!window.confirm("Delete all saved conversations and start a fresh chat? This cannot be undone.")) return;
+    chatHistory = [];
+    activeTranscript = [];
     sessionId = makeId();
     sessionStorage.setItem(sessionKey, sessionId);
+    elements.chatLog.replaceChildren();
+    elements.welcome.classList.remove("hidden");
+    elements.input.value = "";
+    resizeInput();
+    saveChatHistoryStorage();
+    renderHistoryPanel();
+    showToast("Chat history cleared.", "success");
+  }
+
+  function normalizedHistoryMessages(conversation) {
+    return conversation.messages.slice(-MAX_ARCHIVED_MESSAGES).map((message) => {
+      let content = String(message.content || "").slice(0, MAX_ARCHIVED_MESSAGE_CHARS);
+      if (message.role === "assistant" && content.trim() === "I have a proposed action ready for your review. Nothing has changed yet.") {
+        content = "This chat had an action awaiting approval. It was not restored for safety. Ask JARVIS to propose it again before continuing.";
+      }
+      return {
+        role: message.role,
+        content,
+        at: Number.isFinite(Number(message.at)) ? Number(message.at) : Date.now(),
+      };
+    }).filter((message) => message.role === "user" || message.role === "assistant");
+  }
+
+  function restoreArchivedConversation(conversation, announce = true) {
+    if (!conversation) return;
+    persistCurrentConversation();
+    sessionId = conversation.id;
+    sessionStorage.setItem(sessionKey, sessionId);
+    activeTranscript = normalizedHistoryMessages(conversation);
+    elements.chatLog.replaceChildren();
+    if (activeTranscript.length) {
+      elements.welcome.classList.add("hidden");
+      activeTranscript.forEach((message) => renderMessage(message.role, message.content, { archive: false, at: message.at }));
+    } else {
+      elements.welcome.classList.remove("hidden");
+    }
+    closeUtility();
+    closeSidebar();
+    const restoreId = sessionId;
+    const task = apiPost("/api/session/restore", {
+      session_id: restoreId,
+      messages: activeTranscript.map((message) => ({ role: message.role, content: message.content })),
+    }).then(() => {
+      if (announce) showToast("Conversation restored. You can continue it.", "success");
+    }).catch((error) => {
+      if (announce) showToast("Transcript opened, but model context could not be restored: " + error.message, "error");
+    });
+    sessionRestorePromise = task;
+    task.then(() => {
+      if (sessionRestorePromise === task) sessionRestorePromise = null;
+    });
+  }
+
+  function restoreCurrentConversation() {
+    const conversation = chatHistory.find((item) => item.id === sessionId);
+    if (conversation) restoreArchivedConversation(conversation, false);
+  }
+
+  function newChat() {
+    if (busy || sessionRestorePromise) return;
+    sessionId = makeId();
+    sessionStorage.setItem(sessionKey, sessionId);
+    activeTranscript = [];
     elements.chatLog.replaceChildren();
     elements.welcome.classList.remove("hidden");
     elements.input.value = "";
@@ -468,7 +681,7 @@
     elements.utilityPanel.classList.remove("hidden");
     closeSidebar();
     renderUtility();
-    logActivity("Panel opened", ({kitchen:"Kitchen",models:"Model manager",memory:"Persistent memory",activity:"Activity feed",coding:"Coding agent"})[view] || view, "panel");
+    logActivity("Panel opened", ({kitchen:"Kitchen",models:"Model manager",memory:"Persistent memory",activity:"Activity feed",coding:"Coding agent",history:"Chat history"})[view] || view, "panel");
     if (view === "models") refreshModelList(false);
     if (view === "memory") refreshMemoryPanel();
     if (view === "coding") refreshCodingPanel();
@@ -488,6 +701,7 @@
       memory: ["SYSTEM / MEMORY", "Persistent memory"],
       activity: ["SYSTEM / TELEMETRY", "Live activity feed"],
       coding: ["WORKSPACE / DEVELOPER TOOLS", "Coding agent"],
+      history: ["SYSTEM / ARCHIVE", "Chat history"],
     };
     const selected = config[currentUtilityView] || ["JARVIS / SYSTEM", "Utility panel"];
     elements.utilityEyebrow.textContent = selected[0];
@@ -497,6 +711,7 @@
     else if (currentUtilityView === "memory") {
       elements.utilityContent.innerHTML = '<div class="utility-loading">Loading saved memories…</div>';
     } else if (currentUtilityView === "activity") renderActivityPanel();
+    else if (currentUtilityView === "history") renderHistoryPanel();
     else if (currentUtilityView === "coding") {
       elements.utilityContent.innerHTML = '<div class="utility-loading">Checking workspace…</div>';
     }
@@ -776,6 +991,14 @@
     if (!button) return;
     const action = button.dataset.utilityAction;
     const id = button.dataset.id;
+    if (action === "history-open") {
+      const conversation = chatHistory.find((item) => item.id === id);
+      if (conversation) restoreArchivedConversation(conversation, true);
+      return;
+    }
+    if (action === "history-delete") { deleteChatHistoryEntry(id); return; }
+    if (action === "history-export") { downloadChatHistory(); return; }
+    if (action === "history-clear") { clearChatHistory(); return; }
     if (action === "model-refresh") { refreshModelList(true); return; }
     if (action === "meal-ideas" || action === "meal-plan") {
       const pantry = kitchenState.pantry.map((item) => item.text);
@@ -827,6 +1050,12 @@
   }
 
   function handleUtilityInput(event) {
+    const historySearch = event.target.closest("[data-history-search]");
+    if (historySearch) {
+      historySearchText = historySearch.value;
+      renderHistoryRows();
+      return;
+    }
     const input = event.target.closest("[data-meal-day]");
     if (!input) return;
     kitchenState.meals[input.dataset.mealDay] = input.value;
@@ -853,6 +1082,7 @@
   $("#voiceOutputBtn").addEventListener("click", toggleVoiceReplies);
   $("#testModelBtn").addEventListener("click", testModel);
   $("#systemBtn").addEventListener("click", () => sendMessage("Check my system status and summarize the basics."));
+  $("#historyBtn").addEventListener("click", () => openUtility("history"));
   $("#kitchenBtn").addEventListener("click", () => openUtility("kitchen"));
   $("#modelManagerBtn").addEventListener("click", () => openUtility("models"));
   $("#memoryBtn").addEventListener("click", () => openUtility("memory"));
@@ -1346,6 +1576,7 @@
     });
   }
   initRecipeSaver();
+  restoreCurrentConversation();
 
 
   loadConfig();
