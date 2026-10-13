@@ -23,6 +23,8 @@
     lilac: "200,162,255",
     blue: "133,170,255",
     cyan: "120,228,238",
+    red: "255,65,92",
+    steel: "177,203,229",
     white: "243,255,255"
   };
 
@@ -114,6 +116,116 @@
       ctx.arc(px, py, lineWidth * (index === 0 ? 1.7 : 1.1), 0, Math.PI * 2);
       ctx.fill();
     });
+    ctx.restore();
+  }
+
+  // Abstract machine-intelligence mask: holographic blue hardware with a crimson core.
+  function drawHybridMask(x, y, radius, time) {
+    var r = radius;
+    var pulse = .7 + (Math.sin(time * .0021) + 1) * .14;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalCompositeOperation = "source-over";
+
+    function plate(points, fill, stroke, width) {
+      ctx.beginPath();
+      ctx.moveTo(points[0][0] * r, points[0][1] * r);
+      for (var i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0] * r, points[i][1] * r);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = width || 1;
+      ctx.stroke();
+    }
+
+    var alloy = ctx.createLinearGradient(-r * .5, -r * .6, r * .55, r * .55);
+    alloy.addColorStop(0, "rgba(190,224,242,.86)");
+    alloy.addColorStop(.22, "rgba(55,91,125,.94)");
+    alloy.addColorStop(.53, "rgba(9,18,34,.98)");
+    alloy.addColorStop(.82, "rgba(52,66,96,.97)");
+    alloy.addColorStop(1, "rgba(9,14,27,.91)");
+
+    // Angular shield shape instead of a literal character face.
+    plate([[0,-.61],[-.32,-.5],[-.51,-.28],[-.43,.1],[-.27,.36],[0,.55],[.27,.36],[.43,.1],[.51,-.28],[.32,-.5]],
+      alloy, "rgba(" + colors.cyan + ",.72)", 1.05);
+    plate([[-.32,-.49],[-.08,-.55],[0,-.35],[-.23,-.28],[-.42,-.34]],
+      "rgba(177,203,229,.22)", "rgba(" + colors.cyan + ",.65)", .8);
+    plate([[.08,-.55],[.32,-.49],[.42,-.34],[.23,-.28],[0,-.35]],
+      "rgba(255,65,92,.24)", "rgba(" + colors.red + ",.95)", .9);
+
+    var dark = ctx.createLinearGradient(0, -r * .38, 0, r * .42);
+    dark.addColorStop(0, "rgba(3,9,19,.98)");
+    dark.addColorStop(.7, "rgba(12,21,39,.98)");
+    dark.addColorStop(1, "rgba(4,8,16,.98)");
+    plate([[0,-.37],[-.23,-.27],[-.27,.02],[-.16,.3],[0,.43],[.16,.3],[.27,.02],[.23,-.27]],
+      dark, "rgba(" + colors.steel + ",.46)", .8);
+
+    // Two hot-red angular optical slits with cold cyan highlights.
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    ctx.shadowColor = "rgba(" + colors.red + ",.95)";
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = "rgba(" + colors.red + "," + pulse + ")";
+    ctx.lineWidth = Math.max(2.2, r * .034);
+    ctx.beginPath();
+    ctx.moveTo(-.235*r, -.145*r); ctx.lineTo(-.085*r, -.18*r);
+    ctx.moveTo(.085*r, -.18*r); ctx.lineTo(.235*r, -.145*r);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(" + colors.white + ",.92)";
+    ctx.lineWidth = Math.max(.6, r * .008);
+    ctx.beginPath();
+    ctx.moveTo(-.2*r, -.15*r); ctx.lineTo(-.095*r, -.175*r);
+    ctx.moveTo(.095*r, -.175*r); ctx.lineTo(.2*r, -.15*r);
+    ctx.stroke();
+
+    // A fine blue spinal circuit intersects a rotating amber reactor ring.
+    ctx.strokeStyle = "rgba(" + colors.cyan + ",.85)";
+    ctx.lineWidth = Math.max(.8, r * .012);
+    ctx.beginPath();
+    ctx.moveTo(0, -.095*r); ctx.lineTo(-.035*r, .035*r);
+    ctx.lineTo(0, .12*r); ctx.lineTo(.035*r, .035*r);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(0, .22*r);
+    ctx.rotate(Math.sin(time * .0007) * .08);
+    ctx.strokeStyle = "rgba(" + colors.red + ",.85)";
+    ctx.lineWidth = Math.max(.7, r * .01);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * .105, r * .045, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Split cheek plates and short vent lines make the core feel machined.
+    plate([[-.25,-.015],[-.13,.055],[-.12,.22],[-.29,.15]],
+      "rgba(120,228,238,.12)", "rgba(" + colors.cyan + ",.68)", .75);
+    plate([[.25,-.015],[.13,.055],[.12,.22],[.29,.15]],
+      "rgba(255,65,92,.13)", "rgba(" + colors.red + ",.82)", .75);
+    for (var vent = -2; vent <= 2; vent++) {
+      ctx.strokeStyle = vent === 0 ? "rgba(" + colors.red + ",.9)" :
+        "rgba(" + colors.cyan + ",.72)";
+      ctx.lineWidth = Math.max(.65, r * .009);
+      ctx.beginPath();
+      ctx.moveTo(vent * .04*r, .29*r);
+      ctx.lineTo(vent * .035*r, .34*r);
+      ctx.stroke();
+    }
+
+    // Small data traces pulse like active circuitry on either temple.
+    for (var trace = 0; trace < 3; trace++) {
+      var yy = (-.02 + trace * .075) * r;
+      ctx.globalAlpha = .4 + trace * .12;
+      ctx.strokeStyle = trace === 1 ? "rgba(" + colors.red + ",1)" : "rgba(" + colors.cyan + ",1)";
+      ctx.lineWidth = .8;
+      ctx.beginPath();
+      ctx.moveTo(-.39*r, yy); ctx.lineTo(-.31*r, yy + .015*r);
+      ctx.moveTo(.39*r, yy); ctx.lineTo(.31*r, yy + .015*r);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -308,6 +420,9 @@
     ctx.beginPath();
     ctx.arc(orbitX, orbitY, coreR * 1.25, 0, Math.PI * 2);
     ctx.fill();
+
+    // Let the hybrid machine mask emerge from the reactor glow.
+    drawHybridMask(orbitX, orbitY, globeR * .78, time);
     ctx.restore();
 
     // Satellites leave small tapered energy trails around the outside.
