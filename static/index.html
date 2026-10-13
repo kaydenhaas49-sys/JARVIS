@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/lcars.css?v=9">
   <link rel="stylesheet" href="/utility-tweaks.css?v=1">
-  <link rel="stylesheet" href="/stark-hud.css?v=1">
+  <link rel="stylesheet" href="/stark-hud.css?v=2">
   <script src="/jarvis-orb.js?v=8" defer></script>
   <script src="/app.js" defer></script>
 </head>
@@ -54,7 +54,69 @@
       </header>
 
       <section class="conversation-viewport" id="conversationViewport">
-        <section class="welcome-panel" id="welcomePanel" aria-label="JARVIS ambient core display"></section>
+        <section class="welcome-panel" id="welcomePanel" aria-label="JARVIS operations dashboard">
+          <div class="hud-dashboard">
+            <div class="hud-readout-bar" aria-label="Interface metadata">
+              <div class="hud-readout-brand"><span class="hud-led"></span><span>STARK SYSTEMS</span><i>/</i><strong>PERSONAL AI</strong></div>
+              <div class="hud-readout-revision">INTERFACE REV <strong>04.2</strong></div>
+              <div class="hud-readout-mode"><span></span> LOCAL-FIRST WORKFLOW</div>
+            </div>
+
+            <aside class="hud-rail hud-rail-left" aria-label="Session overview">
+              <div class="hud-rail-heading"><span>01</span><strong>SESSION MATRIX</strong><i></i></div>
+              <div class="hud-session-state"><span class="hud-state-led"></span><div><strong>PRIVATE SESSION</strong><small>CONVERSATION SCOPE</small></div></div>
+              <div class="hud-data-row"><span>INPUT CHANNEL</span><strong>TEXT / VOICE</strong></div>
+              <div class="hud-data-row"><span>WORKSPACE TOOLS</span><strong>AVAILABLE</strong></div>
+              <div class="hud-data-row"><span>ACTION CONTROL</span><strong>REVIEW GATED</strong></div>
+              <div class="hud-signal-block">
+                <div class="hud-signal-title"><span>INTERFACE SIGNAL</span><small>VISUAL READOUT</small></div>
+                <div class="hud-signal-bars" aria-hidden="true">
+                  <i style="height:22%"></i><i style="height:38%"></i><i style="height:29%"></i><i style="height:57%"></i><i style="height:43%"></i><i style="height:76%"></i><i style="height:48%"></i><i style="height:89%"></i><i style="height:62%"></i><i style="height:37%"></i><i style="height:69%"></i><i style="height:31%"></i><i style="height:52%"></i><i style="height:24%"></i><i style="height:42%"></i><i style="height:18%"></i>
+                </div>
+                <div class="hud-signal-baseline"><span>INPUT</span><span>READY</span><span>OUTPUT</span></div>
+              </div>
+              <p class="hud-rail-note">Proposed operations remain under user review before execution.</p>
+            </aside>
+
+            <aside class="hud-rail hud-rail-right" aria-label="Subsystem directory">
+              <div class="hud-rail-heading"><span>02</span><strong>SUBSYSTEM INDEX</strong><i></i></div>
+              <div class="hud-channel-row"><span class="hud-channel-number">A1</span><div><strong>ASSISTANT</strong><small>CONVERSATION INTERFACE</small></div><span class="hud-channel-mark">●</span></div>
+              <div class="hud-channel-row"><span class="hud-channel-number">A2</span><div><strong>MODEL LINK</strong><small>CONNECTION STATUS ABOVE</small></div><span class="hud-channel-mark">↗</span></div>
+              <div class="hud-channel-row"><span class="hud-channel-number">A3</span><div><strong>VOICE INTERFACE</strong><small>USER-CONTROLLED INPUT</small></div><span class="hud-channel-mark">◌</span></div>
+              <div class="hud-channel-row"><span class="hud-channel-number">A4</span><div><strong>MEMORY ARCHIVE</strong><small>SAVED SESSION HISTORY</small></div><span class="hud-channel-mark">▤</span></div>
+              <div class="hud-directory-foot"><span class="hud-directory-line"></span><span>MODULES / 04</span><span class="hud-directory-line"></span></div>
+            </aside>
+
+            <div class="hud-core-label">
+              <div class="hud-core-overline"><span></span> NEURAL ASSISTANCE PLATFORM <span class="hud-core-index">/ 001</span></div>
+              <h1>J.A.R.V.I.S.</h1>
+              <p>JUST A RATHER VERY INTELLIGENT SYSTEM</p>
+              <div class="hud-core-prompt"><span></span> AWAITING COMMAND <span></span></div>
+            </div>
+
+            <div class="hud-capability-strip" aria-label="Available interface areas">
+              <div class="hud-capability">
+                <span class="hud-capability-number">01 <i>///</i></span>
+                <div><strong>CONVERSATION</strong><small>Ask, plan, analyze, and iterate.</small></div>
+                <span class="hud-capability-corner" aria-hidden="true">↗</span>
+              </div>
+              <div class="hud-capability">
+                <span class="hud-capability-number">02 <i>///</i></span>
+                <div><strong>SYSTEM CONSOLE</strong><small>Inspect model and runtime status.</small></div>
+                <span class="hud-capability-corner" aria-hidden="true">↗</span>
+              </div>
+              <div class="hud-capability">
+                <span class="hud-capability-number">03 <i>///</i></span>
+                <div><strong>MEMORY ARCHIVE</strong><small>Manage saved conversations.</small></div>
+                <span class="hud-capability-corner" aria-hidden="true">↗</span>
+              </div>
+            </div>
+
+            <div class="hud-footer-readout" aria-hidden="true">
+              <span><i></i> USER CONTROLLED</span><span>SESSION / LOCAL</span><span>J.A.R.V.I.S. <b>—</b> STANDBY</span>
+            </div>
+          </div>
+        </section>
 
         <div class="chat-log" id="chatLog" aria-live="polite" aria-label="Conversation"></div>
         <div class="typing-row hidden" id="typingRow"><span class="typing-avatar">J</span><span class="typing-label">JARVIS is thinking</span><span class="typing-dots"><i></i><i></i><i></i></span></div>
