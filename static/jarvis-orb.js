@@ -1,5 +1,5 @@
 /* JARVIS holographic sphere backdrop, inspired by lcars-reference/static/screensaver.js.
-   This is a quiet always-visible visualizer; it does not call APIs or alter app behavior. */
+   It renders a static frame while idle and animates only during active assistant states. */
 (function () {
   "use strict";
   if (!document.body || document.getElementById("jarvis-orb-canvas")) return;
@@ -15,6 +15,7 @@
   var height = 0;
   var dpr = 1;
   var raf = 0;
+  var frameTimer = 0;
   var reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   var colors = {
@@ -34,6 +35,8 @@
     if (["idle", "listening", "thinking", "speaking", "error"].includes(next)) {
       assistantState = next;
       canvas.dataset.state = next;
+      if (assistantState === "idle") stop();
+      else start();
     }
   });
 
@@ -410,29 +413,49 @@
 
   function tick(time) {
     raf = 0;
-    if (document.hidden) return;
+    if (document.hidden || assistantState === "idle") return;
     render(time);
-    // Reduced-motion mode still animates the core, just with a slower visual tempo.
-    raf = window.requestAnimationFrame(tick);
+    // Redraw at most 24 FPS while active (12 FPS for reduced motion) rather than every frame.
+    frameTimer = window.setTimeout(function () {
+      frameTimer = 0;
+      start();
+    }, reducedMotion ? 1000 / 12 : 1000 / 24);
   }
 
   function start() {
-    if (!raf && !document.hidden) raf = window.requestAnimationFrame(tick);
+    if (!raf && !frameTimer && !document.hidden && assistantState !== "idle") {
+      raf = window.requestAnimationFrame(tick);
+    }
   }
 
-  // Keep the backdrop subdued beneath chat messages, including reduced-motion mode.
+  function stop() {
+    if (raf) window.cancelAnimationFrame(raf);
+    if (frameTimer) window.clearTimeout(frameTimer);
+    raf = 0;
+    frameTimer = 0;
+    // Freeze the current visual instead of keeping a full-screen canvas loop alive.
+    if (!document.hidden) render(performance.now());
+  }
+
+  // Chat mutations need one static redraw while idle. During active animation,
+  // the next throttled frame will incorporate any new message content.
   var observedChatLog = document.getElementById("chatLog");
   if (observedChatLog && window.MutationObserver) {
-    var chatObserver = new MutationObserver(function () { render(performance.now()); });
+    var chatObserver = new MutationObserver(function () {
+      if (assistantState === "idle" && !document.hidden) render(performance.now());
+    });
     chatObserver.observe(observedChatLog, { childList: true, subtree: true });
   }
 
   window.addEventListener("resize", resize, { passive: true });
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden && raf) {
-      cancelAnimationFrame(raf);
+    if (document.hidden) {
+      if (raf) window.cancelAnimationFrame(raf);
+      if (frameTimer) window.clearTimeout(frameTimer);
       raf = 0;
+      frameTimer = 0;
     } else {
+      render(performance.now());
       start();
     }
   });
@@ -441,8 +464,12 @@
     if (motionQuery.addEventListener) {
       motionQuery.addEventListener("change", function (event) {
         reducedMotion = event.matches;
-        // Animation continues in reduced-motion mode at a slower visual tempo.
-        start();
+        // The next active frame will use the updated reduced-motion frame cap.
+        if (assistantState !== "idle") {
+          if (frameTimer) window.clearTimeout(frameTimer);
+          frameTimer = 0;
+          start();
+        }
       });
     }
   }

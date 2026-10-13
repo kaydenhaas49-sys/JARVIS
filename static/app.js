@@ -38,6 +38,8 @@
   let wakeEventCursor = 0;
   let wakeEventsReady = false;
   let wakePollBusy = false;
+  let wakeEventPollTimer = null;
+  let wakeStatusPollTimer = null;
   let currentUtilityView = null;
   let activeSystemTab = "status";
   let openQuickNotesPanel = null;
@@ -798,6 +800,25 @@
     }
   }
 
+  function stopWakeWordPolling() {
+    if (wakeEventPollTimer !== null) {
+      window.clearInterval(wakeEventPollTimer);
+      wakeEventPollTimer = null;
+    }
+    if (wakeStatusPollTimer !== null) {
+      window.clearInterval(wakeStatusPollTimer);
+      wakeStatusPollTimer = null;
+    }
+  }
+
+  // Avoid waking the server repeatedly while wake word is off or this tab is hidden.
+  function syncWakeWordPolling() {
+    stopWakeWordPolling();
+    if (document.hidden || !wakeWordEnabled) return;
+    wakeEventPollTimer = window.setInterval(pollWakeWordEvents, 1_000);
+    wakeStatusPollTimer = window.setInterval(() => refreshWakeWordStatus(false), 5_000);
+  }
+
   function renderWakeWordButton() {
     if (!elements.wakeWord || !wakeWordStatus) return;
     wakeWordEnabled = Boolean(wakeWordStatus.enabled);
@@ -826,6 +847,7 @@
         }
       }
       renderWakeWordButton();
+      if (initial) syncWakeWordPolling();
     } catch (error) {
       if (initial) showToast("Voice service unavailable: " + error.message, "error");
     }
@@ -838,11 +860,13 @@
       wakeWordStatus = result.status;
       wakeWordEnabled = Boolean(result.status?.enabled);
       renderWakeWordButton();
+      syncWakeWordPolling();
       showToast(wakeWordEnabled
         ? 'Wake word enabled. Say "Hey JARVIS", then give your command.'
         : "Wake word disabled; the microphone is released.");
     } catch (error) {
       await refreshWakeWordStatus(false);
+      syncWakeWordPolling();
       showToast(wakeWordStatus?.error || error.message, "error");
     } finally {
       elements.wakeWord.disabled = false;
@@ -850,7 +874,7 @@
   }
 
   async function pollWakeWordEvents() {
-    if (!wakeEventsReady || wakePollBusy) return;
+    if (!wakeEventsReady || !wakeWordEnabled || document.hidden || wakePollBusy) return;
     wakePollBusy = true;
     try {
       const response = await fetch("/api/voice/events?after=" + encodeURIComponent(wakeEventCursor), { cache: "no-store" });
@@ -1413,8 +1437,13 @@
   $("#micBtn").addEventListener("click", toggleMicrophone);
   $("#voiceOutputBtn").addEventListener("click", toggleVoiceReplies);
   elements.wakeWord.addEventListener("click", toggleWakeWord);
-  window.setInterval(pollWakeWordEvents, 700);
-  window.setInterval(() => refreshWakeWordStatus(false), 2_500);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopWakeWordPolling();
+    } else {
+      refreshWakeWordStatus(false).finally(syncWakeWordPolling);
+    }
+  });
   refreshWakeWordStatus(true);
   $("#testModelBtn").addEventListener("click", testModel);
   $("#systemBtn").addEventListener("click", () => openUtility("system"));
