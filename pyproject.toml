@@ -1,0 +1,13 @@
+[project]
+name = "jarvis-local-assistant"
+version = "1.0.0"
+description = "A local-first personal AI assistant with approval-gated workspace tools."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

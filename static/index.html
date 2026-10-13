@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080d17">
+  <meta name="description" content="JARVIS — your local-first AI assistant.">
+  <title>JARVIS — Local Intelligence</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="/" aria-label="JARVIS home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="19" stroke="currentColor" stroke-width="1.5"/><circle cx="24" cy="24" r="12" stroke="currentColor" stroke-opacity=".55"/><path d="M24 7v34M7 24h34M12 12l24 24M36 12 12 36" stroke="currentColor" stroke-opacity=".35"/><circle cx="24" cy="24" r="4" fill="currentColor"/></svg>
+        </span>
+        <span class="brand-copy"><strong>J.A.R.V.I.S.</strong><small>PERSONAL INTELLIGENCE</small></span>
+      </a>
+
+      <button class="new-chat-btn" id="newChatBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>New conversation</span><kbd>⌘ K</kbd>
+      </button>
+
+      <div class="sidebar-section">
+        <div class="section-label">SYSTEM</div>
+        <div class="nav-item selected"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 2.34-5.66M4 4v4h4M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Assistant</span><span class="nav-dot"></span></div>
+        <button class="nav-item nav-button" id="systemBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 21h8m-4-4v4M7 9h3m-3 3h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>System status</span></button>
+        <button class="nav-item nav-button" id="workspaceBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.6"/></svg></span><span>Workspace</span></button>
+      </div>
+
+      <div class="sidebar-divider"></div>
+      <div class="workspace-mini">
+        <div class="workspace-mini-head"><span class="mini-dot"></span><span>WORKSPACE</span></div>
+        <div class="workspace-path" id="workspacePath">Connecting…</div>
+        <div class="workspace-mini-foot"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 5 6v5c0 4.6 2.8 7.9 7 10 4.2-2.1 7-5.4 7-10V6l-7-3Z" stroke="currentColor" stroke-width="1.5"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Files stay in this folder</div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-footer">
+        <div class="footer-orb"><span></span></div>
+        <div class="footer-copy"><strong>Local-first mode</strong><small>Your model. Your machine.</small></div>
+        <span class="online-status" title="Dashboard is running"></span>
+      </div>
+      <div class="sidebar-version">JARVIS CORE <span>·</span> VERSION 1.0</div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn mobile-menu" id="menuBtn" type="button" aria-label="Toggle menu"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+          <div class="breadcrumb"><span>JARVIS</span><span class="crumb-slash">/</span><strong>Assistant</strong></div>
+        </div>
+        <div class="topbar-actions">
+          <div class="connection-pill" id="connectionPill"><span class="connection-dot"></span><span id="connectionLabel">CHECKING MODEL</span></div>
+          <button class="top-action" id="testModelBtn" type="button" title="Test the model connection"><svg viewBox="0 0 24 24" fill="none"><path d="M20 7v5h-5M4 17v-5h5M6.2 9a6.5 6.5 0 0 1 10.7-2L20 12M4 12l3.1 5a6.5 6.5 0 0 0 10.7-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Test link</span></button>
+          <button class="top-action voice-output-btn" id="voiceOutputBtn" type="button" aria-pressed="false" title="Toggle spoken replies"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10v4h4l5 4V6l-5 4H4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M17 9a5 5 0 0 1 0 6M19.5 6.5a9 9 0 0 1 0 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Voice off</span></button>
+        </div>
+      </header>
+
+      <section class="conversation-viewport" id="conversationViewport">
+        <section class="welcome-panel" id="welcomePanel">
+          <div class="welcome-eyebrow"><span class="eyebrow-line"></span><span>YOUR PERSONAL AI</span><span class="eyebrow-line"></span></div>
+          <div class="hero-emblem" aria-hidden="true">
+            <div class="emblem-ring ring-outer"></div><div class="emblem-ring ring-mid"></div><div class="emblem-ring ring-inner"></div>
+            <div class="emblem-axis axis-x"></div><div class="emblem-axis axis-y"></div>
+            <div class="emblem-core"><svg viewBox="0 0 64 64" fill="none"><path d="M32 9 51 20v24L32 55 13 44V20L32 9Z" stroke="currentColor" stroke-width="1.5"/><path d="m22 25 10-6 10 6v14l-10 6-10-6V25Z" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="5" fill="currentColor"/><path d="M32 4v9M32 51v9M4 32h9M51 32h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+            <span class="emblem-spark spark-one"></span><span class="emblem-spark spark-two"></span><span class="emblem-spark spark-three"></span>
+          </div>
+          <h1>At your service<span>.</span></h1>
+          <p class="welcome-description">Your workspace-aware assistant, running on your terms.<br class="desktop-break"> Ask a question, explore an idea, or get something built.</p>
+
+          <div class="capability-grid">
+            <button class="capability-card" type="button" data-prompt="What can you do? Explain your tools and what requires my approval.">
+              <span class="capability-icon violet"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 14.3 9.7 21 12l-6.7 2.3L12 21l-2.3-6.7L3 12l6.7-2.3L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+              <span class="capability-title">Ask anything</span><span class="capability-copy">Think through ideas and get clear answers.</span><span class="capability-arrow">↗</span>
+            </button>
+            <button class="capability-card" type="button" data-prompt="Check my system status and summarize the basics.">
+              <span class="capability-icon blue"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 21h8m-4-4v4M7 9h3m-3 3h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+              <span class="capability-title">Check your system</span><span class="capability-copy">Inspect basic machine and disk information.</span><span class="capability-arrow">↗</span>
+            </button>
+            <button class="capability-card" type="button" data-prompt="Help me start a coding project. First inspect the workspace, then suggest a plan before changing anything.">
+              <span class="capability-icon amber"><svg viewBox="0 0 24 24" fill="none"><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-3-9-2 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="capability-title">Build something</span><span class="capability-copy">Explore files and help develop projects.</span><span class="capability-arrow">↗</span>
+            </button>
+          </div>
+
+          <div class="welcome-footnote"><span class="tiny-shield"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 5 6v5c0 4.6 2.8 7.9 7 10 4.2-2.1 7-5.4 7-10V6l-7-3Z" stroke="currentColor" stroke-width="1.5"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span><span>Workspace tools are restricted. File changes and commands always ask first.</span></div>
+        </section>
+
+        <div class="chat-log" id="chatLog" aria-live="polite" aria-label="Conversation"></div>
+        <div class="typing-row hidden" id="typingRow"><span class="typing-avatar">J</span><span class="typing-label">JARVIS is thinking</span><span class="typing-dots"><i></i><i></i><i></i></span></div>
+      </section>
+
+      <footer class="composer-zone">
+        <div class="composer-shell">
+          <div class="composer-topline"><span class="composer-lock"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5"/></svg></span><span>PRIVATE SESSION</span><span class="composer-topline-divider">/</span><span>WORKSPACE TOOLS ENABLED</span><span class="composer-spacer"></span><span class="composer-shortcut">ENTER TO SEND</span></div>
+          <div class="composer-main">
+            <textarea id="messageInput" rows="1" placeholder="Message JARVIS…" aria-label="Message JARVIS"></textarea>
+            <div class="composer-buttons">
+              <button class="mic-btn" id="micBtn" type="button" aria-label="Use voice input" title="Voice input"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="12" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+              <button class="send-btn" id="sendBtn" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5m-6 6 6-6 6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="composer-disclaimer">AI can make mistakes. Review important information and every proposed action.</div>
+      </footer>
+    </main>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+  <div class="mobile-scrim" id="mobileScrim"></div>
+</body>
+</html>
