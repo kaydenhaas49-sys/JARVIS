@@ -58,14 +58,14 @@
     var shiftY = (time * 0.0018) % spacing;
     ctx.save();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(133,170,255,0.035)";
+    ctx.strokeStyle = "rgba(78,208,255,0.028)";
     for (var x = -spacing + shiftX; x < width + spacing; x += spacing) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
     }
     for (var y = -spacing + shiftY; y < height + spacing; y += spacing) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
     }
-    ctx.fillStyle = "rgba(255,159,67,0.08)";
+    ctx.fillStyle = "rgba(80,224,255,0.055)";
     for (var px = -spacing + shiftX; px < width + spacing; px += spacing) {
       for (var py = -spacing + shiftY; py < height + spacing; py += spacing) {
         ctx.beginPath(); ctx.arc(px, py, 1, 0, Math.PI * 2); ctx.fill();
@@ -133,67 +133,94 @@
     ctx.restore();
   }
 
-  // A cleaner reactor globe: broad glass shell, three precise orbital tracks,
-  // restrained scan details, and a bright contained core instead of dense noise.
+  // Cinematic Stark-style holographic core: circular range reticles, cyan arc
+  // segments, a glass globe, and precise instrument marks with very restrained glow.
   function drawSphere(x, y, r, time) {
     var active = assistantState !== "idle";
-    var pulseBoost = assistantState === "thinking" ? .05 :
-      assistantState === "speaking" ? .035 :
+    var pulseBoost = assistantState === "thinking" ? .045 :
+      assistantState === "speaking" ? .03 :
       assistantState === "listening" ? .025 :
       assistantState === "error" ? .012 : 0;
-    var spinBoost = assistantState === "thinking" ? 1.7 :
-      assistantState === "speaking" ? 1.25 :
-      assistantState === "listening" ? .7 :
-      assistantState === "error" ? .6 : 1;
     var stateColor = assistantState === "listening" ? colors.green :
       assistantState === "speaking" ? colors.gold :
       assistantState === "error" ? colors.red :
-      assistantState === "thinking" ? colors.lilac : colors.cyan;
-    var pulse = .985 + Math.sin(time * .0011) * .015 + pulseBoost * (.65 + Math.sin(time * .002) * .35);
-    var spin = time * .00015 * spinBoost;
-    var orbitX = x + Math.sin(time * .0002) * r * .025;
-    var orbitY = y + Math.cos(time * .00017) * r * .018;
-    var globeR = r * .59 * pulse;
+      assistantState === "thinking" ? colors.blue : colors.cyan;
+    var phase = time * (assistantState === "thinking" ? .00024 : .00013);
+    var pulse = .987 + Math.sin(time * .00115) * .013 + pulseBoost * (.7 + Math.sin(time * .002) * .3);
+    var orbitX = x + Math.sin(phase * .75) * r * .018;
+    var orbitY = y + Math.cos(phase * .65) * r * .014;
+    var globeR = r * .54 * pulse;
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
 
-    var halo = ctx.createRadialGradient(orbitX, orbitY, globeR * .2, orbitX, orbitY, r * 1.7);
-    halo.addColorStop(0, "rgba(" + colors.cyan + ",.18)");
-    halo.addColorStop(.28, "rgba(" + colors.blue + ",.12)");
-    halo.addColorStop(.56, "rgba(" + colors.lilac + ",.045)");
+    var halo = ctx.createRadialGradient(orbitX, orbitY, globeR * .15, orbitX, orbitY, r * 1.65);
+    halo.addColorStop(0, "rgba(" + colors.cyan + ",.17)");
+    halo.addColorStop(.26, "rgba(" + colors.blue + ",.11)");
+    halo.addColorStop(.58, "rgba(" + colors.cyan + ",.035)");
     halo.addColorStop(1, "rgba(" + colors.cyan + ",0)");
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(orbitX, orbitY, r * 1.7, 0, Math.PI * 2);
+    ctx.arc(orbitX, orbitY, r * 1.65, 0, Math.PI * 2);
     ctx.fill();
 
-    // Three orbital tracks keep the silhouette readable and deliberate.
-    drawOrbitalRing(orbitX, orbitY, r * 1.25, r * .32, -.42 + spin * .65,
-      stateColor, .43, 56, spin * .65);
-    drawOrbitalRing(orbitX, orbitY, r * 1.08, r * .62, .82 - spin * .42,
-      colors.lilac, .27, 40, -spin * .5);
-    drawOrbitalRing(orbitX, orbitY, r * 1.48, r * .15, .18 + spin * .32,
-      colors.orange, .3, 64, spin * .55);
+    // Concentric circular scopes: the main visual signature of the JARVIS HUD.
+    drawOrbitalRing(orbitX, orbitY, r * 1.37, r * 1.37, phase * .18,
+      colors.cyan, .24, 120, -phase * .12);
+    drawOrbitalRing(orbitX, orbitY, r * 1.18, r * 1.18, -phase * .22,
+      colors.blue, .27, 96, phase * .2);
+    drawOrbitalRing(orbitX, orbitY, r * .91, r * .91, phase * .28,
+      colors.cyan, .13, 72, -phase * .25);
 
-    drawEnergyArc(orbitX, orbitY, r * 1.25, r * .32, -.42 + spin * .65,
-      .18 + spin * 1.6, 1.18 + spin * 1.6, stateColor, 2, .88, 13);
-    drawEnergyArc(orbitX, orbitY, r * 1.08, r * .62, .82 - spin * .42,
-      3.12 - spin * 1.2, 4.03 - spin * 1.2, colors.lilac, 1.7, .58, 9);
-    drawEnergyArc(orbitX, orbitY, r * 1.48, r * .15, .18 + spin * .32,
-      3.38 + spin * 1.1, 4.08 + spin * 1.1, colors.orange, 2.1, .66, 12);
+    // Two tilted orbits provide depth without the clutter of a dozen rings.
+    drawOrbitalRing(orbitX, orbitY, r * 1.43, r * .34, -.43 + phase * .6,
+      colors.cyan, .52, 72, phase * .7);
+    drawOrbitalRing(orbitX, orbitY, r * 1.27, r * .22, .78 - phase * .42,
+      colors.blue, .32, 64, -phase * .8);
+    drawOrbitalRing(orbitX, orbitY, r * 1.55, r * .11, .18 + phase * .3,
+      colors.gold, .25, 80, phase);
 
-    // Glass shell with a stronger, clean edge and a cool highlight.
+    drawEnergyArc(orbitX, orbitY, r * 1.37, r * 1.37, phase * .18,
+      .18 + phase * 1.2, 1.03 + phase * 1.2, colors.cyan, 2.1, .85, 12);
+    drawEnergyArc(orbitX, orbitY, r * 1.18, r * 1.18, -phase * .22,
+      2.9 - phase * .9, 3.72 - phase * .9, colors.blue, 1.7, .72, 9);
+    drawEnergyArc(orbitX, orbitY, r * 1.43, r * .34, -.43 + phase * .6,
+      3.35 + phase * 1.5, 4.18 + phase * 1.5, stateColor, 2, .78, 12);
+    drawEnergyArc(orbitX, orbitY, r * 1.55, r * .11, .18 + phase * .3,
+      4.65 - phase * .8, 5.25 - phase * .8, colors.gold, 1.7, .58, 8);
+
+    // Fine radial reticle ticks, grouped into major and minor graduations.
+    ctx.save();
+    ctx.translate(orbitX, orbitY);
+    ctx.rotate(-phase * .14);
+    for (var tick = 0; tick < 144; tick++) {
+      var angle = tick * Math.PI * 2 / 144;
+      var major = tick % 12 === 0;
+      var medium = tick % 3 === 0;
+      var inner = r * 1.49;
+      var outer = inner + (major ? 13 : medium ? 7 : 3.2);
+      ctx.globalAlpha = major ? .62 : medium ? .3 : .15;
+      ctx.strokeStyle = major ? "rgba(" + colors.cyan + ",1)" :
+        "rgba(" + colors.blue + ",1)";
+      ctx.lineWidth = major ? 1.15 : .65;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+      ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Translucent globe with a quiet specular highlight and wireframe latitude/longitude.
     var sphereGradient = ctx.createRadialGradient(
-      orbitX - globeR * .36, orbitY - globeR * .4, globeR * .025,
-      orbitX, orbitY, globeR * 1.14
+      orbitX - globeR * .38, orbitY - globeR * .43, globeR * .02,
+      orbitX, orbitY, globeR * 1.12
     );
-    sphereGradient.addColorStop(0, "rgba(" + colors.white + ",.86)");
-    sphereGradient.addColorStop(.09, "rgba(" + colors.cyan + ",.58)");
-    sphereGradient.addColorStop(.28, "rgba(" + colors.blue + ",.35)");
-    sphereGradient.addColorStop(.62, "rgba(22,45,82,.25)");
-    sphereGradient.addColorStop(1, "rgba(4,9,22,.025)");
-    ctx.globalAlpha = .94;
+    sphereGradient.addColorStop(0, "rgba(" + colors.white + ",.82)");
+    sphereGradient.addColorStop(.08, "rgba(" + colors.cyan + ",.56)");
+    sphereGradient.addColorStop(.25, "rgba(" + colors.blue + ",.31)");
+    sphereGradient.addColorStop(.62, "rgba(13,53,91,.22)");
+    sphereGradient.addColorStop(1, "rgba(2,12,27,.015)");
+    ctx.globalAlpha = .9;
     ctx.fillStyle = sphereGradient;
     ctx.beginPath();
     ctx.arc(orbitX, orbitY, globeR, 0, Math.PI * 2);
@@ -204,159 +231,132 @@
     ctx.arc(orbitX, orbitY, globeR, 0, Math.PI * 2);
     ctx.clip();
 
-    for (var meridian = -4; meridian <= 4; meridian++) {
-      var widthFactor = Math.max(.07, Math.abs(Math.cos(meridian * .31 + spin * 1.8)));
-      ctx.globalAlpha = meridian % 2 === 0 ? .31 : .17;
+    for (var meridian = -5; meridian <= 5; meridian++) {
+      var widthFactor = Math.max(.055, Math.abs(Math.cos(meridian * .28 + phase * 1.8)));
+      ctx.globalAlpha = meridian % 2 === 0 ? .32 : .17;
       ctx.strokeStyle = meridian % 3 === 0
-        ? "rgba(" + colors.lilac + ",.95)" : "rgba(" + colors.cyan + ",.95)";
-      ctx.lineWidth = meridian % 3 === 0 ? .9 : .65;
+        ? "rgba(" + colors.cyan + ",.96)" : "rgba(" + colors.blue + ",.94)";
+      ctx.lineWidth = meridian % 3 === 0 ? .85 : .6;
       ctx.beginPath();
-      ctx.ellipse(orbitX, orbitY, globeR * widthFactor, globeR, spin + meridian * .018, 0, Math.PI * 2);
+      ctx.ellipse(orbitX, orbitY, globeR * widthFactor, globeR, phase + meridian * .015, 0, Math.PI * 2);
       ctx.stroke();
     }
-
-    for (var lat = -3; lat <= 3; lat++) {
-      var yOffset = (lat / 4) * globeR;
+    for (var lat = -4; lat <= 4; lat++) {
+      var yOffset = (lat / 5) * globeR;
       var wide = Math.sqrt(Math.max(0, globeR * globeR - yOffset * yOffset));
-      ctx.globalAlpha = lat === 0 ? .48 : .22;
-      ctx.strokeStyle = lat === 0 ? "rgba(" + stateColor + ",1)" : "rgba(" + colors.blue + ",1)";
-      ctx.lineWidth = lat === 0 ? 1.1 : .65;
+      ctx.globalAlpha = lat === 0 ? .4 : .19;
+      ctx.strokeStyle = lat === 0
+        ? "rgba(" + stateColor + ",.98)" : "rgba(" + colors.cyan + ",.9)";
+      ctx.lineWidth = lat === 0 ? 1 : .6;
       ctx.beginPath();
-      ctx.ellipse(orbitX, orbitY + yOffset, wide, Math.max(1.1, globeR * .045), spin * .12, 0, Math.PI * 2);
+      ctx.ellipse(orbitX, orbitY + yOffset, wide, Math.max(1, globeR * .04), phase * .12, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // A thin scan band and a handful of points give the globe detail without clutter.
-    var scanY = orbitY + Math.sin(time * .0006) * globeR * .34;
-    var scanGlow = ctx.createLinearGradient(orbitX, scanY - 9, orbitX, scanY + 9);
-    scanGlow.addColorStop(0, "rgba(" + stateColor + ",0)");
-    scanGlow.addColorStop(.5, "rgba(" + stateColor + ",.32)");
-    scanGlow.addColorStop(1, "rgba(" + stateColor + ",0)");
-    ctx.fillStyle = scanGlow;
-    ctx.fillRect(orbitX - globeR, scanY - 9, globeR * 2, 18);
+    var scanY = orbitY + Math.sin(time * .0006) * globeR * .38;
+    var scan = ctx.createLinearGradient(orbitX, scanY - 8, orbitX, scanY + 8);
+    scan.addColorStop(0, "rgba(" + stateColor + ",0)");
+    scan.addColorStop(.5, "rgba(" + stateColor + ",.28)");
+    scan.addColorStop(1, "rgba(" + stateColor + ",0)");
+    ctx.fillStyle = scan;
+    ctx.fillRect(orbitX - globeR, scanY - 8, globeR * 2, 16);
 
-    for (var spark = 0; spark < 14; spark++) {
-      var sparkAngle = spark * 2.399 + spin * (spark % 2 ? 1.1 : -.8);
-      var sparkRadius = globeR * (.22 + ((spark * 5) % 11) / 16);
-      var sx = orbitX + Math.cos(sparkAngle) * sparkRadius;
-      var sy = orbitY + Math.sin(sparkAngle * 1.13) * sparkRadius * .82;
-      var sparkAlpha = active ? .42 + (Math.sin(time * .0014 + spark * 1.3) + 1) * .2 : .55;
-      ctx.globalAlpha = sparkAlpha;
-      ctx.fillStyle = spark % 5 === 0
-        ? "rgba(" + colors.gold + ",1)" : "rgba(" + colors.white + ",1)";
+    for (var point = 0; point < 18; point++) {
+      var pointAngle = point * 2.399 + phase * (point % 2 ? 1.15 : -.8);
+      var pointRadius = globeR * (.2 + ((point * 5) % 13) / 17);
+      ctx.globalAlpha = active ? .38 + (Math.sin(time * .001 + point) + 1) * .18 : .52;
+      ctx.fillStyle = point % 6 === 0
+        ? "rgba(" + colors.gold + ",1)" : "rgba(" + colors.white + ",.95)";
       ctx.beginPath();
-      ctx.arc(sx, sy, spark % 5 === 0 ? 1.7 : 1.05, 0, Math.PI * 2);
+      ctx.arc(orbitX + Math.cos(pointAngle) * pointRadius,
+        orbitY + Math.sin(pointAngle * 1.12) * pointRadius * .8,
+        point % 6 === 0 ? 1.6 : .9, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
 
-    // Rim lighting and a faint secondary glass edge.
-    ctx.globalAlpha = .68;
-    ctx.strokeStyle = "rgba(" + stateColor + ",.94)";
-    ctx.lineWidth = 1.25;
+    // Glass rim, center reticle, and small cyan-white arc reactor.
+    ctx.globalAlpha = .66;
+    ctx.strokeStyle = "rgba(" + colors.cyan + ",.95)";
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
     ctx.arc(orbitX, orbitY, globeR, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.globalAlpha = .18;
-    ctx.strokeStyle = "rgba(" + colors.lilac + ",.9)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(orbitX + globeR * .03, orbitY - globeR * .022, globeR * 1.022, 0, Math.PI * 2);
-    ctx.stroke();
 
-    // Small, bright reactor core with two fine circuit loops.
-    var coreR = r * (.105 + Math.sin(time * .0014) * .006 + pulseBoost * .12);
-    var coreHalo = ctx.createRadialGradient(orbitX, orbitY, coreR * .12, orbitX, orbitY, coreR * 4.2);
-    coreHalo.addColorStop(0, "rgba(255,255,255,.88)");
-    coreHalo.addColorStop(.2, "rgba(" + colors.cyan + ",.5)");
-    coreHalo.addColorStop(.5, "rgba(" + stateColor + ",.18)");
+    var coreR = r * (.082 + Math.sin(time * .0014) * .004 + pulseBoost * .1);
+    var coreHalo = ctx.createRadialGradient(orbitX, orbitY, coreR * .08, orbitX, orbitY, coreR * 4.8);
+    coreHalo.addColorStop(0, "rgba(" + colors.white + ",.88)");
+    coreHalo.addColorStop(.18, "rgba(" + colors.cyan + ",.46)");
+    coreHalo.addColorStop(.48, "rgba(" + stateColor + ",.15)");
     coreHalo.addColorStop(1, "rgba(" + stateColor + ",0)");
-    ctx.globalAlpha = .95;
     ctx.fillStyle = coreHalo;
     ctx.beginPath();
-    ctx.arc(orbitX, orbitY, coreR * 4.2, 0, Math.PI * 2);
+    ctx.arc(orbitX, orbitY, coreR * 4.8, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.save();
     ctx.translate(orbitX, orbitY);
-    ctx.rotate(spin * 5);
-    ctx.strokeStyle = "rgba(" + colors.gold + ",.78)";
-    ctx.lineWidth = 1.2;
+    ctx.rotate(phase * 8);
+    ctx.strokeStyle = "rgba(" + colors.cyan + ",.92)";
+    ctx.lineWidth = 1.15;
     ctx.beginPath();
-    ctx.ellipse(0, 0, coreR * 2.15, coreR * .76, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, coreR * 2.35, coreR * .82, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.rotate(Math.PI / 2.8);
-    ctx.strokeStyle = "rgba(" + colors.cyan + ",.84)";
-    ctx.lineWidth = .9;
+    ctx.strokeStyle = "rgba(" + colors.gold + ",.83)";
+    ctx.lineWidth = .85;
     ctx.beginPath();
     ctx.ellipse(0, 0, coreR * 1.72, coreR * .58, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
 
     var core = ctx.createRadialGradient(
-      orbitX - coreR * .22, orbitY - coreR * .24, 0, orbitX, orbitY, coreR * 1.24
+      orbitX - coreR * .2, orbitY - coreR * .23, 0, orbitX, orbitY, coreR * 1.25
     );
     core.addColorStop(0, "rgba(255,255,255,1)");
-    core.addColorStop(.24, "rgba(" + colors.white + ",.98)");
-    core.addColorStop(.58, "rgba(" + colors.cyan + ",.86)");
+    core.addColorStop(.28, "rgba(" + colors.white + ",.98)");
+    core.addColorStop(.62, "rgba(" + colors.cyan + ",.82)");
     core.addColorStop(1, "rgba(" + stateColor + ",0)");
     ctx.fillStyle = core;
     ctx.beginPath();
-    ctx.arc(orbitX, orbitY, coreR * 1.24, 0, Math.PI * 2);
+    ctx.arc(orbitX, orbitY, coreR * 1.25, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.restore();
-
-    // Satellite points stay sparse, with short trails rather than another dense ring.
-    for (var node = 0; node < 10; node++) {
-      var angle = time * .00017 + node * Math.PI * .2;
-      var rx = r * 1.43;
-      var ry = r * .37;
-      var px = orbitX + Math.cos(angle) * rx;
-      var py = orbitY + Math.sin(angle) * ry;
-      var tx = orbitX + Math.cos(angle - .08) * rx;
-      var ty = orbitY + Math.sin(angle - .08) * ry;
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = active ? .25 + (Math.sin(time * .001 + node) + 1) * .13 : .42;
-      ctx.strokeStyle = node % 3 === 0
-        ? "rgba(" + colors.orange + ",1)" : "rgba(" + colors.cyan + ",1)";
-      ctx.lineWidth = node % 3 === 0 ? 1.5 : .8;
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(px, py);
-      ctx.stroke();
-      ctx.fillStyle = node % 3 === 0
-        ? "rgba(" + colors.gold + ",1)" : "rgba(" + colors.white + ",1)";
-      ctx.beginPath();
-      ctx.arc(px, py, node % 3 === 0 ? 2.1 : 1.25, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Symmetrical registration marks anchor the instrument to the centre.
+    // Minimal instrument labels and registration ticks.
     ctx.save();
-    ctx.globalAlpha = .3;
-    ctx.strokeStyle = "rgba(" + stateColor + ",.9)";
-    ctx.lineWidth = 1;
+    ctx.globalAlpha = .48;
+    ctx.strokeStyle = "rgba(" + colors.cyan + ",.92)";
+    ctx.lineWidth = .8;
     ctx.beginPath();
-    ctx.moveTo(orbitX - r * 1.78, orbitY);
-    ctx.lineTo(orbitX - r * 1.59, orbitY);
-    ctx.moveTo(orbitX + r * 1.59, orbitY);
-    ctx.lineTo(orbitX + r * 1.78, orbitY);
+    ctx.moveTo(orbitX - r * 1.86, orbitY); ctx.lineTo(orbitX - r * 1.72, orbitY);
+    ctx.moveTo(orbitX + r * 1.72, orbitY); ctx.lineTo(orbitX + r * 1.86, orbitY);
+    ctx.moveTo(orbitX, orbitY - r * 1.86); ctx.lineTo(orbitX, orbitY - r * 1.72);
+    ctx.moveTo(orbitX, orbitY + r * 1.72); ctx.lineTo(orbitX, orbitY + r * 1.86);
     ctx.stroke();
-    ctx.fillStyle = "rgba(" + stateColor + ",1)";
-    ctx.font = "700 8px ui-monospace, SFMono-Regular, Menlo, monospace";
-    ctx.letterSpacing = "1.3px";
+
+    ctx.globalAlpha = .58;
+    ctx.fillStyle = "rgba(" + colors.cyan + ",1)";
+    ctx.font = "700 7px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.letterSpacing = "1.1px";
+    ctx.fillText("N", orbitX, orbitY - r * 1.6);
+    ctx.fillText("S", orbitX, orbitY + r * 1.62);
+    ctx.textAlign = "left";
+    ctx.fillText("E", orbitX + r * 1.58, orbitY - 5);
+    ctx.textAlign = "right";
+    ctx.fillText("W", orbitX - r * 1.58, orbitY - 5);
+    ctx.globalAlpha = .82;
     ctx.textAlign = "center";
     var stateLabels = {
-      idle: "NEURAL CORE",
-      listening: "LISTENING",
+      idle: "STANDBY",
+      listening: "VOICE INPUT",
       thinking: "PROCESSING",
       speaking: "VOICE OUTPUT",
       error: "ATTENTION"
     };
-    ctx.fillText("J.A.R.V.I.S  /  " + stateLabels[assistantState], orbitX, orbitY + r * .98);
+    ctx.font = "700 8px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillText("J.A.R.V.I.S.  /  " + stateLabels[assistantState], orbitX, orbitY + r * 1.95);
+    ctx.restore();
     ctx.restore();
   }
 

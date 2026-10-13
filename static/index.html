@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#07080d">
   <meta name="description" content="JARVIS — your local-first AI assistant.">
-  <title>JARVIS — LCARS Command Interface</title>
+  <title>J.A.R.V.I.S. — Stark Systems Interface</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/lcars.css?v=9">
   <link rel="stylesheet" href="/utility-tweaks.css?v=1">
-  <script src="/jarvis-orb.js?v=7" defer></script>
+  <link rel="stylesheet" href="/stark-hud.css?v=1">
+  <script src="/jarvis-orb.js?v=8" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -17,6 +18,10 @@
   <div class="ambient ambient-two"></div>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
+      <div class="hud-brand" aria-label="JARVIS by Stark Systems">
+        <span class="hud-brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="hud-brand-copy"><strong>J.A.R.V.I.S.</strong><small>STARK SYSTEMS / LOCAL AI</small></span>
+      </div>
       <button class="new-chat-btn" id="newChatBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>New conversation</span><kbd>⌘ K</kbd>
