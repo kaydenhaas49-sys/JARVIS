@@ -23,10 +23,19 @@
     lilac: "200,162,255",
     blue: "133,170,255",
     cyan: "120,228,238",
+    green: "121,224,176",
     red: "255,65,92",
     steel: "177,203,229",
     white: "243,255,255"
   };
+  var assistantState = "idle";
+  window.addEventListener("jarvis:state", function (event) {
+    var next = event && event.detail && event.detail.state;
+    if (["idle", "listening", "thinking", "speaking", "error"].includes(next)) {
+      assistantState = next;
+      canvas.dataset.state = next;
+    }
+  });
 
   function resize() {
     width = window.innerWidth;
@@ -121,8 +130,20 @@
 
   // Abstract machine-intelligence mask: holographic blue hardware with a crimson core.
   function drawSphere(x, y, r, time) {
-    var pulse = .965 + Math.sin(time * .00115) * .035;
-    var spin = time * .00018;
+    var pulseBoost = assistantState === "thinking" ? .075 :
+      assistantState === "speaking" ? .045 :
+      assistantState === "listening" ? .035 :
+      assistantState === "error" ? .02 : 0;
+    var spinBoost = assistantState === "thinking" ? 2.15 :
+      assistantState === "speaking" ? 1.5 :
+      assistantState === "listening" ? .72 :
+      assistantState === "error" ? .82 : 1;
+    var stateColor = assistantState === "listening" ? colors.green :
+      assistantState === "speaking" ? colors.gold :
+      assistantState === "error" ? colors.red :
+      assistantState === "thinking" ? colors.lilac : colors.cyan;
+    var pulse = .965 + Math.sin(time * .00115) * .035 + pulseBoost * (.65 + Math.sin(time * .0024) * .35);
+    var spin = time * .00018 * spinBoost;
     var orbitX = x + Math.sin(time * .00023) * r * .045;
     var orbitY = y + Math.cos(time * .00019) * r * .035;
     var globeR = r * .62 * pulse;
@@ -143,7 +164,7 @@
     ctx.fill();
 
     // Layered telemetry rings with counter-rotating tick marks.
-    drawOrbitalRing(orbitX, orbitY, r * 1.42, r * .32, -.48 + spin * .8, colors.cyan, .52, 88, spin * 1.2);
+    drawOrbitalRing(orbitX, orbitY, r * 1.42, r * .32, -.48 + spin * .8, stateColor, assistantState === "idle" ? .52 : .7, 88, spin * 1.2);
     drawOrbitalRing(orbitX, orbitY, r * 1.2, r * .55, .94 - spin * .58, colors.lilac, .39, 64, -spin * 1.1);
     drawOrbitalRing(orbitX, orbitY, r * 1.62, r * .17, .19 + spin * .48, colors.orange, .52, 96, spin * 1.7);
     drawOrbitalRing(orbitX, orbitY, r * 1.05, r * .84, -.18 - spin * .38, colors.blue, .29, 44, spin * .45);
@@ -151,7 +172,7 @@
 
     // Fast, luminous orbit segments sweep across the slower wireframe.
     drawEnergyArc(orbitX, orbitY, r * 1.42, r * .32, -.48 + spin * .8,
-      .15 + spin * 2.2, 1.27 + spin * 2.2, colors.cyan, 2.3, .88, 15);
+      .15 + spin * 2.2, 1.27 + spin * 2.2, stateColor, 2.3, assistantState === "idle" ? .88 : .98, 15);
     drawEnergyArc(orbitX, orbitY, r * 1.2, r * .55, .94 - spin * .58,
       2.75 - spin * 1.8, 4.05 - spin * 1.8, colors.lilac, 2, .68, 12);
     drawEnergyArc(orbitX, orbitY, r * 1.62, r * .17, .19 + spin * .48,
@@ -273,7 +294,7 @@
     ctx.stroke();
 
     // Contained reactor core: white-hot center, amber corona, rotating circuit rings.
-    var coreR = r * (.125 + Math.sin(time * .0016) * .009);
+    var coreR = r * (.125 + Math.sin(time * .0016) * .009 + pulseBoost * .18);
     var coreHalo = ctx.createRadialGradient(orbitX, orbitY, coreR * .1, orbitX, orbitY, coreR * 3.8);
     coreHalo.addColorStop(0, "rgba(255,255,255,.9)");
     coreHalo.addColorStop(.18, "rgba(" + colors.gold + ",.68)");
@@ -312,7 +333,7 @@
     ctx.arc(orbitX, orbitY, coreR * 1.25, 0, Math.PI * 2);
     ctx.fill();
 
-    // Let the hybrid machine mask emerge from the reactor glow.
+    // Leave the glass hologram clear and unobstructed.
     ctx.restore();
 
     // Satellites leave small tapered energy trails around the outside.
@@ -355,7 +376,8 @@
     ctx.font = "700 8px ui-monospace, SFMono-Regular, Menlo, monospace";
     ctx.letterSpacing = "1.2px";
     ctx.textAlign = "center";
-    ctx.fillText("J.A.R.V.I.S  /  NEURAL CORE", orbitX, orbitY + r * 1.02);
+    var stateLabels = { idle: "NEURAL CORE", listening: "LISTENING", thinking: "PROCESSING", speaking: "VOICE OUTPUT", error: "ATTENTION" };
+    ctx.fillText("J.A.R.V.I.S  /  " + stateLabels[assistantState], orbitX, orbitY + r * 1.02);
     ctx.restore();
   }
 
@@ -379,7 +401,10 @@
     // Strong presence on the idle screen; fade back under conversation text.
     var chatLog = document.getElementById("chatLog");
     var hasConversation = !!(chatLog && chatLog.children.length);
-    canvas.style.opacity = hasConversation ? (mobile ? ".18" : ".23") : (mobile ? ".78" : ".92");
+    var active = assistantState !== "idle";
+    canvas.style.opacity = hasConversation
+      ? (active ? (mobile ? ".28" : ".4") : (mobile ? ".18" : ".23"))
+      : (mobile ? ".78" : ".92");
     drawSphere(x, y, r, animationTime);
   }
 
@@ -416,13 +441,8 @@
     if (motionQuery.addEventListener) {
       motionQuery.addEventListener("change", function (event) {
         reducedMotion = event.matches;
-        if (reducedMotion && raf) {
-          cancelAnimationFrame(raf);
-          raf = 0;
-          render(performance.now());
-        } else {
-          start();
-        }
+        // Animation continues in reduced-motion mode at a slower visual tempo.
+        start();
       });
     }
   }

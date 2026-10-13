@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import jarvis
@@ -37,6 +38,37 @@ class WorkspacePathTests(unittest.TestCase):
         (self.root / "shortcut").symlink_to(outside, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, "outside"):
             jarvis.resolve_workspace_path("shortcut/secret.txt", self.root)
+
+
+class ModelAndMemoryTests(unittest.TestCase):
+    def test_model_endpoint_requires_http_or_https_without_credentials(self) -> None:
+        self.assertEqual(
+            jarvis.normalize_model_base_url("http://127.0.0.1:8080/v1/"),
+            "http://127.0.0.1:8080/v1",
+        )
+        for value in ("", "file:///tmp/model", "http://user:pass@localhost/v1", "http://localhost/v1?key=x"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    jarvis.normalize_model_base_url(value)
+
+    def test_model_id_validation(self) -> None:
+        self.assertEqual(jarvis.validate_model_id("qwen3-coder:30b"), "qwen3-coder:30b")
+        with self.assertRaises(ValueError):
+            jarvis.validate_model_id("")
+
+    def test_memory_can_be_saved_deduplicated_and_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(jarvis, "MEMORY_PATH", Path(directory) / "memory.json"):
+                first = jarvis.remember_fact("I prefer short answers.")
+                again = jarvis.remember_fact("I prefer short answers.")
+                self.assertFalse(first["duplicate"])
+                self.assertTrue(again["duplicate"])
+                self.assertEqual(len(jarvis.memory_items()), 1)
+                jarvis.delete_memory_fact(first["item"]["id"])
+                self.assertEqual(jarvis.memory_items(), [])
+
+    def test_memory_is_approval_gated_when_requested_by_agent(self) -> None:
+        self.assertTrue(jarvis.is_approval_required("remember_fact"))
 
 
 class ApprovalAndCommandTests(unittest.TestCase):

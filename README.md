@@ -5,7 +5,12 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 ## Features
 
 - Chat with a local model through llama.cpp, LM Studio, or another OpenAI-compatible endpoint.
-- Voice input and spoken responses in supported browsers.
+- Voice input and spoken responses in supported browsers, with a reactive holographic core.
+- Model manager to discover compatible server models and save the selected model/endpoint locally.
+- Persistent memory injected into future chats; memory requests made in chat require approval.
+- Live activity feed, kept in browser storage without copying full message text into the feed.
+- Kitchen panel with grocery checklist, pantry inventory, weekly meal notes, and browser-based timers.
+- Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
 - File writes and terminal commands pause for your explicit approval in the UI.
 - Local-only HTTP server by default; model API credentials remain on the server.
@@ -21,7 +26,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 
 The default endpoint is `http://127.0.0.1:8080/v1`, suitable for a local llama.cpp server. For LM Studio, use its local server URL. For Ollama's OpenAI-compatible endpoint, use `http://127.0.0.1:11434/v1`.
 
-JARVIS creates `~/JARVIS-workspace` for files it can browse and edit. File tools are deliberately scoped to this workspace. Terminal actions and file writes require you to approve the exact action in the dashboard.
+JARVIS creates `~/JARVIS-workspace` for files it can browse and edit. File tools are deliberately scoped to this workspace. Terminal actions and file writes require you to approve the exact action in the dashboard. User settings and persistent memory are saved under `~/.local/share/jarvis/`; kitchen lists and activity history stay in this browser's local storage.
 
 ## Configuration
 
