@@ -1,14 +1,73 @@
 """Unit tests for JARVIS path and command safety boundaries."""
 from __future__ import annotations
 
+import io
 import json
+import sys
+import types
 import urllib.error
 import tempfile
 import unittest
-from unittest import mock
+import wave
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import jarvis
+import voice
+
+
+class VoiceSupportTests(unittest.TestCase):
+    def test_empty_or_oversized_recordings_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "No voice audio"):
+            voice.transcribe_audio_bytes(b"")
+        with self.assertRaisesRegex(ValueError, "too large"):
+            voice.transcribe_audio_bytes(b"x" * (voice.MAX_AUDIO_BYTES + 1))
+
+    def test_local_transcription_uses_and_removes_a_temporary_audio_file(self) -> None:
+        class FakeWhisper:
+            source_path = None
+
+            def transcribe(self, path, **kwargs):
+                self.source_path = Path(path)
+                self.asserted_options = kwargs
+                assert self.source_path.is_file()
+                assert self.source_path.suffix == ".webm"
+                return iter([SimpleNamespace(text=" Hello from local speech ") ]), None
+
+        fake_model = FakeWhisper()
+        fake_module = types.ModuleType("faster_whisper")
+        fake_module.WhisperModel = lambda *args, **kwargs: fake_model
+        with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+             mock.patch.object(voice, "_STT_MODEL", fake_model):
+            result = voice.transcribe_audio_bytes(b"fake encoded audio", ".webm")
+        self.assertEqual(result, "Hello from local speech")
+        self.assertFalse(fake_model.source_path.exists())
+        self.assertTrue(fake_model.asserted_options["vad_filter"])
+
+    def test_wakeword_pcm_is_wrapped_as_mono_16khz_wav(self) -> None:
+        pcm = b"\\x00\\x00" * 1600
+        with mock.patch.object(voice, "transcribe_audio_bytes", return_value="hello") as transcribe:
+            self.assertEqual(voice.transcribe_pcm_bytes(pcm), "hello")
+        wav_bytes, suffix = transcribe.call_args.args
+        self.assertEqual(suffix, ".wav")
+        with wave.open(io.BytesIO(wav_bytes), "rb") as reader:
+            self.assertEqual(reader.getframerate(), 16000)
+            self.assertEqual(reader.getnchannels(), 1)
+            self.assertEqual(reader.getsampwidth(), 2)
+            self.assertEqual(reader.getnframes(), 1600)
+
+    def test_wakeword_events_use_a_monotonic_cursor(self) -> None:
+        manager = voice.WakeWordManager(transcribe_pcm=lambda _pcm: "ignored")
+        first = manager._publish("wake", score=0.8)
+        second = manager._publish("command", text="What time is it?")
+        self.assertEqual([row["id"] for row in manager.events_since(0)["events"]], [first["id"], second["id"]])
+        self.assertEqual(manager.events_since(first["id"])["events"], [second])
+        self.assertEqual(manager.status()["last_event_id"], second["id"])
+
+    def test_wake_phrase_is_removed_from_transcribed_command(self) -> None:
+        self.assertEqual(voice._strip_wake_phrase("Hey JARVIS, what time is it?"), "what time is it?")
+        self.assertEqual(voice._strip_wake_phrase("Set a five minute timer"), "Set a five minute timer")
 
 
 class WorkspacePathTests(unittest.TestCase):
