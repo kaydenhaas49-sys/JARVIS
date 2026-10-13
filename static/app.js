@@ -1116,6 +1116,270 @@
 
   initQuickNotes();
 
+
+  function initRecipeSaver() {
+    const STORE = "jarvis-recipes-v1";
+    const MAX = 500;
+    let recipes = [];
+    let editingId = "";
+    let searchText = "";
+    let activeCategory = "";
+    let favoritesOnly = false;
+
+    function splitLines(value) {
+      const array = Array.isArray(value) ? value : String(value || "").split("\n");
+      return array.map((item) => String(item ?? "").trim()).filter(Boolean).slice(0, 250);
+    }
+    function normalize(row, keepId) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+      const name = String(row.name || row.title || "").trim().slice(0, 160);
+      if (!name) return null;
+      const minute = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 1440 ? Math.round(Number(value)) : 0;
+      const now = Date.now();
+      return {
+        id: keepId && typeof row.id === "string" && row.id ? row.id : makeId(),
+        name,
+        category: String(row.category || "Other").trim().slice(0, 80) || "Other",
+        description: String(row.description || "").trim().slice(0, 800),
+        ingredients: splitLines(row.ingredients),
+        instructions: splitLines(row.instructions || row.method),
+        servings: String(row.servings || "").trim().slice(0, 40),
+        prepMinutes: minute(row.prepMinutes || row.prep_time),
+        cookMinutes: minute(row.cookMinutes || row.cook_time),
+        notes: String(row.notes || "").trim().slice(0, 2000),
+        source: String(row.source || "").trim().slice(0, 500),
+        favorite: Boolean(row.favorite || row.is_favorite),
+        createdAt: Number(row.createdAt) || now,
+        updatedAt: Number(row.updatedAt) || now
+      };
+    }
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE) || "[]");
+      if (Array.isArray(saved)) recipes = saved.map((row) => normalize(row, true)).filter(Boolean).slice(0, MAX);
+    } catch (_) {}
+
+    const nav = document.createElement("button");
+    nav.className = "nav-item nav-button";
+    nav.id = "recipesBtn";
+    nav.type = "button";
+    nav.innerHTML = '<span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h15v17H7a2 2 0 0 1-2-2V4ZM5 4v15M9 8h7M9 12h7M9 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>Recipe Saver</span>';
+    const notes = document.getElementById("notesBtn");
+    if (notes && !document.getElementById("recipesBtn")) notes.insertAdjacentElement("afterend", nav);
+
+    const css = document.createElement("style");
+    css.textContent = [
+      ".recipe-grid{display:grid;grid-template-columns:minmax(230px,.8fr) minmax(0,1.2fr);gap:14px;align-items:start}",
+      ".recipe-form{display:flex;flex-direction:column;gap:11px}.recipe-form label,.recipe-filter label{display:flex;flex-direction:column;gap:6px;color:#9aa9bd;font-size:10px;font-weight:700}",
+      ".recipe-form input,.recipe-form textarea,.recipe-filter input,.recipe-filter select{box-sizing:border-box;width:100%;min-width:0;padding:10px;border:1px solid rgba(148,173,207,.19);border-radius:7px;outline:none;background:rgba(3,7,13,.55);color:#dce7f6;font:11px/1.65 Inter,system-ui,sans-serif}",
+      ".recipe-form select,.recipe-filter select{color-scheme:dark}.recipe-form textarea{resize:vertical;white-space:pre-wrap}.recipe-pair{display:grid;grid-template-columns:1fr 1fr;gap:9px}",
+      ".recipe-buttons,.recipe-card-actions,.recipe-import-export{display:flex;flex-wrap:wrap;gap:7px}.recipe-filter{display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,.7fr);gap:9px;margin-bottom:10px}",
+      ".recipe-fav-filter{display:flex;align-items:center;gap:8px;margin:7px 0 13px;color:#9aa9bd;font-size:10px}.recipe-fav-filter input{accent-color:#78e4ee}",
+      ".recipe-list{display:flex;flex-direction:column;gap:10px}.recipe-card{padding:13px;border:1px solid rgba(148,173,207,.14);border-radius:9px;background:rgba(4,9,16,.42);min-width:0}.recipe-card.is-favorite{border-color:rgba(255,184,94,.35)}",
+      ".recipe-card-header{display:flex;justify-content:space-between;gap:10px}.recipe-card h3{margin:0;color:#e2edf9;font-size:13px;overflow-wrap:anywhere}.recipe-category{display:block;margin-top:4px;color:var(--lcars-cyan);font-size:9px;text-transform:uppercase;letter-spacing:.08em}",
+      ".recipe-description,.recipe-notes{font-size:11px;color:#a8b8cb;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.recipe-meta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.recipe-meta span{font:9px ui-monospace,monospace;color:#8496ad;border:1px solid rgba(148,173,207,.12);border-radius:5px;padding:4px 6px}",
+      ".recipe-card details{border-top:1px solid rgba(148,173,207,.09);padding-top:10px;margin-top:10px}.recipe-card summary{color:var(--lcars-cyan);font-size:10px;font-weight:700;cursor:pointer}.recipe-card details h4{font-size:10px;text-transform:uppercase;color:#dce7f6;margin:12px 0 6px}.recipe-card li{font-size:11px;color:#a8b8cb;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}.recipe-card details ul,.recipe-card details ol{padding-left:20px}",
+      ".recipe-card-actions{margin-top:10px;padding-top:9px;border-top:1px solid rgba(148,173,207,.08)}.recipe-card-actions button{min-height:29px;padding:6px 9px;font-size:9px}.recipe-delete{border:1px solid rgba(255,107,120,.2);border-radius:6px;background:rgba(255,107,120,.04);color:#e99aa2;cursor:pointer}",
+      ".recipe-import-export{justify-content:flex-end;margin-top:12px}.recipe-source{font-size:10px;color:var(--lcars-cyan);overflow-wrap:anywhere;display:block;margin-top:8px}",
+      "@media(max-width:760px){.recipe-grid{grid-template-columns:1fr}.recipe-filter{grid-template-columns:1fr}}"
+    ].join("");
+    document.head.appendChild(css);
+
+    function save() {
+      try { localStorage.setItem(STORE, JSON.stringify(recipes)); return true; }
+      catch (_) { showToast("Browser storage is full or unavailable.", "error"); return false; }
+    }
+    function renderList() {
+      const list = document.getElementById("recipeList");
+      if (!list) return;
+      const count = document.getElementById("recipeCount");
+      if (count) count.textContent = recipes.length + " / " + MAX;
+      const select = document.getElementById("recipeCategoryFilter");
+      if (select) {
+        select.innerHTML = '<option value="">All categories</option>' +
+          [...new Set(recipes.map((r) => r.category))].sort().map((c) => '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>').join("");
+        select.value = activeCategory;
+      }
+      const q = searchText.trim().toLocaleLowerCase();
+      const items = recipes.slice().sort((a,b) => Number(b.favorite)-Number(a.favorite) || b.updatedAt-a.updatedAt)
+        .filter((r) => (!activeCategory || r.category === activeCategory) && (!favoritesOnly || r.favorite) &&
+          (!q || [r.name,r.category,r.description,r.ingredients.join(" "),r.instructions.join(" "),r.notes,r.source].join(" ").toLocaleLowerCase().includes(q)));
+      if (!recipes.length) { list.innerHTML = '<div class="empty-state">No recipes saved yet. Add one here or import the recipes.json file from your older JARVIS Kitchen app.</div>'; return; }
+      if (!items.length) { list.innerHTML = '<div class="empty-state">No recipes match those filters.</div>'; return; }
+      list.innerHTML = items.map((r) => {
+        const meta = [r.servings ? "Serves " + r.servings : "",r.prepMinutes ? "Prep " + r.prepMinutes + " min" : "",r.cookMinutes ? "Cook " + r.cookMinutes + " min" : ""].filter(Boolean);
+        const ingredients = r.ingredients.length ? "<ul>" + r.ingredients.map((x) => "<li>" + escapeHtml(x) + "</li>").join("") + "</ul>" : '<p class="empty-state">No ingredients saved.</p>';
+        const steps = r.instructions.length ? "<ol>" + r.instructions.map((x) => "<li>" + escapeHtml(x) + "</li>").join("") + "</ol>" : '<p class="empty-state">No instructions saved.</p>';
+        let source = "";
+        if (r.source) {
+          let url = "";
+          try { const parsed = new URL(r.source); if (parsed.protocol === "http:" || parsed.protocol === "https:") url = parsed.href; } catch (_) {}
+          source = url ? '<a class="recipe-source" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Open recipe source ↗</a>' : '<span class="recipe-source">Source: ' + escapeHtml(r.source) + "</span>";
+        }
+        return '<article class="recipe-card' + (r.favorite ? " is-favorite" : "") + '"><div class="recipe-card-header"><div><h3>' + escapeHtml(r.name) + '</h3><span class="recipe-category">' + escapeHtml(r.category) + '</span></div><button class="utility-secondary" type="button" data-recipe-action="favorite" data-id="' + escapeHtml(r.id) + '">' + (r.favorite ? "★" : "☆") + '</button></div>' +
+          (r.description ? '<p class="recipe-description">' + escapeHtml(r.description) + "</p>" : "") +
+          (meta.length ? '<div class="recipe-meta">' + meta.map((x) => "<span>" + escapeHtml(x) + "</span>").join("") + "</div>" : "") +
+          '<details><summary>Ingredients & method (' + r.ingredients.length + " ingredients · " + r.instructions.length + ' steps)</summary><h4>Ingredients</h4>' + ingredients + "<h4>Instructions</h4>" + steps +
+          (r.notes ? '<h4>Personal notes</h4><p class="recipe-notes">' + escapeHtml(r.notes) + "</p>" : "") + source + "</details>" +
+          '<div class="recipe-card-actions"><button class="utility-secondary" type="button" data-recipe-action="edit" data-id="' + escapeHtml(r.id) + '">Edit</button><button class="utility-secondary" type="button" data-recipe-action="copy" data-id="' + escapeHtml(r.id) + '">Copy text</button><button class="recipe-delete" type="button" data-recipe-action="delete" data-id="' + escapeHtml(r.id) + '">Delete</button></div></article>';
+      }).join("");
+    }
+    function renderPanel() {
+      const r = recipes.find((item) => item.id === editingId) || null;
+      elements.utilityEyebrow.textContent = "KITCHEN / RECIPE DATABASE";
+      elements.utilityTitle.textContent = "Recipe Saver";
+      elements.utilityContent.innerHTML =
+        '<p class="utility-intro">Save recipes, search by ingredients, and keep a portable JSON backup. Import supports the older JARVIS Kitchen recipes.json format. Recipes stay in this browser, separate from AI memory.</p>' +
+        '<div class="recipe-grid"><section class="utility-card"><div class="utility-card-heading"><span class="utility-index">01</span><div><h3>' + (r ? "Edit recipe" : "Add a recipe") + '</h3><p>Put each ingredient and step on its own line</p></div></div>' +
+        '<form class="recipe-form" id="recipeForm"><label for="recipeName">Recipe name<input id="recipeName" name="name" maxlength="160" required value="' + escapeHtml(r?.name || "") + '" placeholder="Family pasta bake"></label>' +
+        '<div class="recipe-pair"><label for="recipeCategory">Category<input id="recipeCategory" name="category" maxlength="80" value="' + escapeHtml(r?.category || "Other") + '" placeholder="Dinner, dessert…"></label><label for="recipeServings">Servings<input id="recipeServings" name="servings" maxlength="40" value="' + escapeHtml(r?.servings || "") + '" placeholder="4 people"></label></div>' +
+        '<label for="recipeDescription">Description (optional)<input id="recipeDescription" name="description" maxlength="800" value="' + escapeHtml(r?.description || "") + '" placeholder="Short description"></label>' +
+        '<div class="recipe-pair"><label for="recipePrep">Prep minutes<input id="recipePrep" name="prep" type="number" min="0" max="1440" value="' + (r?.prepMinutes || 0) + '"></label><label for="recipeCook">Cook minutes<input id="recipeCook" name="cook" type="number" min="0" max="1440" value="' + (r?.cookMinutes || 0) + '"></label></div>' +
+        '<label for="recipeIngredients">Ingredients<textarea id="recipeIngredients" name="ingredients" rows="6" maxlength="12000" required placeholder="2 cups flour&#10;1 tsp salt">' + escapeHtml((r?.ingredients || []).join("\n")) + '</textarea></label>' +
+        '<label for="recipeInstructions">Instructions<textarea id="recipeInstructions" name="instructions" rows="7" maxlength="16000" required placeholder="Preheat the oven…&#10;Mix the ingredients…">' + escapeHtml((r?.instructions || []).join("\n")) + '</textarea></label>' +
+        '<label for="recipeNotes">Personal notes (optional)<textarea id="recipeNotes" name="notes" rows="3" maxlength="2000" placeholder="Substitutions or tips">' + escapeHtml(r?.notes || "") + '</textarea></label>' +
+        '<label for="recipeSource">Source URL or credit (optional)<input id="recipeSource" name="source" maxlength="500" value="' + escapeHtml(r?.source || "") + '" placeholder="https://… or cookbook/page"></label>' +
+        '<div class="recipe-buttons"><button class="utility-primary" type="submit">' + (r ? "Save changes" : "Save recipe") + '</button>' + (r ? '<button class="utility-secondary" type="button" data-recipe-action="cancel">Cancel</button>' : "") + '</div></form></section>' +
+        '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">02</span><div><h3>Recipe library</h3><p>Search names, ingredients, or instructions</p></div></div>' +
+        '<div class="recipe-filter"><label for="recipeSearch">Search<input id="recipeSearch" type="search" data-recipe-search value="' + escapeHtml(searchText) + '" placeholder="Find a dish or ingredient…"></label><label for="recipeCategoryFilter">Category<select id="recipeCategoryFilter" data-recipe-category><option value="">All categories</option></select></label></div>' +
+        '<label class="recipe-fav-filter"><input type="checkbox" data-recipe-favorites' + (favoritesOnly ? " checked" : "") + '> Favorites only <span class="utility-muted" id="recipeCount">' + recipes.length + " / " + MAX + '</span></label><div class="recipe-list" id="recipeList"></div>' +
+        '<div class="recipe-import-export"><input type="file" id="recipeImportFile" accept=".json,application/json" hidden><button class="utility-secondary" type="button" data-recipe-action="import">Import JSON</button><button class="utility-secondary" type="button" data-recipe-action="export">Export JSON</button></div></section></div>';
+      renderList();
+    }
+    function openPanel() {
+      editingId = "";
+      currentUtilityView = "recipes";
+      elements.utilityPanel.classList.remove("hidden");
+      closeSidebar();
+      renderPanel();
+      logActivity("Panel opened", "Recipe Saver", "kitchen");
+      document.getElementById("utilityCloseBtn")?.focus({ preventScroll: true });
+    }
+    function recipeText(r) {
+      return [r.name,"Category: " + r.category,r.servings ? "Servings: " + r.servings : "",r.prepMinutes ? "Prep: " + r.prepMinutes + " min" : "",r.cookMinutes ? "Cook: " + r.cookMinutes + " min" : "",r.description,"","INGREDIENTS",...r.ingredients.map((x) => "- " + x),"","INSTRUCTIONS",...r.instructions.map((x,i) => (i+1) + ". " + x),r.notes ? "\nNOTES\n" + r.notes : "",r.source ? "\nSOURCE\n" + r.source : ""].filter((x) => x !== null && x !== undefined).join("\n");
+    }
+    async function copyRecipe(r) {
+      try {
+        const value = recipeText(r);
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+        else {
+          const area = document.createElement("textarea"); area.value = value; area.style.position = "fixed"; area.style.opacity = "0";
+          document.body.appendChild(area); area.select(); const copied = document.execCommand("copy"); area.remove(); if (!copied) throw new Error("copy failed");
+        }
+        showToast("Recipe copied.", "success");
+      } catch (_) { showToast("Could not copy this recipe in this browser.", "error"); }
+    }
+    async function importFile(file) {
+      if (!file) return;
+      if (file.size > 5000000) { showToast("JSON file is over 5 MB.", "error"); return; }
+      try {
+        const payload = JSON.parse(await file.text());
+        const source = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.recipes) ? payload.recipes : null);
+        if (!source) throw new Error("Use a recipe array or an object containing a recipes array.");
+        const incoming = source.slice(0,2000).map((x) => normalize(x,false)).filter(Boolean);
+        if (!incoming.length) { showToast("No valid recipes found; each recipe needs a name.", "error"); return; }
+        if (!window.confirm("Merge " + incoming.length + " recipes into your library? Existing recipes stay untouched and duplicates are skipped.")) return;
+        const before = recipes;
+        const keys = new Set(recipes.map((r) => (r.name + "|" + r.ingredients.join("|")).toLocaleLowerCase()));
+        const added = []; let skipped = 0;
+        for (const r of incoming) {
+          const key = (r.name + "|" + r.ingredients.join("|")).toLocaleLowerCase();
+          if (keys.has(key)) { skipped++; continue; }
+          if (before.length + added.length >= MAX) break;
+          keys.add(key); added.push(r);
+        }
+        recipes = [...added,...before];
+        if (!save()) { recipes = before; renderPanel(); return; }
+        editingId = "";
+        logActivity("Recipes imported", added.length + " added; " + skipped + " duplicates skipped", "kitchen");
+        showToast("Imported " + added.length + " recipes" + (skipped ? "; skipped " + skipped + " duplicates." : "."), "success");
+        renderPanel();
+      } catch (error) { showToast("Could not import JSON: " + (error instanceof SyntaxError ? "invalid JSON file." : error.message), "error"); }
+    }
+
+    button.addEventListener("click", openPanel);
+    elements.utilityContent.addEventListener("submit", (event) => {
+      const form = event.target.closest("#recipeForm");
+      if (!form) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      const data = new FormData(form);
+      const name = String(data.get("name") || "").trim();
+      const ingredients = splitLines(String(data.get("ingredients") || ""));
+      const instructions = splitLines(String(data.get("instructions") || ""));
+      if (!name || !ingredients.length || !instructions.length) { showToast("Enter a recipe name, at least one ingredient, and one instruction.", "error"); return; }
+      const existing = editingId ? recipes.find((r) => r.id === editingId) : null;
+      const now = Date.now();
+      const minute = (v) => Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 1440 ? Math.round(Number(v)) : 0;
+      const updated = {
+        id: existing?.id || makeId(), name: name.slice(0,160), category: String(data.get("category") || "").trim().slice(0,80) || "Other",
+        description: String(data.get("description") || "").trim().slice(0,800), ingredients, instructions,
+        servings: String(data.get("servings") || "").trim().slice(0,40), prepMinutes: minute(data.get("prep")), cookMinutes: minute(data.get("cook")),
+        notes: String(data.get("notes") || "").trim().slice(0,2000), source: String(data.get("source") || "").trim().slice(0,500),
+        favorite: Boolean(existing?.favorite), createdAt: existing?.createdAt || now, updatedAt: now
+      };
+      const before = recipes;
+      if (existing) recipes = recipes.map((r) => r.id === existing.id ? updated : r);
+      else {
+        if (recipes.length >= MAX) { showToast("Recipe library is full (500). Export a backup or delete a recipe.", "error"); return; }
+        recipes = [updated,...recipes];
+      }
+      if (!save()) { recipes = before; return; }
+      editingId = "";
+      logActivity(existing ? "Recipe updated" : "Recipe saved", name.slice(0,80), "kitchen");
+      showToast(existing ? "Recipe updated." : "Recipe saved.", "success");
+      renderPanel();
+    }, true);
+    elements.utilityContent.addEventListener("input", (event) => {
+      const el = event.target.closest("[data-recipe-search]");
+      if (el) { searchText = el.value; renderList(); }
+    });
+    elements.utilityContent.addEventListener("change", (event) => {
+      const cat = event.target.closest("[data-recipe-category]");
+      const fav = event.target.closest("[data-recipe-favorites]");
+      const file = event.target.closest("#recipeImportFile");
+      if (cat) { activeCategory = cat.value; renderList(); }
+      if (fav) { favoritesOnly = fav.checked; renderList(); }
+      if (file?.files?.[0]) { const selectedFile = file.files[0]; file.value = ""; importFile(selectedFile); }
+    });
+    elements.utilityContent.addEventListener("click", (event) => {
+      const b = event.target.closest("[data-recipe-action]");
+      if (!b) return;
+      const action = b.dataset.recipeAction;
+      const id = b.dataset.id;
+      if (action === "import") { document.getElementById("recipeImportFile")?.click(); return; }
+      if (action === "export") {
+        const blob = new Blob([JSON.stringify({recipes:recipes},null,2) + "\n"],{type:"application/json"});
+        const url = URL.createObjectURL(blob); const link = document.createElement("a");
+        link.href=url; link.download="jarvis-recipes-"+new Date().toISOString().slice(0,10)+".json";
+        document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url),0);
+        showToast("Recipe backup exported.","success"); return;
+      }
+      if (action === "cancel") { editingId=""; renderPanel(); return; }
+      const r = recipes.find((x) => x.id === id);
+      if (!r) return;
+      if (action === "edit") { editingId=id; renderPanel(); document.getElementById("recipeName")?.focus({preventScroll:true}); return; }
+      if (action === "copy") { copyRecipe(r); return; }
+      if (action === "delete" && !window.confirm('Delete "' + r.name + '" from the recipe library?')) return;
+      const before = recipes;
+      if (action === "favorite") recipes = recipes.map((x) => x.id === id ? {...x,favorite:!x.favorite,updatedAt:Date.now()} : x);
+      if (action === "delete") { recipes = recipes.filter((x) => x.id !== id); if (editingId === id) editingId=""; }
+      if (save()) {
+        if (action === "favorite") logActivity(recipes.find((x) => x.id === id).favorite ? "Recipe favorited" : "Recipe unfavorited",r.name,"kitchen");
+        if (action === "delete") { logActivity("Recipe deleted",r.name,"kitchen"); showToast("Recipe deleted.","success"); }
+      } else recipes=before;
+      renderPanel();
+    });
+    window.addEventListener("storage", (event) => {
+      if (event.key !== STORE) return;
+      try {
+        const parsed = JSON.parse(event.newValue || "[]");
+        recipes = Array.isArray(parsed) ? parsed.map((r) => normalize(r,true)).filter(Boolean).slice(0,MAX) : [];
+        if (currentUtilityView === "recipes") renderPanel();
+      } catch (_) {}
+    });
+  }
+  initRecipeSaver();
+
+
   loadConfig();
   logActivity("JARVIS ready", "Local assistant interface initialized", "system");
   elements.input.focus({ preventScroll: true });
