@@ -589,10 +589,10 @@
   function renderModelPanel(data, endpointOverride, modelOverride) {
     data = data || {};
     const endpoint = endpointOverride || data.base_url || "http://127.0.0.1:11434";
+    const models = Array.isArray(data.models) ? data.models : [];
     const requestedModel = modelOverride || data.model || "";
     const model = (requestedModel === "local-model" && models.length && !models.some((item) => item.id === requestedModel))
       ? models[0].id : (requestedModel || models[0]?.id || "local-model");
-    const models = Array.isArray(data.models) ? data.models : [];
     const options = models.map((item) => '<option value="' + escapeHtml(item.id) + '"></option>').join("");
     const status = data.available
       ? (models.length
