@@ -617,6 +617,11 @@ kbd { background: rgba(10, 43, 65, .55) !important; border-color: rgba(70, 202, 
   color: #ffca7a;
   border-color: rgba(255, 202, 122, .24);
 }
+.hud-channel-state[data-state="untested"] {
+  color: #ffca7a;
+  border-color: rgba(255, 202, 122, .24);
+  background: rgba(88, 56, 18, .14);
+}
 .hud-core-prompt {
   min-height: 10px;
   transition: color .18s;
