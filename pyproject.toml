@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "jarvis-local-assistant"
 version = "1.0.0"
@@ -19,3 +23,10 @@ target-version = "py310"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# This app is run from its checkout; only its two root Python modules belong
+# in the editable distribution. The static/ and reference folders are app data,
+# not Python packages that setuptools should auto-discover.
+[tool.setuptools]
+py-modules = ["jarvis", "voice"]
+include-package-data = false
