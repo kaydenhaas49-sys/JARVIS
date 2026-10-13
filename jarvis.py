@@ -48,7 +48,7 @@ APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 HOST = os.environ.get("JARVIS_HOST", "127.0.0.1")
 PORT = int(os.environ.get("JARVIS_PORT", "8765"))
-BASE_URL = os.environ.get("JARVIS_BASE_URL", "http://127.0.0.1:8080/v1").rstrip("/")
+BASE_URL = os.environ.get("JARVIS_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 MODEL = os.environ.get("JARVIS_MODEL", "local-model")
 API_KEY = os.environ.get("JARVIS_API_KEY", "")
 WORKSPACE = Path(
@@ -93,14 +93,29 @@ def normalize_model_base_url(raw: str) -> str:
         raise ValueError("Enter a model endpoint URL under 500 characters.")
     try:
         parsed = urlsplit(value)
-        _ = parsed.port
+        port = parsed.port
     except ValueError as exc:
         raise ValueError("The model endpoint URL is invalid.") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("The model endpoint must begin with http:// or https:// and include a host.")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("Endpoint URLs cannot contain credentials, query strings, or fragments.")
+    if port == 11434 and parsed.path.rstrip("/") == "/v1":
+        value = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
     return value
+
+
+def is_ollama_native_api(base_url: str | None = None) -> bool:
+    endpoint = normalize_model_base_url(base_url or BASE_URL)
+    parsed = urlsplit(endpoint)
+    return parsed.port == 11434 or parsed.path.rstrip("/") in {"", "/", "/api"}
+
+
+def ollama_api_url(base_url: str, route: str) -> str:
+    endpoint = normalize_model_base_url(base_url).rstrip("/")
+    if endpoint.endswith("/api"):
+        return endpoint + "/" + route.lstrip("/")
+    return endpoint + "/api/" + route.lstrip("/")
 
 
 def validate_model_id(raw: str) -> str:
@@ -185,22 +200,37 @@ def current_system_prompt() -> str:
 
 def available_models(base_url: str | None = None) -> dict[str, Any]:
     endpoint = normalize_model_base_url(base_url or BASE_URL)
-    request = urllib.request.Request(endpoint + "/models", headers={"Accept": "application/json"})
+    native = is_ollama_native_api(endpoint)
+    request_url = ollama_api_url(endpoint, "tags") if native else endpoint + "/models"
+    request = urllib.request.Request(request_url, headers={"Accept": "application/json"})
     if API_KEY:
         request.add_header("Authorization", "Bearer " + API_KEY)
     try:
         with urllib.request.urlopen(request, timeout=6) as response:
             parsed = json.loads(response.read(1_000_000).decode("utf-8"))
-        raw_models = parsed.get("data", []) if isinstance(parsed, dict) else []
-        models = []
-        if isinstance(raw_models, list):
-            for item in raw_models[:300]:
-                if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip():
-                    models.append({"id": item["id"][:250], "owned_by": str(item.get("owned_by", ""))[:100]})
-        return {"available": True, "models": models, "model": MODEL, "base_url": endpoint}
+        if native:
+            raw_models = parsed.get("models", []) if isinstance(parsed, dict) else []
+            models = []
+            if isinstance(raw_models, list):
+                for item in raw_models[:300]:
+                    if not isinstance(item, dict):
+                        continue
+                    model_id = item.get("name") or item.get("model")
+                    if isinstance(model_id, str) and model_id.strip():
+                        models.append({"id": model_id[:250], "owned_by": "ollama"})
+        else:
+            raw_models = parsed.get("data", []) if isinstance(parsed, dict) else []
+            models = []
+            if isinstance(raw_models, list):
+                for item in raw_models[:300]:
+                    if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip():
+                        models.append({"id": item["id"][:250], "owned_by": str(item.get("owned_by", ""))[:100]})
+        return {"available": True, "models": models, "model": MODEL, "base_url": endpoint,
+                "api_mode": "ollama" if native else "openai"}
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError,
             json.JSONDecodeError, UnicodeDecodeError) as exc:
         return {"available": False, "models": [], "model": MODEL, "base_url": endpoint,
+                "api_mode": "ollama" if native else "openai",
                 "error": f"Could not load models: {exc}"[:500]}
 
 
@@ -524,15 +554,44 @@ def execute_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def _model_request(messages: list[dict[str, Any]]) -> dict[str, Any]:
-    body = json.dumps({
-        "model": MODEL, "messages": messages, "tools": TOOL_SPECS,
-        "tool_choice": "auto", "parallel_tool_calls": False,
-        "temperature": 0.35, "stream": False,
-    }).encode("utf-8")
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    native = is_ollama_native_api(BASE_URL)
+    if native:
+        native_messages: list[dict[str, Any]] = []
+        for message in messages:
+            role = str(message.get("role", "user"))
+            row: dict[str, Any] = {"role": role, "content": message.get("content") or ""}
+            if role == "assistant" and message.get("tool_calls"):
+                native_calls = []
+                for call in message.get("tool_calls", []):
+                    function = call.get("function", {}) if isinstance(call, dict) else {}
+                    arguments = function.get("arguments", {})
+                    if isinstance(arguments, str):
+                        try:
+                            arguments = json.loads(arguments)
+                        except json.JSONDecodeError:
+                            arguments = {}
+                    native_calls.append({"function": {
+                        "name": str(function.get("name", "")),
+                        "arguments": arguments if isinstance(arguments, dict) else {},
+                    }})
+                row["tool_calls"] = native_calls
+            native_messages.append(row)
+        payload = {
+            "model": MODEL, "messages": native_messages, "tools": TOOL_SPECS,
+            "stream": False, "options": {"temperature": 0.35},
+        }
+        request_url = ollama_api_url(BASE_URL, "chat")
+    else:
+        payload = {
+            "model": MODEL, "messages": messages, "tools": TOOL_SPECS,
+            "tool_choice": "auto", "parallel_tool_calls": False,
+            "temperature": 0.35, "stream": False,
+        }
+        request_url = BASE_URL + "/chat/completions"
+    request = urllib.request.Request(request_url, data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST")
     if API_KEY:
-        headers["Authorization"] = "Bearer " + API_KEY
-    request = urllib.request.Request(BASE_URL + "/chat/completions", data=body, headers=headers, method="POST")
+        request.add_header("Authorization", "Bearer " + API_KEY)
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             raw = response.read(2_000_000)
@@ -546,6 +605,27 @@ def _model_request(messages: list[dict[str, Any]]) -> dict[str, Any]:
         ) from exc
     except (TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise RuntimeError(f"Invalid or timed-out response from the model server: {exc}") from exc
+    if native:
+        native_message = parsed.get("message") if isinstance(parsed, dict) else None
+        if not isinstance(native_message, dict):
+            detail = parsed.get("error") if isinstance(parsed, dict) else None
+            raise RuntimeError(str(detail or "Ollama /api/chat returned no message."))
+        normalized: dict[str, Any] = {"role": "assistant", "content": native_message.get("content") or ""}
+        calls = native_message.get("tool_calls") or []
+        if calls:
+            normalized_calls = []
+            for call in calls:
+                function = call.get("function", {}) if isinstance(call, dict) else {}
+                arguments = function.get("arguments", {})
+                if not isinstance(arguments, dict):
+                    arguments = {}
+                normalized_calls.append({
+                    "id": "ollama_" + secrets.token_hex(8),
+                    "type": "function",
+                    "function": {"name": str(function.get("name", "")), "arguments": arguments},
+                })
+            normalized["tool_calls"] = normalized_calls
+        parsed = {"choices": [{"message": normalized}]}
     if not isinstance(parsed, dict) or not parsed.get("choices"):
         raise RuntimeError("The model server response did not contain a chat completion.")
     return parsed
@@ -749,15 +829,11 @@ class JarvisHandler(BaseHTTPRequestHandler):
         if route == "/api/memory":
             return self._send_json(200, {"items": memory_items(), "limit": 100})
         if route == "/api/ping":
-            request = urllib.request.Request(BASE_URL + "/models", headers={"Accept": "application/json"})
-            if API_KEY:
-                request.add_header("Authorization", "Bearer " + API_KEY)
-            try:
-                with urllib.request.urlopen(request, timeout=4) as response:
-                    response.read(100_000)
-                return self._send_json(200, {"ok": True, "message": "Model endpoint answered.", "model": MODEL})
-            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
-                return self._send_json(503, {"ok": False, "message": f"Could not verify the model endpoint: {exc}"})
+            models = available_models(BASE_URL)
+            if models.get("available"):
+                return self._send_json(200, {"ok": True, "message": "Model endpoint answered.",
+                    "model": MODEL, "api_mode": models.get("api_mode", "openai")})
+            return self._send_json(503, {"ok": False, "message": models.get("error", "Model endpoint did not respond.")})
         if route == "/":
             route = "/index.html"
         candidate = (STATIC_DIR / route.lstrip("/")).resolve()

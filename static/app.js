@@ -588,22 +588,24 @@
 
   function renderModelPanel(data, endpointOverride, modelOverride) {
     data = data || {};
-    const endpoint = endpointOverride || data.base_url || "http://127.0.0.1:8080/v1";
-    const model = modelOverride || data.model || "local-model";
+    const endpoint = endpointOverride || data.base_url || "http://127.0.0.1:11434";
+    const requestedModel = modelOverride || data.model || "";
+    const model = (requestedModel === "local-model" && models.length && !models.some((item) => item.id === requestedModel))
+      ? models[0].id : (requestedModel || models[0]?.id || "local-model");
     const models = Array.isArray(data.models) ? data.models : [];
     const options = models.map((item) => '<option value="' + escapeHtml(item.id) + '"></option>').join("");
     const status = data.available
       ? '<div class="inline-status status-good">Endpoint responded · ' + models.length + ' model' + (models.length === 1 ? "" : "s") + ' found</div>'
       : '<div class="inline-status status-warn">' + escapeHtml(data.error || "Refresh models to check the endpoint. You can still enter a model ID manually.") + '</div>';
     elements.utilityContent.innerHTML =
-      '<p class="utility-intro">Choose a model exposed by your local OpenAI-compatible server. The selected model and endpoint are saved on this computer for the next launch.</p>' +
+      '<p class="utility-intro">Choose a model from Ollama’s native API or another OpenAI-compatible server. Your endpoint and model choice are saved locally.</p>' +
       '<section class="utility-card model-manager-card"><form class="utility-form" data-form="model-manager">' +
-        '<label>API endpoint<input id="modelBaseUrl" name="base_url" type="url" maxlength="500" required value="' + escapeHtml(endpoint) + '" placeholder="http://127.0.0.1:8080/v1"></label>' +
+        '<label>API endpoint<input id="modelBaseUrl" name="base_url" type="url" maxlength="500" required value="' + escapeHtml(endpoint) + '" placeholder="http://127.0.0.1:11434"></label>' +
         '<label>Model ID<input id="modelId" name="model" list="modelOptions" maxlength="250" required value="' + escapeHtml(model) + '" placeholder="Select or type a model ID"><datalist id="modelOptions">' + options + '</datalist></label>' +
         status +
         '<div class="utility-button-row"><button class="utility-secondary" type="button" data-utility-action="model-refresh">Refresh model list</button><button class="utility-primary" type="submit">Apply model</button></div>' +
       '</form></section>' +
-      '<div class="utility-note"><strong>Tip:</strong> LM Studio, llama.cpp, and Ollama can expose OpenAI-compatible endpoints. For Ollama, try <code>http://127.0.0.1:11434/v1</code>. API keys stay in your server environment; this panel never displays them.</div>';
+      '<div class="utility-note"><strong>Ollama native:</strong> use <code>http://127.0.0.1:11434</code> with no <code>/v1</code>. JARVIS uses <code>/api/tags</code> to list models and <code>/api/chat</code> to chat. For llama.cpp or LM Studio, use their documented endpoint, usually ending in <code>/v1</code>. API keys stay on the server.</div>';
   }
 
   async function refreshModelList(showNotice) {

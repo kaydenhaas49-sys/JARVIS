@@ -24,7 +24,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 4. Run `python3 jarvis.py`.
 5. Open http://127.0.0.1:8765.
 
-The default endpoint is `http://127.0.0.1:8080/v1`, suitable for a local llama.cpp server. For LM Studio, use its local server URL. For Ollama's OpenAI-compatible endpoint, use `http://127.0.0.1:11434/v1`.
+The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama serve` API. JARVIS discovers models via `/api/tags` and chats via `/api/chat` (no `/v1` required). For llama.cpp or LM Studio, enter the documented OpenAI-compatible endpoint, usually ending in `/v1`.
 
 JARVIS creates `~/JARVIS-workspace` for files it can browse and edit. File tools are deliberately scoped to this workspace. Terminal actions and file writes require you to approve the exact action in the dashboard. User settings and persistent memory are saved under `~/.local/share/jarvis/`; kitchen lists and activity history stay in this browser's local storage.
 

@@ -1,6 +1,7 @@
 """Unit tests for JARVIS path and command safety boundaries."""
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from unittest import mock
@@ -41,6 +42,50 @@ class WorkspacePathTests(unittest.TestCase):
 
 
 class ModelAndMemoryTests(unittest.TestCase):
+    def test_native_ollama_url_does_not_require_v1(self) -> None:
+        self.assertEqual(
+            jarvis.normalize_model_base_url("http://127.0.0.1:11434/v1"),
+            "http://127.0.0.1:11434",
+        )
+        self.assertTrue(jarvis.is_ollama_native_api("http://127.0.0.1:11434"))
+        self.assertTrue(jarvis.is_ollama_native_api("http://localhost:11434/v1"))
+        self.assertFalse(jarvis.is_ollama_native_api("http://127.0.0.1:8080/v1"))
+        self.assertEqual(
+            jarvis.ollama_api_url("http://127.0.0.1:11434", "tags"),
+            "http://127.0.0.1:11434/api/tags",
+        )
+
+    def test_ollama_model_list_uses_native_tags_endpoint(self) -> None:
+        with mock.patch("jarvis.urllib.request.urlopen") as urlopen:
+            response = mock.MagicMock()
+            response.__enter__.return_value.read.return_value = b'{"models":[{"name":"qwen3-coder:30b"}]}'
+            urlopen.return_value = response
+            result = jarvis.available_models("http://127.0.0.1:11434")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "http://127.0.0.1:11434/api/tags")
+        self.assertTrue(result["available"])
+        self.assertEqual(result["models"][0]["id"], "qwen3-coder:30b")
+        self.assertEqual(result["api_mode"], "ollama")
+
+    def test_ollama_chat_uses_native_api_and_normalizes_tool_calls(self) -> None:
+        fake_body = b'{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"get_current_time","arguments":{}}}]}}'
+        with mock.patch.object(jarvis, "BASE_URL", "http://127.0.0.1:11434"), \
+             mock.patch.object(jarvis, "MODEL", "qwen3-coder:30b"), \
+             mock.patch("jarvis.urllib.request.urlopen") as urlopen:
+            response = mock.MagicMock()
+            response.__enter__.return_value.read.return_value = fake_body
+            urlopen.return_value = response
+            result = jarvis._model_request([{"role": "user", "content": "What time is it?"}])
+        request = urlopen.call_args.args[0]
+        sent = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(request.full_url, "http://127.0.0.1:11434/api/chat")
+        self.assertNotIn("tool_choice", sent)
+        self.assertEqual(sent["model"], "qwen3-coder:30b")
+        call = result["choices"][0]["message"]["tool_calls"][0]
+        self.assertEqual(call["function"]["name"], "get_current_time")
+        self.assertTrue(call["id"].startswith("ollama_"))
+
+    def test_model_endpoint_requires_http_or_https_without_credentials(self) -> None:
     def test_model_endpoint_requires_http_or_https_without_credentials(self) -> None:
         self.assertEqual(
             jarvis.normalize_model_base_url("http://127.0.0.1:8080/v1/"),
