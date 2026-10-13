@@ -178,13 +178,25 @@ class ChatSessionRestoreTests(unittest.TestCase):
 class DashboardDataTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.path = Path(self.temporary.name) / "dashboard-data.json"
-        self.path.touch()
-        with mock.patch.object(jarvis, "APP_DATA_PATH", self.path):
-            initial = {key: jarvis._normalize_dashboard_bucket(key, default)
-                       for key, default in jarvis.APP_DATA_DEFAULTS.items()}
-            initial["initialized"] = {}
-            jarvis._write_dashboard_store(initial)
+        root = Path(self.temporary.name)
+        self.path = root / "dashboard-data.json"
+        self.index_path = root / "dashboard-index.json"
+        self.files = {
+            "recipes": root / "recipes.json",
+            "notes": root / "notes.json",
+            "kitchen": root / "kitchen.json",
+            "chat_history": root / "chat-history.json",
+            "activity": root / "activity.json",
+        }
+        self.store_patcher = mock.patch.multiple(
+            jarvis, APP_DATA_PATH=self.path, APP_DATA_INDEX_PATH=self.index_path, APP_DATA_FILES=self.files
+        )
+        self.store_patcher.start()
+        self.addCleanup(self.store_patcher.stop)
+        initial = {key: jarvis._normalize_dashboard_bucket(key, default)
+                   for key, default in jarvis.APP_DATA_DEFAULTS.items()}
+        initial["initialized"] = {key: False for key in jarvis.APP_DATA_BUCKETS}
+        jarvis._write_dashboard_store(initial)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -231,9 +243,44 @@ class DashboardDataTests(unittest.TestCase):
         self.assertEqual(kitchen["groceries"][0]["text"], "Milk")
 
     def test_recipe_requires_ingredients_and_instructions(self) -> None:
-        with mock.patch.object(jarvis, "APP_DATA_PATH", self.path):
-            with self.assertRaisesRegex(ValueError, "at least one ingredient"):
-                jarvis.manage_dashboard_data({"action": "add_recipe", "recipe": {"name": "Empty cake"}})
+        with self.assertRaisesRegex(ValueError, "at least one ingredient"):
+            jarvis.manage_dashboard_data({"action": "add_recipe", "recipe": {"name": "Empty cake"}})
+
+    def test_dashboard_records_are_separate_local_json_files(self) -> None:
+        jarvis.manage_dashboard_data({
+            "action": "add_recipe",
+            "recipe": {"name": "Oatmeal", "ingredients": ["Oats"], "instructions": ["Cook"]},
+        })
+        saved = json.loads(self.files["recipes"].read_text(encoding="utf-8"))
+        self.assertEqual(saved[0]["name"], "Oatmeal")
+        self.assertTrue(self.index_path.is_file())
+        self.assertFalse(self.path.exists(), "new writes must not create the legacy combined store")
+
+    def test_old_combined_store_is_migrated_to_separate_files(self) -> None:
+        for path in self.files.values():
+            path.unlink()
+        self.index_path.unlink()
+        self.path.write_text(json.dumps({
+            "recipes": [{"name": "Legacy soup", "ingredients": ["Water"], "instructions": ["Boil"]}],
+            "notes": [], "kitchen": {"groceries": [], "pantry": [], "meals": {}, "timers": []},
+            "chat_history": [], "activity": [],
+            "initialized": {key: True for key in jarvis.APP_DATA_BUCKETS},
+        }), encoding="utf-8")
+        result = jarvis.bootstrap_dashboard_data({"buckets": {key: jarvis.APP_DATA_DEFAULTS[key]
+                                                               for key in jarvis.APP_DATA_BUCKETS}})
+        self.assertEqual(result["data"]["recipes"][0]["name"], "Legacy soup")
+        self.assertEqual(json.loads(self.files["recipes"].read_text(encoding="utf-8"))[0]["name"], "Legacy soup")
+        self.assertTrue(self.path.exists(), "legacy data should remain as a safety backup")
+
+    def test_system_storage_memory_is_saved_to_a_file_and_injected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "system-memory.md"
+            with mock.patch.object(jarvis, "SYSTEM_MEMORY_PATH", memory_path):
+                prompt = jarvis.current_system_prompt()
+            self.assertTrue(memory_path.is_file())
+            self.assertIn("recipes.json", memory_path.read_text(encoding="utf-8"))
+            self.assertIn("PERSISTENT STORAGE MEMORY", prompt)
+            self.assertIn("must not be used as ongoing persistent storage", prompt)
 
 
 class ApprovalAndCommandTests(unittest.TestCase):
