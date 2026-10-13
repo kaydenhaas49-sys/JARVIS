@@ -32,6 +32,7 @@
   let voiceReplies = false;
   let recognition = null;
   let currentUtilityView = null;
+  let activeSystemTab = "status";
   let openQuickNotesPanel = null;
   let openRecipeSaverPanel = null;
   let activityEvents = readLocalJson("jarvis-activity-v1", []);
@@ -394,7 +395,7 @@
   }
 
   function renderHistoryPanel() {
-    elements.utilityContent.innerHTML =
+    elements.utilityContent.innerHTML = renderMemoryNotesTabs("history") +
       '<div class="history-toolbar"><div><p class="history-description">Your last 25 conversations, saved only in this browser. Reopen one to continue with its saved text context.</p>' +
       '<div class="utility-muted" id="historyCount">0 conversations</div></div>' +
       '<div class="history-toolbar-actions"><button type="button" class="history-toolbar-btn" data-utility-action="history-export">Export JSON</button>' +
@@ -673,15 +674,16 @@
     });
     activityEvents = activityEvents.slice(0, 50);
     try { localStorage.setItem("jarvis-activity-v1", JSON.stringify(activityEvents)); } catch (_) {}
-    if (currentUtilityView === "activity") renderActivityPanel();
+    if (currentUtilityView === "activity" || (currentUtilityView === "system" && activeSystemTab === "activity")) renderActivityPanel();
   }
 
   function openUtility(view) {
+    if (view === "system" && currentUtilityView !== "system") activeSystemTab = "status";
     currentUtilityView = view;
     elements.utilityPanel.classList.remove("hidden");
     closeSidebar();
     renderUtility();
-    logActivity("Panel opened", ({kitchen:"Kitchen",models:"Model manager",memory:"Persistent memory",activity:"Activity feed",coding:"Coding agent",history:"Chat history"})[view] || view, "panel");
+    logActivity("Panel opened", ({kitchen:"Kitchen",system:"System Console",models:"Model manager",memory:"Memory & archive",activity:"Activity feed",coding:"Coding agent",history:"Memory & archive"})[view] || view, "panel");
     if (view === "models") refreshModelList(false);
     if (view === "memory") refreshMemoryPanel();
     if (view === "coding") refreshCodingPanel();
@@ -697,16 +699,18 @@
   function renderUtility() {
     const config = {
       kitchen: ["KITCHEN / HOME", "Kitchen"],
+      system: ["SYSTEM / CONSOLE", "System Console"],
       models: ["SYSTEM / MODELS", "Model manager"],
-      memory: ["SYSTEM / MEMORY", "Persistent memory"],
+      memory: ["PERSONAL / STORAGE", "Memory & archive"],
       activity: ["SYSTEM / TELEMETRY", "Live activity feed"],
       coding: ["WORKSPACE / DEVELOPER TOOLS", "Coding agent"],
-      history: ["SYSTEM / ARCHIVE", "Chat history"],
+      history: ["PERSONAL / STORAGE", "Memory & archive"],
     };
     const selected = config[currentUtilityView] || ["JARVIS / SYSTEM", "Utility panel"];
     elements.utilityEyebrow.textContent = selected[0];
     elements.utilityTitle.textContent = selected[1];
     if (currentUtilityView === "kitchen") renderKitchenPanel();
+    else if (currentUtilityView === "system") renderSystemConsole();
     else if (currentUtilityView === "models") renderModelPanel(latestModelList || {});
     else if (currentUtilityView === "memory") {
       elements.utilityContent.innerHTML = '<div class="utility-loading">Loading saved memories…</div>';
@@ -725,9 +729,34 @@
   }
 
   function renderMemoryNotesTabs(active) {
-    return '<nav class="utility-module-tabs" aria-label="Memory sections">' +
+    return '<nav class="utility-module-tabs" aria-label="Memory and archive sections">' +
       '<button type="button" data-module-tab="memory" class="' + (active === "memory" ? "active" : "") + '" aria-pressed="' + (active === "memory") + '">AI memory</button>' +
-      '<button type="button" data-module-tab="notes" class="' + (active === "notes" ? "active" : "") + '" aria-pressed="' + (active === "notes") + '">Quick notes</button></nav>';
+      '<button type="button" data-module-tab="notes" class="' + (active === "notes" ? "active" : "") + '" aria-pressed="' + (active === "notes") + '">Quick notes</button>' +
+      '<button type="button" data-module-tab="history" class="' + (active === "history" ? "active" : "") + '" aria-pressed="' + (active === "history") + '">Chat history</button></nav>';
+  }
+
+  function renderSystemTabs(active) {
+    return '<nav class="utility-module-tabs" aria-label="System console sections">' +
+      '<button type="button" data-system-tab="status" class="' + (active === "status" ? "active" : "") + '" aria-pressed="' + (active === "status") + '">Status</button>' +
+      '<button type="button" data-system-tab="models" class="' + (active === "models" ? "active" : "") + '" aria-pressed="' + (active === "models") + '">Models</button>' +
+      '<button type="button" data-system-tab="activity" class="' + (active === "activity" ? "active" : "") + '" aria-pressed="' + (active === "activity") + '">Activity feed</button></nav>';
+  }
+
+  function renderSystemConsole() {
+    if (activeSystemTab === "models") {
+      renderModelPanel(latestModelList || {});
+      refreshModelList(false);
+      return;
+    }
+    if (activeSystemTab === "activity") {
+      renderActivityPanel();
+      return;
+    }
+    elements.utilityContent.innerHTML = renderSystemTabs("status") +
+      '<p class="utility-intro">System health, model settings, and recent activity live here now. Use the tabs above to switch sections.</p>' +
+      '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">STATUS</span><div><h3>JARVIS diagnostics</h3><p>Ask the assistant for a live system check, or open Models to change the active model.</p></div></div>' +
+      '<div class="utility-button-row"><button class="utility-primary" type="button" data-prompt="Check my system status and summarize the basics.">Ask JARVIS for diagnostics</button>' +
+      '<button class="utility-secondary" type="button" data-system-tab="models">Configure model</button></div></section>';
   }
 
   function renderKitchenPanel() {
@@ -810,7 +839,7 @@
       return '<article class="activity-row"><span class="activity-mark activity-' + escapeHtml(item.kind || "system") + '"></span><div class="activity-row-body"><strong>' +
         escapeHtml(item.title) + '</strong><span>' + escapeHtml(item.detail) + '</span></div><time>' + escapeHtml(time) + '</time></article>';
     }).join("");
-    elements.utilityContent.innerHTML =
+    elements.utilityContent.innerHTML = (currentUtilityView === "system" ? renderSystemTabs("activity") : "") +
       '<div class="utility-toolbar"><p>Recent actions from this browser session history. Messages are logged as events, not copied into this feed.</p>' +
       '<button class="text-action" type="button" data-utility-action="clear-activity">Clear feed</button></div>' +
       '<section class="utility-card activity-card"><div class="activity-feed">' + (rows || '<div class="empty-state">Activity will appear here as you use JARVIS.</div>') + '</div></section>';
@@ -829,7 +858,7 @@
         ? '<div class="inline-status status-good">' + escapeHtml(data.api_mode === "ollama" ? "Ollama connected" : "OpenAI-compatible server connected") + ' · ' + models.length + ' model' + (models.length === 1 ? "" : "s") + ' found' + (data.auto_detected ? ' · auto-detected' : '') + '</div>'
         : '<div class="inline-status status-warn">Server is reachable, but it returned no models. Check <code>ollama list</code> in a terminal, then refresh.</div>')
       : '<div class="inline-status status-warn">' + escapeHtml(data.error || "Refresh models to check the endpoint. You can still enter a model ID manually.") + '</div>';
-    elements.utilityContent.innerHTML =
+    elements.utilityContent.innerHTML = (currentUtilityView === "system" ? renderSystemTabs("models") : "") +
       '<p class="utility-intro">Choose a model from Ollama’s native API or another OpenAI-compatible server. Your endpoint and model choice are saved locally.</p>' +
       '<section class="utility-card model-manager-card"><form class="utility-form" data-form="model-manager">' +
         '<label>API endpoint<input id="modelBaseUrl" name="base_url" type="url" maxlength="500" required value="' + escapeHtml(endpoint) + '" placeholder="http://127.0.0.1:11434"></label>' +
@@ -840,8 +869,12 @@
       '<div class="utility-note"><strong>Ollama native:</strong> use <code>http://127.0.0.1:11434</code> with no <code>/v1</code>. JARVIS uses <code>/api/tags</code> to list models and <code>/api/chat</code> to chat. For llama.cpp or LM Studio, use their documented endpoint, usually ending in <code>/v1</code>. API keys stay on the server.</div>';
   }
 
+  function isModelPanelActive() {
+    return currentUtilityView === "models" || (currentUtilityView === "system" && activeSystemTab === "models");
+  }
+
   async function refreshModelList(showNotice) {
-    if (currentUtilityView !== "models") return;
+    if (!isModelPanelActive()) return;
     const endpointInput = document.getElementById("modelBaseUrl");
     const modelInput = document.getElementById("modelId");
     const endpoint = endpointInput?.value.trim() || latestModelList?.base_url || "";
@@ -972,10 +1005,16 @@
   }
 
   function handleUtilityClick(event) {
+    const systemTab = event.target.closest("[data-system-tab]");
+    if (systemTab && elements.utilityContent.contains(systemTab)) {
+      activeSystemTab = systemTab.dataset.systemTab;
+      renderUtility();
+      return;
+    }
     const moduleTab = event.target.closest("[data-module-tab]");
     if (moduleTab && elements.utilityContent.contains(moduleTab)) {
       const destination = moduleTab.dataset.moduleTab;
-      if (destination === "kitchen" || destination === "memory") openUtility(destination);
+      if (destination === "kitchen" || destination === "memory" || destination === "history") openUtility(destination);
       else if (destination === "recipes" && openRecipeSaverPanel) openRecipeSaverPanel();
       else if (destination === "notes" && openQuickNotesPanel) openQuickNotesPanel();
       return;
@@ -1081,12 +1120,9 @@
   $("#micBtn").addEventListener("click", toggleMicrophone);
   $("#voiceOutputBtn").addEventListener("click", toggleVoiceReplies);
   $("#testModelBtn").addEventListener("click", testModel);
-  $("#systemBtn").addEventListener("click", () => sendMessage("Check my system status and summarize the basics."));
-  $("#historyBtn").addEventListener("click", () => openUtility("history"));
+  $("#systemBtn").addEventListener("click", () => openUtility("system"));
   $("#kitchenBtn").addEventListener("click", () => openUtility("kitchen"));
-  $("#modelManagerBtn").addEventListener("click", () => openUtility("models"));
   $("#memoryBtn").addEventListener("click", () => openUtility("memory"));
-  $("#activityBtn").addEventListener("click", () => openUtility("activity"));
   $("#codingBtn").addEventListener("click", () => openUtility("coding"));
   $("#utilityCloseBtn").addEventListener("click", closeUtility);
   $("#utilityPanel").addEventListener("click", (event) => {
@@ -1122,7 +1158,7 @@
     } catch (_) {}
 
     const memoryButton = document.getElementById("memoryBtn");
-    if (memoryButton && memoryButton.lastElementChild) memoryButton.lastElementChild.textContent = "Memory & notes";
+    if (memoryButton && memoryButton.lastElementChild) memoryButton.lastElementChild.textContent = "Memory & archive";
 
 
 
