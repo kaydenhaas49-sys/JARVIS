@@ -24,6 +24,8 @@
   let voiceReplies = false;
   let recognition = null;
   let currentUtilityView = null;
+  let openQuickNotesPanel = null;
+  let openRecipeSaverPanel = null;
   let activityEvents = readLocalJson("jarvis-activity-v1", []);
   let kitchenState = readLocalJson("jarvis-kitchen-v1", {
     groceries: [], pantry: [], meals: {}, timers: [],
@@ -500,6 +502,19 @@
     }
   }
 
+
+  function renderKitchenModuleTabs(active) {
+    return '<nav class="utility-module-tabs" aria-label="Kitchen sections">' +
+      '<button type="button" data-module-tab="kitchen" class="' + (active === "kitchen" ? "active" : "") + '" aria-pressed="' + (active === "kitchen") + '">Kitchen</button>' +
+      '<button type="button" data-module-tab="recipes" class="' + (active === "recipes" ? "active" : "") + '" aria-pressed="' + (active === "recipes") + '">Recipe Saver</button></nav>';
+  }
+
+  function renderMemoryNotesTabs(active) {
+    return '<nav class="utility-module-tabs" aria-label="Memory sections">' +
+      '<button type="button" data-module-tab="memory" class="' + (active === "memory" ? "active" : "") + '" aria-pressed="' + (active === "memory") + '">AI memory</button>' +
+      '<button type="button" data-module-tab="notes" class="' + (active === "notes" ? "active" : "") + '" aria-pressed="' + (active === "notes") + '">Quick notes</button></nav>';
+  }
+
   function renderKitchenPanel() {
     kitchenState.groceries = Array.isArray(kitchenState.groceries) ? kitchenState.groceries : [];
     kitchenState.pantry = Array.isArray(kitchenState.pantry) ? kitchenState.pantry : [];
@@ -522,7 +537,7 @@
       '<div class="timer-row"><div class="timer-row-copy"><strong>' + escapeHtml(timer.label) + '</strong><span class="timer-remaining" data-timer-id="' + escapeHtml(timer.id) + '" data-timer-ends="' + Number(timer.endsAt || 0) + '">' + (timer.finished ? "FINISHED" : formatDuration(Math.max(0, Number(timer.endsAt || 0) - Date.now()))) + '</span></div>' +
       '<button class="mini-icon-button" type="button" data-utility-action="remove-timer" data-id="' + escapeHtml(timer.id) + '" aria-label="Remove timer">×</button></div>'
     ).join("");
-    elements.utilityContent.innerHTML =
+    elements.utilityContent.innerHTML = renderKitchenModuleTabs("kitchen") +
       '<div class="kitchen-topline"><p>Keep the everyday stuff organized here. Your grocery list, pantry, meal plan, and timers stay in this browser.</p><span class="local-chip">LOCAL ONLY</span></div>' +
       '<div class="kitchen-grid">' +
         '<section class="utility-card kitchen-card"><div class="utility-card-heading"><span class="utility-index">01</span><div><h3>Grocery list</h3><p>' + kitchenState.groceries.filter((item) => !item.done).length + ' items to pick up</p></div></div>' +
@@ -673,7 +688,7 @@
       '<article class="memory-row"><div><p>' + escapeHtml(item.fact) + '</p><time>' + escapeHtml(item.created_at || "Saved") + '</time></div>' +
       '<button class="mini-icon-button" type="button" data-utility-action="memory-delete" data-id="' + escapeHtml(item.id) + '" aria-label="Delete memory">×</button></article>'
     ).join("");
-    elements.utilityContent.innerHTML =
+    elements.utilityContent.innerHTML = renderMemoryNotesTabs("memory") +
       '<p class="utility-intro">Saved notes are stored in a private local data file and included as context in future chats. JARVIS must ask before saving a note from conversation.</p>' +
       '<section class="utility-card"><form class="memory-add-form" data-form="memory-add"><label for="memoryFact">Remember a preference or useful fact</label><textarea id="memoryFact" name="fact" maxlength="2000" rows="3" required placeholder="Example: I prefer concise answers, and my main project is Backrooms: Lost Signal."></textarea><div class="utility-button-row"><span class="utility-muted">' + items.length + ' / ' + limit + ' memories</span><button class="utility-primary" type="submit">Save memory</button></div></form></section>' +
       '<section class="utility-card memory-list-card"><div class="utility-card-heading"><span class="utility-index">01</span><div><h3>Saved memories</h3><p>Review or delete anything here</p></div></div><div class="memory-list">' + (rows || '<div class="empty-state">No memories saved yet.</div>') + '</div></section>';
@@ -742,6 +757,14 @@
   }
 
   function handleUtilityClick(event) {
+    const moduleTab = event.target.closest("[data-module-tab]");
+    if (moduleTab && elements.utilityContent.contains(moduleTab)) {
+      const destination = moduleTab.dataset.moduleTab;
+      if (destination === "kitchen" || destination === "memory") openUtility(destination);
+      else if (destination === "recipes" && openRecipeSaverPanel) openRecipeSaverPanel();
+      else if (destination === "notes" && openQuickNotesPanel) openQuickNotesPanel();
+      return;
+    }
     const promptButton = event.target.closest("[data-prompt]");
     if (promptButton && elements.utilityContent.contains(promptButton)) {
       const prompt = promptButton.dataset.prompt;
@@ -868,41 +891,10 @@
       if (Array.isArray(stored)) notes = stored.filter((n) => n && typeof n.id === "string").slice(0, 100);
     } catch (_) {}
 
-    const navButton = document.createElement("button");
-    navButton.className = "nav-item nav-button";
-    navButton.id = "notesBtn";
-    navButton.type = "button";
-    navButton.innerHTML = '<span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 3h9l4 4v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v5h5M8 12h7M8 16h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>Quick notes</span>';
     const memoryButton = document.getElementById("memoryBtn");
-    if (memoryButton && !document.getElementById("notesBtn")) memoryButton.insertAdjacentElement("afterend", navButton);
+    if (memoryButton && memoryButton.lastElementChild) memoryButton.lastElementChild.textContent = "Memory & notes";
 
-    const style = document.createElement("style");
-    style.textContent =
-      ".quick-notes-layout{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);gap:14px;align-items:start}" +
-      ".quick-notes-form{display:flex;flex-direction:column;gap:12px}" +
-      ".quick-notes-form label,.quick-notes-search label{display:flex;flex-direction:column;gap:7px;color:#9aa9bd;font-size:10px;font-weight:700}" +
-      ".quick-notes-form input,.quick-notes-form textarea,.quick-notes-search input{box-sizing:border-box;width:100%;padding:11px 12px;border:1px solid rgba(148,173,207,.19);border-radius:7px;outline:none;background:rgba(3,7,13,.55);color:#dce7f6;font:11px/1.65 Inter,system-ui,sans-serif}" +
-      ".quick-notes-form textarea{min-height:160px;resize:vertical;white-space:pre-wrap}" +
-      ".quick-notes-form input:focus,.quick-notes-form textarea:focus,.quick-notes-search input:focus{border-color:rgba(120,228,238,.6)}" +
-      ".quick-notes-form input::placeholder,.quick-notes-form textarea::placeholder,.quick-notes-search input::placeholder{color:#596b83}" +
-      ".quick-notes-actions,.quick-note-actions{display:flex;flex-wrap:wrap;gap:6px}" +
-      ".quick-notes-search{display:flex;align-items:end;gap:12px;margin-bottom:12px}" +
-      ".quick-notes-search label{flex:1;min-width:0}.quick-notes-search input{padding:9px 10px}" +
-      ".quick-notes-list{display:flex;flex-direction:column;gap:10px}" +
-      ".quick-note{min-width:0;padding:14px;border:1px solid rgba(148,173,207,.13);border-radius:9px;background:rgba(4,9,16,.42)}" +
-      ".quick-note.pinned{border-color:rgba(120,228,238,.35);background:rgba(120,228,238,.035)}" +
-      ".quick-note-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}" +
-      ".quick-note-heading h3{margin:0;color:#e2edf9;font-size:12px;line-height:1.5;overflow-wrap:anywhere}" +
-      ".quick-note-heading time{display:block;margin-top:4px;color:#687c95;font:9px/1.5 ui-monospace,monospace}" +
-      ".quick-note-pin{flex:0 0 auto;padding:4px 6px;border:1px solid rgba(120,228,238,.22);border-radius:4px;color:var(--lcars-cyan);font:700 8px/1 ui-monospace,monospace;letter-spacing:.1em}" +
-      ".quick-note-body{margin:11px 0 14px;color:#a8b8cb;font-size:11px;line-height:1.75;overflow-wrap:anywhere;white-space:pre-wrap}" +
-      ".quick-note-actions{padding-top:10px;border-top:1px solid rgba(148,173,207,.08)}" +
-      ".quick-note-actions button{min-height:29px;padding:6px 9px;font-size:9px}" +
-      ".quick-note-delete{border:1px solid rgba(255,107,120,.18);border-radius:6px;background:rgba(255,107,120,.04);color:#e99aa2;cursor:pointer}" +
-      ".quick-note-delete:hover{border-color:rgba(255,107,120,.48);background:rgba(255,107,120,.09)}" +
-      ".quick-notes-export{display:flex;justify-content:flex-end;margin-top:13px}" +
-      "@media(max-width:700px){.quick-notes-layout{grid-template-columns:1fr}.quick-notes-search{align-items:stretch;flex-direction:column}.quick-notes-search label{width:100%}}";
-    document.head.appendChild(style);
+
 
     function persist() {
       try {
@@ -955,7 +947,7 @@
       const edit = notes.find((note) => note.id === editingId) || null;
       elements.utilityEyebrow.textContent = "PERSONAL / NOTES";
       elements.utilityTitle.textContent = "Quick notes";
-      elements.utilityContent.innerHTML =
+      elements.utilityContent.innerHTML = renderMemoryNotesTabs("notes") +
         '<p class="utility-intro">Keep ideas, reminders, and reusable snippets here. Notes stay in this browser and are not automatically sent to the AI model.</p>' +
         '<div class="quick-notes-layout">' +
           '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">01</span><div><h3>' + (edit ? "Edit note" : "New note") + '</h3><p>Up to 100 notes · 5,000 characters each</p></div></div>' +
@@ -1002,7 +994,7 @@
       }
     }
 
-    navButton.addEventListener("click", openPanel);
+    openQuickNotesPanel = openPanel;
     elements.utilityContent.addEventListener("input", (event) => {
       const search = event.target.closest("[data-quick-note-search]");
       if (!search) return;
@@ -1158,31 +1150,7 @@
       if (Array.isArray(saved)) recipes = saved.map((row) => normalize(row, true)).filter(Boolean).slice(0, MAX);
     } catch (_) {}
 
-    const nav = document.createElement("button");
-    nav.className = "nav-item nav-button";
-    nav.id = "recipesBtn";
-    nav.type = "button";
-    nav.innerHTML = '<span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h15v17H7a2 2 0 0 1-2-2V4ZM5 4v15M9 8h7M9 12h7M9 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>Recipe Saver</span>';
-    const notes = document.getElementById("notesBtn");
-    if (notes && !document.getElementById("recipesBtn")) notes.insertAdjacentElement("afterend", nav);
 
-    const css = document.createElement("style");
-    css.textContent = [
-      ".recipe-grid{display:grid;grid-template-columns:minmax(230px,.8fr) minmax(0,1.2fr);gap:14px;align-items:start}",
-      ".recipe-form{display:flex;flex-direction:column;gap:11px}.recipe-form label,.recipe-filter label{display:flex;flex-direction:column;gap:6px;color:#9aa9bd;font-size:10px;font-weight:700}",
-      ".recipe-form input,.recipe-form textarea,.recipe-filter input,.recipe-filter select{box-sizing:border-box;width:100%;min-width:0;padding:10px;border:1px solid rgba(148,173,207,.19);border-radius:7px;outline:none;background:rgba(3,7,13,.55);color:#dce7f6;font:11px/1.65 Inter,system-ui,sans-serif}",
-      ".recipe-form select,.recipe-filter select{color-scheme:dark}.recipe-form textarea{resize:vertical;white-space:pre-wrap}.recipe-pair{display:grid;grid-template-columns:1fr 1fr;gap:9px}",
-      ".recipe-buttons,.recipe-card-actions,.recipe-import-export{display:flex;flex-wrap:wrap;gap:7px}.recipe-filter{display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,.7fr);gap:9px;margin-bottom:10px}",
-      ".recipe-fav-filter{display:flex;align-items:center;gap:8px;margin:7px 0 13px;color:#9aa9bd;font-size:10px}.recipe-fav-filter input{accent-color:#78e4ee}",
-      ".recipe-list{display:flex;flex-direction:column;gap:10px}.recipe-card{padding:13px;border:1px solid rgba(148,173,207,.14);border-radius:9px;background:rgba(4,9,16,.42);min-width:0}.recipe-card.is-favorite{border-color:rgba(255,184,94,.35)}",
-      ".recipe-card-header{display:flex;justify-content:space-between;gap:10px}.recipe-card h3{margin:0;color:#e2edf9;font-size:13px;overflow-wrap:anywhere}.recipe-category{display:block;margin-top:4px;color:var(--lcars-cyan);font-size:9px;text-transform:uppercase;letter-spacing:.08em}",
-      ".recipe-description,.recipe-notes{font-size:11px;color:#a8b8cb;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.recipe-meta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.recipe-meta span{font:9px ui-monospace,monospace;color:#8496ad;border:1px solid rgba(148,173,207,.12);border-radius:5px;padding:4px 6px}",
-      ".recipe-card details{border-top:1px solid rgba(148,173,207,.09);padding-top:10px;margin-top:10px}.recipe-card summary{color:var(--lcars-cyan);font-size:10px;font-weight:700;cursor:pointer}.recipe-card details h4{font-size:10px;text-transform:uppercase;color:#dce7f6;margin:12px 0 6px}.recipe-card li{font-size:11px;color:#a8b8cb;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}.recipe-card details ul,.recipe-card details ol{padding-left:20px}",
-      ".recipe-card-actions{margin-top:10px;padding-top:9px;border-top:1px solid rgba(148,173,207,.08)}.recipe-card-actions button{min-height:29px;padding:6px 9px;font-size:9px}.recipe-delete{border:1px solid rgba(255,107,120,.2);border-radius:6px;background:rgba(255,107,120,.04);color:#e99aa2;cursor:pointer}",
-      ".recipe-import-export{justify-content:flex-end;margin-top:12px}.recipe-source{font-size:10px;color:var(--lcars-cyan);overflow-wrap:anywhere;display:block;margin-top:8px}",
-      "@media(max-width:760px){.recipe-grid{grid-template-columns:1fr}.recipe-filter{grid-template-columns:1fr}}"
-    ].join("");
-    document.head.appendChild(css);
 
     function save() {
       try { localStorage.setItem(STORE, JSON.stringify(recipes)); return true; }
@@ -1227,7 +1195,7 @@
       const r = recipes.find((item) => item.id === editingId) || null;
       elements.utilityEyebrow.textContent = "KITCHEN / RECIPE DATABASE";
       elements.utilityTitle.textContent = "Recipe Saver";
-      elements.utilityContent.innerHTML =
+      elements.utilityContent.innerHTML = renderKitchenModuleTabs("recipes") +
         '<p class="utility-intro">Save recipes, search by ingredients, and keep a portable JSON backup. Import supports the older JARVIS Kitchen recipes.json format. Recipes stay in this browser, separate from AI memory.</p>' +
         '<div class="recipe-grid"><section class="utility-card"><div class="utility-card-heading"><span class="utility-index">01</span><div><h3>' + (r ? "Edit recipe" : "Add a recipe") + '</h3><p>Put each ingredient and step on its own line</p></div></div>' +
         '<form class="recipe-form" id="recipeForm"><label for="recipeName">Recipe name<input id="recipeName" name="name" maxlength="160" required value="' + escapeHtml(r?.name || "") + '" placeholder="Family pasta bake"></label>' +
@@ -1296,7 +1264,7 @@
       } catch (error) { showToast("Could not import JSON: " + (error instanceof SyntaxError ? "invalid JSON file." : error.message), "error"); }
     }
 
-    button.addEventListener("click", openPanel);
+    openRecipeSaverPanel = openPanel;
     elements.utilityContent.addEventListener("submit", (event) => {
       const form = event.target.closest("#recipeForm");
       if (!form) return;

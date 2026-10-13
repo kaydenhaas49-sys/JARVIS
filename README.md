@@ -8,7 +8,8 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Voice input and spoken responses in supported browsers, with a reactive holographic core.
 - Model manager to discover compatible server models and save the selected model/endpoint locally.
 - Persistent memory injected into future chats; memory requests made in chat require approval.
-- Quick Notes panel with live search, pinned notes, editing, copy, delete, and JSON export (stored in the current browser only).
+- Combined Kitchen / Recipe Saver panel with groceries, pantry, meal plans, timers, searchable recipes, favorites, and JSON import/export.
+- Combined Memory / Quick Notes panel: AI memory stays in JARVIS's server-side data while quick notes stay in browser storage.
 - Recipe Saver with ingredients, instructions, category/search filters, favorites, servings and cooking time, and JSON import/export compatible with the older JARVIS Kitchen `recipes.json` format.
 - Live activity feed, kept in browser storage without copying full message text into the feed.
 - Kitchen panel with grocery checklist, pantry inventory, weekly meal notes, and browser-based timers.
