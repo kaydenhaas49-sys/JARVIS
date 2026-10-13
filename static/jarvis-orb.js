@@ -182,8 +182,9 @@
     ctx.fillStyle = "rgba(" + colors.cyan + ",1)";
     ctx.font = "700 8px ui-monospace, SFMono-Regular, Menlo, monospace";
     ctx.letterSpacing = "1.2px";
-    ctx.fillText("J.A.R.V.I.S  /  NEURAL CORE", orbitX - r * 1.9, orbitY + r * 1.48);
-    ctx.fillText("CORE ACTIVE", orbitX + r * .92, orbitY - r * 1.27);
+    ctx.textAlign = "center";
+    ctx.globalAlpha = .23;
+    ctx.fillText("J.A.R.V.I.S  /  NEURAL CORE", orbitX, orbitY + r * .94);
     ctx.restore();
   }
 
@@ -191,11 +192,22 @@
     if (!ctx || !width || !height) return;
     ctx.clearRect(0, 0, width, height);
     drawBackgroundGrid(time);
+
+    // Anchor the orb to the main conversation display, not the whole window.
+    var viewport = document.getElementById("conversationViewport");
+    var bounds = viewport ? viewport.getBoundingClientRect() : null;
     var mobile = width < 700;
-    var x = width * (mobile ? .63 : .675);
-    var y = height * .49;
-    var r = Math.min(width, height) * (mobile ? .225 : .205);
-    r = Math.max(82, Math.min(r, 285));
+    var x = bounds ? bounds.left + bounds.width * .5 : width * .62;
+    var y = bounds ? bounds.top + bounds.height * .49 : height * .49;
+    var displayWidth = bounds && bounds.width ? bounds.width : width;
+    var displayHeight = bounds && bounds.height ? bounds.height : height;
+    var r = Math.min(displayWidth * .34, displayHeight * .42);
+    r = Math.max(mobile ? 70 : 100, Math.min(r, 430));
+
+    // Strong presence on the idle screen; fade back under conversation text.
+    var chatLog = document.getElementById("chatLog");
+    var hasConversation = !!(chatLog && chatLog.children.length);
+    canvas.style.opacity = hasConversation ? (mobile ? ".18" : ".23") : (mobile ? ".78" : ".92");
     drawSphere(x, y, r, time);
   }
 
