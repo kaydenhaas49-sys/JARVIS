@@ -7,7 +7,7 @@
   <meta name="description" content="JARVIS — your local-first AI assistant.">
   <title>JARVIS — LCARS Command Interface</title>
   <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/lcars.css?v=4">
+  <link rel="stylesheet" href="/lcars.css?v=5">
   <script src="/jarvis-orb.js?v=1" defer></script>
   <script src="/app.js" defer></script>
 </head>
@@ -16,13 +16,6 @@
   <div class="ambient ambient-two"></div>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <a class="brand" href="/" aria-label="JARVIS home">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="19" stroke="currentColor" stroke-width="1.5"/><circle cx="24" cy="24" r="12" stroke="currentColor" stroke-opacity=".55"/><path d="M24 7v34M7 24h34M12 12l24 24M36 12 12 36" stroke="currentColor" stroke-opacity=".35"/><circle cx="24" cy="24" r="4" fill="currentColor"/></svg>
-        </span>
-        <span class="brand-copy"><strong>J.A.R.V.I.S.</strong><small>PERSONAL INTELLIGENCE</small></span>
-      </a>
-
       <button class="new-chat-btn" id="newChatBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>New conversation</span><kbd>⌘ K</kbd>
@@ -34,18 +27,6 @@
         <button class="nav-item nav-button" id="systemBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 21h8m-4-4v4M7 9h3m-3 3h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>System status</span></button>
         <button class="nav-item nav-button" id="workspaceBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.6"/></svg></span><span>Workspace</span></button>
       </div>
-
-      <section class="sidebar-telemetry" aria-label="JARVIS core visualizer">
-        <div class="telemetry-heading"><span>CORE VISUALIZER</span><span class="telemetry-code">01 / 04</span></div>
-        <div class="telemetry-graphic" aria-hidden="true">
-          <span class="telemetry-orbit telemetry-orbit-one"></span>
-          <span class="telemetry-orbit telemetry-orbit-two"></span>
-          <span class="telemetry-sphere"></span>
-          <span class="telemetry-sweep"></span>
-        </div>
-        <div class="telemetry-readout"><span class="telemetry-live-dot"></span><strong>NEURAL INTERFACE</strong><span class="telemetry-live-label">READY</span></div>
-        <div class="telemetry-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      </section>
 
       <div class="sidebar-divider"></div>
       <div class="workspace-mini">

@@ -678,3 +678,8 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .telemetry-sweep, .telemetry-spectrum i { animation: none !important; }
 }
+
+
+/* Keep the LCARS rail, but remove the brand badge and sidebar mini-visualizer. */
+.sidebar::after { content: none; }
+.new-chat-btn { margin-top: 8px; }
