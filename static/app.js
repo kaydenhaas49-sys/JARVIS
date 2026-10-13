@@ -4,7 +4,7 @@
   const $ = (selector) => document.querySelector(selector);
   const elements = {
     chatLog: $("#chatLog"), welcome: $("#welcomePanel"), input: $("#messageInput"),
-    send: $("#sendBtn"), mic: $("#micBtn"), typing: $("#typingRow"),
+    send: $("#sendBtn"), mic: $("#micBtn"), wakeWord: $("#wakeWordBtn"), typing: $("#typingRow"),
     connectionPill: $("#connectionPill"), connectionLabel: $("#connectionLabel"),
     workspacePath: $("#workspacePath"), testModel: $("#testModelBtn"),
     voiceOutput: $("#voiceOutputBtn"), toastRegion: $("#toastRegion"),
@@ -28,6 +28,16 @@
   let listening = false;
   let voiceReplies = false;
   let recognition = null;
+  let mediaRecorder = null;
+  let microphoneStream = null;
+  let recordedChunks = [];
+  let recordingStartedAt = 0;
+  let recordingStopTimer = null;
+  let wakeWordEnabled = false;
+  let wakeWordStatus = null;
+  let wakeEventCursor = 0;
+  let wakeEventsReady = false;
+  let wakePollBusy = false;
   let currentUtilityView = null;
   let activeSystemTab = "status";
   let openQuickNotesPanel = null;
@@ -269,7 +279,7 @@
     return data;
   }
 
-  async function sendMessage(textOverride) {
+  async function sendMessage(textOverride, options = {}) {
     if (busy) return;
     if (sessionRestorePromise) {
       showToast("Still restoring the saved conversation. Try sending again in a moment.");
@@ -293,7 +303,7 @@
       }
       renderMessage("assistant", result.reply || "I’m here.");
       logActivity("Assistant replied", result.pending_action ? "Waiting for action approval" : "Response received", "chat");
-      speak(result.reply || "");
+      await speak(result.reply || "");
       if (result.pending_action) {
         logActivity("Approval requested", result.pending_action.title || "Review a proposed action", "approval");
         renderPendingAction(result.pending_action);
@@ -307,6 +317,14 @@
       showToast(error.message, "error");
     } finally {
       setBusy(false);
+      if (options.fromWakeWord && wakeWordEnabled) {
+        try {
+          await apiPost("/api/voice/rearm", {});
+          await refreshWakeWordStatus(false);
+        } catch (error) {
+          showToast("Wake word could not re-arm: " + error.message, "error");
+        }
+      }
     }
   }
 
@@ -580,21 +598,39 @@
   }
 
   function speak(text) {
-    if (!voiceReplies || !("speechSynthesis" in window) || !text) {
-      setOrbState("idle");
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const fence = String.fromCharCode(96).repeat(3);
-    const clean = String(text).replace(new RegExp(fence + "[\\s\\S]*?" + fence, "g"), " code block omitted ")
-      .replace(/[*_#>]/g, "").slice(0, 3_500);
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.02;
-    utterance.pitch = 0.94;
-    utterance.onstart = () => setOrbState("speaking");
-    utterance.onend = () => setOrbState("idle");
-    utterance.onerror = () => setOrbState("idle");
-    window.speechSynthesis.speak(utterance);
+    return new Promise((resolve) => {
+      if (!voiceReplies || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined" || !text) {
+        setOrbState("idle");
+        resolve();
+        return;
+      }
+      const synthesis = window.speechSynthesis;
+      synthesis.cancel();
+      const fence = String.fromCharCode(96).repeat(3);
+      const clean = String(text).replace(new RegExp(fence + "[\\s\\S]*?" + fence, "g"), " code block omitted ")
+        .replace(/[*_#>]/g, "").replace(/\s+/g, " ").trim().slice(0, 3_500);
+      if (!clean) { resolve(); return; }
+      const utterance = new SpeechSynthesisUtterance(clean);
+      const voices = synthesis.getVoices();
+      utterance.voice = voices.find((voice) => /^en-CA$/i.test(voice.lang)) ||
+        voices.find((voice) => /^en-(US|GB)/i.test(voice.lang)) || null;
+      utterance.lang = utterance.voice?.lang || "en-CA";
+      utterance.rate = 1.02;
+      utterance.pitch = 0.94;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        setOrbState("idle");
+        resolve();
+      };
+      utterance.onstart = () => setOrbState("speaking");
+      utterance.onend = finish;
+      utterance.onerror = finish;
+      synthesis.speak(utterance);
+      // Resolve on cancellation too, so wake-word re-arming cannot get stuck.
+      window.setTimeout(finish, 120_000);
+    });
   }
 
   function toggleVoiceReplies() {
@@ -607,45 +643,236 @@
     showToast(voiceReplies ? "Spoken replies enabled." : "Spoken replies disabled.");
   }
 
+  function updateMicButton(isListening, label) {
+    listening = isListening;
+    elements.mic.classList.toggle("listening", isListening);
+    elements.mic.setAttribute("aria-label", label || (isListening ? "Stop voice input" : "Use voice input"));
+    elements.mic.title = label || (isListening ? "Stop voice input" : "Voice input");
+  }
+
+  async function startRecordedVoiceInput() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      showToast("This browser can't record microphone audio. Check microphone permissions and browser support.", "error");
+      return;
+    }
+    try {
+      microphoneStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+      recordedChunks = [];
+      recordingStartedAt = Date.now();
+      const formats = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
+      const mimeType = formats.find((type) => MediaRecorder.isTypeSupported?.(type));
+      mediaRecorder = mimeType ? new MediaRecorder(microphoneStream, { mimeType }) : new MediaRecorder(microphoneStream);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data?.size) recordedChunks.push(event.data);
+      };
+      mediaRecorder.onerror = () => {
+        showToast("Microphone recording failed. Check your input device and permissions.", "error");
+        stopRecordedVoiceInput();
+      };
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || mimeType || "audio/webm" });
+        recordedChunks = [];
+        if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
+        microphoneStream = null;
+        mediaRecorder = null;
+        if (recordingStopTimer) window.clearTimeout(recordingStopTimer);
+        recordingStopTimer = null;
+        updateMicButton(false);
+        if (currentOrbState === "listening") setOrbState("idle");
+        if (Date.now() - recordingStartedAt < 600 || blob.size < 2_000) {
+          showToast("I didn't get enough audio. Hold the mic for a little longer.", "error");
+          return;
+        }
+        if (blob.size > 720_000) {
+          showToast("That recording is too large. Try a shorter command.", "error");
+          return;
+        }
+        try {
+          setOrbState("thinking");
+          showToast("Transcribing locally…");
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("Could not read recorded audio."));
+            reader.readAsDataURL(blob);
+          });
+          const audioBase64 = dataUrl.split(",", 2)[1];
+          const result = await apiPost("/api/voice/transcribe", { audio_base64: audioBase64, mime_type: blob.type });
+          if (!result.text?.trim()) {
+            showToast("I couldn't make out the audio. Try speaking closer to the mic.", "error");
+            setOrbState("idle");
+            return;
+          }
+          logActivity("Voice input captured", "Transcribed locally", "voice");
+          await sendMessage(result.text);
+        } catch (error) {
+          showToast("Voice input failed: " + error.message, "error");
+          setOrbState("idle");
+        }
+      };
+      mediaRecorder.start();
+      updateMicButton(true, "Stop recording");
+      setOrbState("listening");
+      logActivity("Voice input started", "Recording a short local voice command", "voice");
+      showToast("Recording… tap the mic to finish (12-second limit).");
+      recordingStopTimer = window.setTimeout(stopRecordedVoiceInput, 12_000);
+    } catch (error) {
+      if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
+      microphoneStream = null;
+      mediaRecorder = null;
+      listening = false;
+      updateMicButton(false);
+      showToast("Couldn't access the microphone: " + error.message, "error");
+    }
+  }
+
+  function stopRecordedVoiceInput() {
+    if (recordingStopTimer) window.clearTimeout(recordingStopTimer);
+    recordingStopTimer = null;
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+    } else {
+      if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
+      microphoneStream = null;
+      updateMicButton(false);
+    }
+  }
+
   function toggleMicrophone() {
+    if (listening) {
+      if (recognition) {
+        recognition.stop();
+      } else {
+        stopRecordedVoiceInput();
+      }
+      return;
+    }
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Recognition) {
-      showToast("Voice input isn't available in this browser. Try Chromium-based browser support.", "error");
+      startRecordedVoiceInput();
       return;
     }
-    if (listening && recognition) {
-      recognition.stop();
-      return;
+    try {
+      recognition = new Recognition();
+      recognition.lang = "en-CA";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onstart = () => {
+        updateMicButton(true, "Stop voice input");
+        setOrbState("listening");
+        logActivity("Voice input started", "Browser speech recognition is listening", "voice");
+        showToast("Listening…");
+      };
+      recognition.onresult = (event) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+          logActivity("Voice input captured", "Speech recognized", "voice");
+          sendMessage(transcript);
+        }
+      };
+      recognition.onerror = (event) => {
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          showToast("Microphone permission was denied. Allow microphone access for JARVIS and retry.", "error");
+        } else {
+          showToast("Browser speech recognition failed (" + (event.error || "unknown error") + ").", "error");
+        }
+      };
+      recognition.onend = () => {
+        recognition = null;
+        updateMicButton(false);
+        if (currentOrbState === "listening") setOrbState("idle");
+      };
+      recognition.start();
+    } catch (error) {
+      recognition = null;
+      showToast("Browser speech recognition could not start. Trying local transcription instead.", "error");
+      startRecordedVoiceInput();
     }
-    recognition = new Recognition();
-    recognition.lang = "en-CA";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => {
-      listening = true;
-      setOrbState("listening");
-      logActivity("Voice input started", "Microphone is listening", "voice");
-      elements.mic.classList.add("listening");
-      elements.mic.setAttribute("aria-label", "Stop voice input");
-      showToast("Listening…");
-    };
-    recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript;
-      if (transcript) {
-        logActivity("Voice input captured", "Speech recognized", "voice");
-        sendMessage(transcript);
+  }
+
+  function renderWakeWordButton() {
+    if (!elements.wakeWord || !wakeWordStatus) return;
+    wakeWordEnabled = Boolean(wakeWordStatus.enabled);
+    const label = !wakeWordEnabled ? "Wake off" : wakeWordStatus.armed ? "Wake on" :
+      wakeWordStatus.capturing_command ? "Hearing…" : "Wake paused";
+    const span = elements.wakeWord.querySelector("span");
+    if (span) span.textContent = label;
+    elements.wakeWord.classList.toggle("active", wakeWordEnabled);
+    elements.wakeWord.setAttribute("aria-pressed", String(wakeWordEnabled));
+    elements.wakeWord.title = wakeWordStatus.error || (wakeWordEnabled
+      ? (wakeWordStatus.armed ? 'Listening locally for "Hey JARVIS"' : "Wake word enabled; waiting to re-arm")
+      : 'Enable local "Hey JARVIS" wake word');
+  }
+
+  async function refreshWakeWordStatus(initial = false) {
+    try {
+      const response = await fetch("/api/voice/status", { cache: "no-store" });
+      const status = await response.json();
+      if (!response.ok) throw new Error(status.error || "Voice status unavailable.");
+      wakeWordStatus = status;
+      if (initial) {
+        wakeEventCursor = Number(status.last_event_id) || 0;
+        wakeEventsReady = true;
+        if (status.enabled && status.running && !status.armed && !status.capturing_command) {
+          apiPost("/api/voice/rearm", {}).catch(() => {});
+        }
       }
-    };
-    recognition.onerror = (event) => {
-      showToast("Voice input: " + (event.error || "recognition failed") + ".", "error");
-    };
-    recognition.onend = () => {
-      listening = false;
-      if (currentOrbState === "listening") setOrbState("idle");
-      elements.mic.classList.remove("listening");
-      elements.mic.setAttribute("aria-label", "Use voice input");
-    };
-    try { recognition.start(); } catch (_) { showToast("Voice input could not start.", "error"); }
+      renderWakeWordButton();
+    } catch (error) {
+      if (initial) showToast("Voice service unavailable: " + error.message, "error");
+    }
+  }
+
+  async function toggleWakeWord() {
+    elements.wakeWord.disabled = true;
+    try {
+      const result = await apiPost("/api/voice/wakeword", { enabled: !wakeWordEnabled });
+      wakeWordStatus = result.status;
+      wakeWordEnabled = Boolean(result.status?.enabled);
+      renderWakeWordButton();
+      showToast(wakeWordEnabled
+        ? 'Wake word enabled. Say "Hey JARVIS", then give your command.'
+        : "Wake word disabled; the microphone is released.");
+    } catch (error) {
+      await refreshWakeWordStatus(false);
+      showToast(error.message, "error");
+    } finally {
+      elements.wakeWord.disabled = false;
+    }
+  }
+
+  async function pollWakeWordEvents() {
+    if (!wakeEventsReady || wakePollBusy) return;
+    wakePollBusy = true;
+    try {
+      const response = await fetch("/api/voice/events?after=" + encodeURIComponent(wakeEventCursor), { cache: "no-store" });
+      if (!response.ok) return;
+      const result = await response.json();
+      for (const event of (result.events || [])) {
+        wakeEventCursor = Math.max(wakeEventCursor, Number(event.id) || 0);
+        if (event.type === "wake") {
+          setOrbState("listening");
+          showToast('Wake word detected. Listening for your command…');
+        } else if (event.type === "command") {
+          if (event.text?.trim()) {
+            await sendMessage(event.text, { fromWakeWord: true });
+          } else {
+            showToast(event.error || "I didn't catch that command. Try again.", "error");
+            if (wakeWordEnabled) await apiPost("/api/voice/rearm", {}).catch(() => {});
+            await refreshWakeWordStatus(false);
+          }
+        } else if (event.type === "error") {
+          showToast(event.message || "Wake word stopped unexpectedly.", "error");
+          await refreshWakeWordStatus(false);
+        }
+      }
+    } catch (_) {
+      // The server is also polled for status; a brief network error is not fatal.
+    } finally {
+      wakePollBusy = false;
+    }
   }
 
   async function testModel() {
@@ -1179,6 +1406,10 @@
   $("#newChatBtn").addEventListener("click", newChat);
   $("#micBtn").addEventListener("click", toggleMicrophone);
   $("#voiceOutputBtn").addEventListener("click", toggleVoiceReplies);
+  elements.wakeWord.addEventListener("click", toggleWakeWord);
+  window.setInterval(pollWakeWordEvents, 700);
+  window.setInterval(() => refreshWakeWordStatus(false), 2_500);
+  refreshWakeWordStatus(true);
   $("#testModelBtn").addEventListener("click", testModel);
   $("#systemBtn").addEventListener("click", () => openUtility("system"));
   $("#kitchenBtn").addEventListener("click", () => openUtility("kitchen"));
