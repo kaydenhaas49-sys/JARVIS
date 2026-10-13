@@ -560,3 +560,101 @@ kbd { background: rgba(10, 43, 65, .55) !important; border-color: rgba(70, 202, 
   .hud-capability small { font-size: 6px; }
   .hud-footer-readout { display: none; }
 }
+
+
+/* Live instrument-state readouts: color is driven by real JARVIS UI events. */
+.hud-channel-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 5px;
+  overflow: hidden;
+  border: 1px solid rgba(80, 193, 235, .18);
+  border-radius: 1px 5px 1px 5px;
+  color: #64b5d1;
+  background: rgba(8, 46, 68, .22);
+  font: 700 5px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .055em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color .18s, border-color .18s, background .18s;
+}
+.hud-channel-state::before {
+  content: "";
+  flex: 0 0 3px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 5px currentColor;
+}
+.hud-channel-state[data-state="idle"],
+.hud-channel-state[data-state="available"] {
+  color: #66c8df;
+}
+.hud-channel-state[data-state="listening"],
+.hud-channel-state[data-state="online"],
+.hud-channel-state[data-state="enabled"] {
+  color: #6dffdc;
+  border-color: rgba(109, 255, 220, .25);
+  background: rgba(14, 100, 88, .14);
+}
+.hud-channel-state[data-state="thinking"],
+.hud-channel-state[data-state="speaking"] {
+  color: #8bc4ff;
+  border-color: rgba(139, 196, 255, .27);
+  background: rgba(27, 75, 126, .17);
+}
+.hud-channel-state[data-state="error"],
+.hud-channel-state[data-state="offline"] {
+  color: #ff7890;
+  border-color: rgba(255, 120, 144, .32);
+  background: rgba(105, 20, 43, .18);
+}
+.hud-channel-state[data-state="checking"] {
+  color: #ffca7a;
+  border-color: rgba(255, 202, 122, .24);
+}
+.hud-core-prompt {
+  min-height: 10px;
+  transition: color .18s;
+}
+.hud-core-prompt[data-state="listening"] { color: #75ffdc; }
+.hud-core-prompt[data-state="thinking"],
+.hud-core-prompt[data-state="speaking"] { color: #9dceff; }
+.hud-core-prompt[data-state="error"] { color: #ff7e94; }
+.hud-core-prompt[data-state="listening"] span { background: rgba(117, 255, 220, .65); }
+.hud-core-prompt[data-state="thinking"] span,
+.hud-core-prompt[data-state="speaking"] span { background: rgba(157, 206, 255, .72); }
+.hud-core-prompt[data-state="error"] span { background: rgba(255, 126, 148, .85); }
+#hudFooterStatus {
+  color: #65c6df;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: inherit;
+  transition: color .18s;
+}
+#hudFooterStatus[data-state="listening"] { color: #6dffdc; }
+#hudFooterStatus[data-state="thinking"],
+#hudFooterStatus[data-state="speaking"] { color: #8bc4ff; }
+#hudFooterStatus[data-state="error"] { color: #ff7890; }
+.hud-channel-row:has(#hudAssistantState[data-state="listening"]) .hud-channel-mark,
+.hud-channel-row:has(#hudModelState[data-state="online"]) .hud-channel-mark,
+.hud-channel-row:has(#hudVoiceState[data-state="enabled"]) .hud-channel-mark { color: #6dffdc; }
+.hud-channel-row:has(#hudModelState[data-state="offline"]) .hud-channel-mark { color: #ff7890; }
+.hud-channel-row:has(#hudAssistantState[data-state="thinking"]) .hud-channel-mark,
+.hud-channel-row:has(#hudAssistantState[data-state="speaking"]) .hud-channel-mark { color: #8bc4ff; }
+.hud-channel-row:has(#hudAssistantState[data-state="error"]) .hud-channel-mark { color: #ff7890; }
+@media (max-width: 1100px) {
+  .hud-channel-state { font-size: 5px; letter-spacing: .025em; }
+}
+@media (max-width: 700px) {
+  .hud-channel-state { max-width: 160px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-channel-state,
+  .hud-core-prompt,
+  #hudFooterStatus { transition: none !important; }
+}
