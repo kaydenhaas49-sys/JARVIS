@@ -20,6 +20,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Verify editable install metadata
         run: python -m pip install --no-deps -e .
+      - name: Verify optional voice dependencies resolve
+        run: python -m pip install --dry-run -e ".[voice]"
+      - name: Verify wake-word wrapper install without TFLite
+        run: python -m pip install --no-deps "openwakeword>=0.6.0"
       - name: Check browser JavaScript syntax
         run: node --check static/app.js
       - name: Run tests
