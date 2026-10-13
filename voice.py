@@ -182,8 +182,9 @@ class WakeWordManager:
                 self.enabled = False
                 self.armed = False
                 self.last_error = (
-                    "Wake word needs the optional voice packages. From the JARVIS folder run: "
-                    "python -m pip install -e '.[voice]'"
+                    "Wake-word support needs the optional packages. From the JARVIS folder run: "
+                    "python -m pip install -e '.[voice]' && "
+                    "python -m pip install --no-deps 'openwakeword>=0.6.0'"
                 )
             return self.status()
 
