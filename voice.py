@@ -224,62 +224,84 @@ class WakeWordManager:
         from openwakeword.model import Model
 
         try:
-            # openWakeWord ships the public model index but may download the
-            # small hey_jarvis model on first opt-in. Later runs use its cache.
+            # The public hey_jarvis model is downloaded on first opt-in and then
+            # cached locally by openWakeWord.
             openwakeword.utils.download_models(models=[_WAKE_MODEL_NAME])
             model = Model(
                 wakeword_models=[_WAKE_MODEL_NAME],
                 inference_framework="onnx",
             )
-            with sd.InputStream(
-                samplerate=_SAMPLE_RATE,
-                channels=1,
-                dtype="int16",
-                blocksize=_BLOCK_SAMPLES,
-            ) as stream:
+            with self._lock:
+                self.running = True
+                self.last_error = None
+            self._publish("status", message="Wake-word model ready.")
+
+            while not self._stop.is_set():
                 with self._lock:
-                    self.running = True
-                    self.last_error = None
-                self._publish("status", message="Wake word is armed locally.")
-                while not self._stop.is_set():
-                    with self._lock:
-                        enabled, armed = self.enabled, self.armed
-                    if not enabled:
+                    enabled, armed = self.enabled, self.armed
+                if not enabled:
+                    break
+                if not armed:
+                    # Do not retain or inspect audio between commands. Closing the
+                    # stream below releases the microphone while waiting to re-arm.
+                    time.sleep(0.08)
+                    continue
+
+                device = sd.query_devices(kind="input")
+                input_rate = int(round(float(device.get("default_samplerate") or _SAMPLE_RATE)))
+                input_rate = max(8_000, min(input_rate, 192_000))
+                input_block_samples = max(1, int(round(input_rate * _BLOCK_SAMPLES / _SAMPLE_RATE)))
+
+                # Re-open the microphone only while armed. When a wake is detected,
+                # the short command is captured and transcribed, then this context
+                # closes; the mic remains released until the UI re-arms after reply.
+                with sd.InputStream(
+                    samplerate=input_rate,
+                    channels=1,
+                    dtype="int16",
+                    blocksize=input_block_samples,
+                    device=None,
+                ) as stream:
+                    while not self._stop.is_set():
+                        with self._lock:
+                            enabled, armed = self.enabled, self.armed
+                        if not enabled or not armed:
+                            break
+
+                        audio, _ = stream.read(input_block_samples)
+                        source = np.asarray(audio, dtype=np.int16).reshape(-1)
+                        samples = self._resample(source, input_rate, np)
+                        if samples.size != _BLOCK_SAMPLES:
+                            continue
+                        rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
+                        if rms < 60:
+                            continue
+                        scores = model.predict(samples)
+                        score = float(scores.get(_WAKE_MODEL_NAME, max(scores.values(), default=0.0)))
+                        self.last_score = score
+                        now = time.monotonic()
+                        if score < _WAKE_THRESHOLD or now - self.last_detection < 2.5:
+                            continue
+
+                        self.last_detection = now
+                        with self._lock:
+                            self.armed = False
+                            self.capturing_command = True
+                            self.triggered += 1
+                        self._publish("wake", score=round(score, 3))
+                        try:
+                            pcm = self._capture_command(stream, np, input_rate, input_block_samples)
+                            text = _strip_wake_phrase(self._transcribe_pcm(pcm)) if pcm else ""
+                            if text:
+                                self._publish("command", text=text)
+                            else:
+                                self._publish("command", text="", error="No clear command was detected. Try again.")
+                        except Exception as exc:
+                            self._publish("command", text="", error=f"Voice transcription failed: {exc}")
+                        finally:
+                            with self._lock:
+                                self.capturing_command = False
                         break
-                    if not armed:
-                        # Drain audio without scoring it while a response is pending,
-                        # avoiding a stale backlog when the next command is enabled.
-                        stream.read(_BLOCK_SAMPLES)
-                        continue
-
-                    audio, _ = stream.read(_BLOCK_SAMPLES)
-                    samples = np.asarray(audio, dtype=np.int16).reshape(-1)
-                    if samples.size != _BLOCK_SAMPLES:
-                        continue
-                    rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
-                    if rms < 60:
-                        continue
-                    scores = model.predict(samples)
-                    score = float(scores.get(_WAKE_MODEL_NAME, max(scores.values(), default=0.0)))
-                    self.last_score = score
-                    now = time.monotonic()
-                    if score < _WAKE_THRESHOLD or now - self.last_detection < 2.5:
-                        continue
-
-                    self.last_detection = now
-                    with self._lock:
-                        self.armed = False
-                        self.capturing_command = True
-                        self.triggered += 1
-                    self._publish("wake", score=round(score, 3))
-                    pcm = self._capture_command(stream, np)
-                    text = _strip_wake_phrase(self._transcribe_pcm(pcm)) if pcm else ""
-                    with self._lock:
-                        self.capturing_command = False
-                    if text:
-                        self._publish("command", text=text)
-                    else:
-                        self._publish("command", text="", error="No clear command was detected. Try again.")
         except Exception as exc:
             with self._lock:
                 self.last_error = str(exc)[:600]
@@ -293,7 +315,22 @@ class WakeWordManager:
                 if not self.enabled:
                     self.armed = False
 
-    def _capture_command(self, stream: Any, np: Any) -> bytes:
+    @staticmethod
+    def _resample(samples: Any, input_rate: int, np: Any) -> Any:
+        """Resample one ~80 ms int16 mic block to OpenWakeWord's 16 kHz format."""
+        samples = np.asarray(samples, dtype=np.int16).reshape(-1)
+        if input_rate == _SAMPLE_RATE and samples.size == _BLOCK_SAMPLES:
+            return samples
+        if not samples.size or input_rate <= 0:
+            return np.array([], dtype=np.int16)
+        target_size = int(round(samples.size * _SAMPLE_RATE / input_rate))
+        if target_size <= 0:
+            return np.array([], dtype=np.int16)
+        old_axis = np.arange(samples.size, dtype=np.float64)
+        new_axis = np.linspace(0, samples.size - 1, target_size, dtype=np.float64)
+        return np.interp(new_axis, old_axis, samples.astype(np.float32)).astype(np.int16)
+
+    def _capture_command(self, stream: Any, np: Any, input_rate: int, input_block_samples: int) -> bytes:
         """Capture a short command after the wake phrase; stop at silence or a hard cap."""
         chunks: list[bytes] = []
         discard_samples = int(0.18 * _SAMPLE_RATE)
@@ -306,8 +343,9 @@ class WakeWordManager:
         silence_limit = int(1.0 * _SAMPLE_RATE)
 
         while captured_samples < maximum_samples and not self._stop.is_set():
-            audio, _ = stream.read(_BLOCK_SAMPLES)
-            samples = np.asarray(audio, dtype=np.int16).reshape(-1)
+            audio, _ = stream.read(input_block_samples)
+            source = np.asarray(audio, dtype=np.int16).reshape(-1)
+            samples = self._resample(source, input_rate, np)
             if samples.size == 0:
                 continue
             if discarded < discard_samples:
