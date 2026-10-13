@@ -46,7 +46,7 @@ class VoiceSupportTests(unittest.TestCase):
         self.assertTrue(fake_model.asserted_options["vad_filter"])
 
     def test_wakeword_pcm_is_wrapped_as_mono_16khz_wav(self) -> None:
-        pcm = b"\\x00\\x00" * 1600
+        pcm = b"\x00\x00" * 1600
         with mock.patch.object(voice, "transcribe_audio_bytes", return_value="hello") as transcribe:
             self.assertEqual(voice.transcribe_pcm_bytes(pcm), "hello")
         wav_bytes, suffix = transcribe.call_args.args
