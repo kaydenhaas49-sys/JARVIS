@@ -219,6 +219,7 @@ class WakeWordManager:
     def _run(self) -> None:
         import numpy as np
         import openwakeword
+        import openwakeword.utils
         import sounddevice as sd
         from openwakeword.model import Model
 
