@@ -30,9 +30,11 @@
     white: "243,255,255"
   };
   var assistantState = "idle";
+  var animationStart = 0;
   window.addEventListener("jarvis:state", function (event) {
     var next = event && event.detail && event.detail.state;
     if (["idle", "listening", "thinking", "speaking", "error"].includes(next)) {
+      if (assistantState === "idle" && next !== "idle") animationStart = performance.now();
       assistantState = next;
       canvas.dataset.state = next;
       if (assistantState === "idle") stop();
@@ -363,7 +365,8 @@
     ctx.clearRect(0, 0, width, height);
     // Use a carefully composed, repeatable frame while idle rather than freezing
     // at a random point in the previous animation.
-    var animationTime = assistantState === "idle" ? 0 : (reducedMotion ? time * .42 : time);
+    var elapsed = assistantState === "idle" ? 0 : Math.max(0, time - animationStart);
+    var animationTime = reducedMotion ? elapsed * .42 : elapsed;
     drawBackgroundGrid(animationTime);
 
     // Anchor the orb to the main conversation display, not the whole window.
