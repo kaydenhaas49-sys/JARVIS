@@ -15,7 +15,7 @@
   var height = 0;
   var dpr = 1;
   var raf = 0;
-  var frameTimer = 0;
+  var lastFrameTime = 0;
   var reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   var colors = {
@@ -392,26 +392,32 @@
 
   function tick(time) {
     raf = 0;
-    if (document.hidden || assistantState === "idle") return;
-    render(time);
-    // Redraw at most 24 FPS while active (12 FPS for reduced motion) rather than every frame.
-    frameTimer = window.setTimeout(function () {
-      frameTimer = 0;
-      start();
-    }, reducedMotion ? 1000 / 12 : 1000 / 24);
+    if (document.hidden || assistantState === "idle") {
+      lastFrameTime = 0;
+      return;
+    }
+
+    // Cap the active HUD at 60 rendered frames per second even on high-refresh
+    // displays. Respect reduced-motion preferences with a 12 FPS limit.
+    var frameInterval = reducedMotion ? 1000 / 12 : 1000 / 60;
+    if (!lastFrameTime || time - lastFrameTime >= frameInterval) {
+      lastFrameTime = time;
+      render(time);
+    }
+    raf = window.requestAnimationFrame(tick);
   }
 
   function start() {
-    if (!raf && !frameTimer && !document.hidden && assistantState !== "idle") {
+    if (!raf && !document.hidden && assistantState !== "idle") {
+      lastFrameTime = 0;
       raf = window.requestAnimationFrame(tick);
     }
   }
 
   function stop() {
     if (raf) window.cancelAnimationFrame(raf);
-    if (frameTimer) window.clearTimeout(frameTimer);
     raf = 0;
-    frameTimer = 0;
+    lastFrameTime = 0;
     // Freeze the current visual instead of keeping a full-screen canvas loop alive.
     if (!document.hidden) render(performance.now());
   }
@@ -430,9 +436,8 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
       if (raf) window.cancelAnimationFrame(raf);
-      if (frameTimer) window.clearTimeout(frameTimer);
       raf = 0;
-      frameTimer = 0;
+      lastFrameTime = 0;
     } else {
       render(performance.now());
       start();
@@ -445,8 +450,7 @@
         reducedMotion = event.matches;
         // The next active frame will use the updated reduced-motion frame cap.
         if (assistantState !== "idle") {
-          if (frameTimer) window.clearTimeout(frameTimer);
-          frameTimer = 0;
+          lastFrameTime = 0;
           start();
         }
       });
