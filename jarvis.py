@@ -101,7 +101,7 @@ def normalize_model_base_url(raw: str) -> str:
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("Endpoint URLs cannot contain credentials, query strings, or fragments.")
     if port == 11434 and parsed.path.rstrip("/") == "/v1":
-        value = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+        value = parsed._replace(path="", query="", fragment="").geturl().rstrip("/")
     return value
 
 
