@@ -1,0 +1,1 @@
+from server.kitchen import store  # noqa: F401

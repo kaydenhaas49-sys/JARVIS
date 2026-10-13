@@ -1,0 +1,25 @@
+[
+  {
+    "id": "1786936841416",
+    "name": "Grandma's Cookie Recipe",
+    "category": "Treat",
+    "description": "",
+    "ingredients": [
+      "1/2 cup butter",
+      "1/2 cup brown sugar",
+      "1/4 white sugar",
+      "1 egg ",
+      "1 tsp baking soda ",
+      "1 tsp vanilla",
+      "1 cup flour (add more if needed) ",
+      "1/2 cup of chocolate "
+    ],
+    "instructions": [
+      "get a medium to large size bowl and lightly soften butter",
+      "add 1/2 cup butter, 1/2 cup brown sugar, one cap full of vanilla, 1/4 cup white sugar and an one egg then stir until butter is until butter chunks disappear",
+      "1 cup of flour until it only sticks to your hand a little bit. "
+    ],
+    "image": "/static/uploads/recipes/1786936841416.jpg",
+    "favorite": true
+  }
+]

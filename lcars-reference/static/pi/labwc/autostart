@@ -1,0 +1,16 @@
+#!/bin/bash
+export WAYLAND_DISPLAY=wayland-0
+export XDG_RUNTIME_DIR=/run/user/1000
+export KIOSK_CONTROL=0.0.0.0:18790
+
+# Clean up stale Chromium singleton files from a previous crash
+rm -f /home/jarvis/.config/jarvis-chromium/SingletonLock
+rm -f /home/jarvis/.config/jarvis-chromium/SingletonCookie
+rm -f /home/jarvis/.config/jarvis-chromium/SingletonSocket
+rm -rf /tmp/org.chromium.Chromium.* 2>/dev/null || true
+
+# Wait a moment for PipeWire and the Wayland compositor to be fully ready.
+sleep 3
+
+# Start the JARVIS native kiosk (GTK + WebKit2). It manages its own ear subprocess.
+systemctl --user start jarvis-kiosk.service
