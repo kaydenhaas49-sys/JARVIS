@@ -257,49 +257,6 @@ APP_DATA_DEFAULTS: dict[str, Any] = {
 }
 
 
-def _read_dashboard_store() -> dict[str, Any]:
-    legacy = _read_json_object(APP_DATA_PATH)
-    index = _read_json_object(APP_DATA_INDEX_PATH)
-    indexed = index.get("initialized", {})
-    legacy_initialized = legacy.get("initialized", {})
-    if not isinstance(indexed, dict):
-        indexed = {}
-    if not isinstance(legacy_initialized, dict):
-        legacy_initialized = {}
-
-    store: dict[str, Any] = {}
-    initialized: dict[str, bool] = {}
-    for bucket in APP_DATA_BUCKETS:
-        path = APP_DATA_FILES[bucket]
-        if path.is_file():
-            raw = _read_json_value(path, APP_DATA_DEFAULTS[bucket])
-        elif bucket in legacy:
-            raw = legacy[bucket]
-        else:
-            raw = APP_DATA_DEFAULTS[bucket]
-        store[bucket] = _normalize_dashboard_bucket(bucket, raw)
-
-        if bucket in indexed:
-            initialized[bucket] = bool(indexed[bucket])
-        elif path.is_file():
-            initialized[bucket] = True
-        else:
-            initialized[bucket] = bool(legacy_initialized.get(bucket, False))
-    store["initialized"] = initialized
-    return store
-
-
-def _write_dashboard_store(store: dict[str, Any]) -> None:
-    for bucket in APP_DATA_BUCKETS:
-        _write_json_atomically(APP_DATA_FILES[bucket], store.get(bucket, APP_DATA_DEFAULTS[bucket]))
-    initialized = store.get("initialized", {})
-    _write_json_atomically(APP_DATA_INDEX_PATH, {
-        "version": 1,
-        "initialized": {bucket: bool(initialized.get(bucket, False))
-                        for bucket in APP_DATA_BUCKETS} if isinstance(initialized, dict) else {},
-    })
-
-
 def _dashboard_text(value: Any, maximum: int, default: str = "") -> str:
     return value.strip()[:maximum] if isinstance(value, str) else default
 
@@ -422,17 +379,46 @@ def _normalize_dashboard_bucket(bucket: str, value: Any) -> Any:
 
 
 def _read_dashboard_store() -> dict[str, Any]:
-    raw = _read_json_object(APP_DATA_PATH)
-    store: dict[str, Any] = {key: _normalize_dashboard_bucket(key, raw.get(key, default))
-                             for key, default in APP_DATA_DEFAULTS.items()}
-    initialized = raw.get("initialized", {})
-    store["initialized"] = ({key: bool(initialized.get(key, False)) for key in APP_DATA_BUCKETS}
-                            if isinstance(initialized, dict) else {})
+    legacy = _read_json_object(APP_DATA_PATH)
+    index = _read_json_object(APP_DATA_INDEX_PATH)
+    indexed = index.get("initialized", {})
+    legacy_initialized = legacy.get("initialized", {})
+    if not isinstance(indexed, dict):
+        indexed = {}
+    if not isinstance(legacy_initialized, dict):
+        legacy_initialized = {}
+
+    store: dict[str, Any] = {}
+    initialized: dict[str, bool] = {}
+    for bucket in APP_DATA_BUCKETS:
+        path = APP_DATA_FILES[bucket]
+        if path.is_file():
+            raw = _read_json_value(path, APP_DATA_DEFAULTS[bucket])
+        elif bucket in legacy:
+            raw = legacy[bucket]
+        else:
+            raw = APP_DATA_DEFAULTS[bucket]
+        store[bucket] = _normalize_dashboard_bucket(bucket, raw)
+
+        if bucket in indexed:
+            initialized[bucket] = bool(indexed[bucket])
+        elif path.is_file():
+            initialized[bucket] = True
+        else:
+            initialized[bucket] = bool(legacy_initialized.get(bucket, False))
+    store["initialized"] = initialized
     return store
 
 
 def _write_dashboard_store(store: dict[str, Any]) -> None:
-    _write_json_atomically(APP_DATA_PATH, store)
+    for bucket in APP_DATA_BUCKETS:
+        _write_json_atomically(APP_DATA_FILES[bucket], store.get(bucket, APP_DATA_DEFAULTS[bucket]))
+    initialized = store.get("initialized", {})
+    _write_json_atomically(APP_DATA_INDEX_PATH, {
+        "version": 1,
+        "initialized": {bucket: bool(initialized.get(bucket, False))
+                        for bucket in APP_DATA_BUCKETS} if isinstance(initialized, dict) else {},
+    })
 
 
 def _dashboard_data_payload(store: dict[str, Any] | None = None) -> dict[str, Any]:
