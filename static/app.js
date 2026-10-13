@@ -349,8 +349,10 @@
     try {
       const response = await fetch("/api/config", { cache: "no-store" });
       const config = await response.json();
-      elements.workspacePath.textContent = config.workspace || "Workspace unavailable";
-      elements.workspacePath.title = config.workspace || "";
+      if (elements.workspacePath) {
+        elements.workspacePath.textContent = config.workspace || "Workspace unavailable";
+        elements.workspacePath.title = config.workspace || "";
+      }
       elements.connectionLabel.textContent = "MODEL NOT TESTED";
     } catch (_) {
       elements.connectionLabel.textContent = "SERVER UNAVAILABLE";
@@ -393,7 +395,7 @@
   $("#voiceOutputBtn").addEventListener("click", toggleVoiceReplies);
   $("#testModelBtn").addEventListener("click", testModel);
   $("#systemBtn").addEventListener("click", () => sendMessage("Check my system status and summarize the basics."));
-  $("#workspaceBtn").addEventListener("click", () => sendMessage("Inspect the root of my JARVIS workspace and summarize what is there."));
+
   $("#menuBtn").addEventListener("click", openSidebar);
   $("#mobileScrim").addEventListener("click", closeSidebar);
   document.querySelectorAll("[data-prompt]").forEach((button) => {
