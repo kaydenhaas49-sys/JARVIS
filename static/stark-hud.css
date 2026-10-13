@@ -560,3 +560,156 @@ kbd { background: rgba(10, 43, 65, .55) !important; border-color: rgba(70, 202, 
   .hud-capability small { font-size: 6px; }
   .hud-footer-readout { display: none; }
 }
+
+
+/* LCARS palette return for the flanking panels; the central JARVIS core stays cyan. */
+:root {
+  --lcars-orange: #ffad55;
+  --lcars-coral: #ff7896;
+  --lcars-lilac: #c8a2ff;
+  --lcars-blue: #85aaff;
+  --lcars-gold: #ffd166;
+}
+.sidebar {
+  border-right-color: rgba(200, 162, 255, .28) !important;
+  background: linear-gradient(180deg, rgba(13, 12, 29, .97), rgba(4, 9, 22, .98)) !important;
+  box-shadow: 10px 0 35px rgba(93, 64, 160, .055), inset -1px 0 rgba(200, 162, 255, .055) !important;
+}
+.sidebar::before {
+  width: 3px !important;
+  background: linear-gradient(180deg,
+    transparent 0%, #ffad55 9%, #ff7896 27%, #c8a2ff 47%,
+    #85aaff 68%, #78e4ee 84%, transparent 100%) !important;
+  opacity: .92 !important;
+}
+.hud-brand { border-bottom-color: rgba(200, 162, 255, .22) !important; }
+.hud-brand::after {
+  width: 94px !important;
+  background: linear-gradient(90deg, #ffad55 0%, #ff7896 43%, #c8a2ff 76%, transparent 100%) !important;
+  box-shadow: 0 0 10px rgba(200, 162, 255, .38) !important;
+}
+.hud-brand-mark i { border-color: rgba(200, 162, 255, .72) !important; }
+.hud-brand-mark i:nth-child(2) { border-color: rgba(255, 173, 85, .65) !important; }
+.hud-brand-mark i:nth-child(3) {
+  background: #ffe0a8 !important;
+  box-shadow: 0 0 13px rgba(255, 173, 85, .85) !important;
+}
+.new-chat-btn {
+  border-color: rgba(255, 173, 85, .36) !important;
+  background: linear-gradient(110deg, rgba(255, 173, 85, .13), rgba(200, 162, 255, .065), rgba(4, 22, 39, .36)) !important;
+}
+.new-chat-btn:hover { border-color: rgba(255, 173, 85, .78) !important; }
+.new-chat-btn svg { color: #ffbd73 !important; }
+.nav-item.selected {
+  border-color: rgba(255, 173, 85, .28) !important;
+  border-left-color: #ffad55 !important;
+  background: linear-gradient(90deg, rgba(255, 173, 85, .13), rgba(255, 120, 150, .065) 46%, rgba(5, 28, 50, .12)) !important;
+  box-shadow: inset 0 0 18px rgba(255, 173, 85, .045) !important;
+}
+.nav-item.selected .nav-icon { color: #ffc27a !important; }
+#systemBtn .nav-icon { color: #ffad55 !important; }
+#kitchenBtn .nav-icon { color: #ff7896 !important; }
+#memoryBtn .nav-icon { color: #c8a2ff !important; }
+#codingBtn .nav-icon { color: #85aaff !important; }
+#systemBtn:hover { border-color: rgba(255, 173, 85, .2) !important; background: rgba(255, 173, 85, .07) !important; }
+#kitchenBtn:hover { border-color: rgba(255, 120, 150, .2) !important; background: rgba(255, 120, 150, .07) !important; }
+#memoryBtn:hover { border-color: rgba(200, 162, 255, .2) !important; background: rgba(200, 162, 255, .07) !important; }
+#codingBtn:hover { border-color: rgba(133, 170, 255, .2) !important; background: rgba(133, 170, 255, .07) !important; }
+
+/* Session matrix = warm LCARS orange; subsystem directory = lavender/rose. */
+.hud-rail-left {
+  --rail-accent: #ffad55;
+  --rail-accent-soft: rgba(255, 173, 85, .26);
+  --rail-text: #ffe0b0;
+  --rail-muted: #b9885d;
+}
+.hud-rail-right {
+  --rail-accent: #c8a2ff;
+  --rail-accent-soft: rgba(200, 162, 255, .28);
+  --rail-text: #e5d7ff;
+  --rail-muted: #a58abd;
+}
+.hud-rail {
+  border-color: var(--rail-accent-soft) !important;
+  background:
+    linear-gradient(135deg, rgba(13, 20, 38, .9), rgba(3, 10, 22, .84)),
+    repeating-linear-gradient(0deg, transparent 0 22px, rgba(200, 162, 255, .022) 22px 23px) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .035), 0 6px 30px rgba(0, 0, 0, .14) !important;
+}
+.hud-rail::before {
+  border-top-color: var(--rail-accent) !important;
+  border-left-color: var(--rail-accent) !important;
+}
+.hud-rail::after {
+  border-bottom-color: var(--rail-accent) !important;
+  border-right-color: var(--rail-accent) !important;
+}
+.hud-rail-heading {
+  color: var(--rail-text) !important;
+  border-bottom-color: var(--rail-accent-soft) !important;
+}
+.hud-rail-heading > span,
+.hud-rail-left .hud-data-row strong { color: #ffc17b !important; }
+.hud-rail-right .hud-rail-heading > span,
+.hud-rail-right .hud-channel-number { color: #c8a2ff !important; }
+.hud-rail-left .hud-state-led {
+  background: #ffad55 !important;
+  box-shadow: 0 0 8px rgba(255, 173, 85, .7) !important;
+}
+.hud-rail-left .hud-signal-block,
+.hud-rail-left .hud-rail-note,
+.hud-rail-left .hud-data-row { border-color: rgba(255, 173, 85, .15) !important; }
+.hud-rail-left .hud-signal-bars {
+  border-bottom-color: rgba(255, 173, 85, .32) !important;
+  background: repeating-linear-gradient(0deg, transparent 0 10px, rgba(255, 173, 85, .07) 10px 11px) !important;
+}
+.hud-rail-left .hud-signal-bars i {
+  background: linear-gradient(180deg, rgba(255, 216, 153, .92), rgba(255, 133, 67, .24)) !important;
+}
+.hud-rail-left .hud-session-state strong { color: #ffe5bc !important; }
+.hud-rail-left .hud-session-state small,
+.hud-rail-left .hud-data-row span,
+.hud-rail-left .hud-signal-title,
+.hud-rail-left .hud-rail-note { color: #b98b60 !important; }
+.hud-rail-right .hud-channel-row { border-bottom-color: rgba(200, 162, 255, .15) !important; }
+.hud-rail-right .hud-channel-row strong { color: #e4d5ff !important; }
+.hud-rail-right .hud-channel-row small,
+.hud-rail-right .hud-directory-foot { color: #9a83bd !important; }
+.hud-rail-right .hud-channel-mark { color: #c8a2ff !important; }
+.hud-rail-right .hud-channel-row:nth-of-type(3) .hud-channel-mark { color: #ff7896 !important; }
+.hud-rail-right .hud-channel-row:nth-of-type(4) .hud-channel-mark { color: #85aaff !important; }
+.hud-rail-right .hud-directory-line { background: linear-gradient(90deg, rgba(200, 162, 255, .42), transparent) !important; }
+
+/* The slide-out utility surface also gets a restrained multicolor LCARS edge. */
+.utility-panel-shell {
+  position: relative !important;
+  border-left-color: rgba(200, 162, 255, .35) !important;
+}
+.utility-panel-shell::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  pointer-events: none;
+  background: linear-gradient(180deg, #ffad55 0%, #ff7896 33%, #c8a2ff 68%, #85aaff 100%);
+  opacity: .9;
+}
+.utility-header {
+  border-bottom-color: rgba(200, 162, 255, .2) !important;
+  background: linear-gradient(90deg, rgba(200, 162, 255, .095), rgba(255, 173, 85, .035), transparent) !important;
+}
+.utility-eyebrow, .history-search-label, .recipe-category, .recipe-card summary {
+  color: #c8a2ff !important;
+}
+.utility-card, .history-entry, .recipe-card, .quick-note {
+  border-color: rgba(200, 162, 255, .19) !important;
+}
+.utility-card:nth-child(odd), .recipe-card:nth-child(odd) {
+  border-top-color: rgba(255, 173, 85, .5) !important;
+}
+.utility-card:nth-child(even), .recipe-card:nth-child(even) {
+  border-top-color: rgba(200, 162, 255, .48) !important;
+}
