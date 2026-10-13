@@ -749,9 +749,15 @@
       }
       return;
     }
+    // Prefer recording a short clip and transcribing it on the local JARVIS
+    // server. This works in Firefox and avoids relying on remote browser STT.
+    if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined") {
+      startRecordedVoiceInput();
+      return;
+    }
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Recognition) {
-      startRecordedVoiceInput();
+      showToast("This browser cannot record audio or provide speech recognition. Try allowing microphone access.", "error");
       return;
     }
     try {
