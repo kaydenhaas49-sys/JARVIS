@@ -214,6 +214,13 @@
     if (!raf && !document.hidden) raf = window.requestAnimationFrame(tick);
   }
 
+  // Keep the backdrop subdued beneath chat messages, including reduced-motion mode.
+  var observedChatLog = document.getElementById("chatLog");
+  if (observedChatLog && window.MutationObserver) {
+    var chatObserver = new MutationObserver(function () { render(performance.now()); });
+    chatObserver.observe(observedChatLog, { childList: true, subtree: true });
+  }
+
   window.addEventListener("resize", resize, { passive: true });
   document.addEventListener("visibilitychange", function () {
     if (document.hidden && raf) {

@@ -641,13 +641,20 @@ body::before {
   100% { transform: scaleY(1); opacity: .95; }
 }
 
-/* Let the original JARVIS orb read through the interface while text stays legible. */
+/* The idle display is intentionally spacious: the sphere is the hero, not another card. */
 .conversation-viewport {
   background:
-    radial-gradient(ellipse at 65% 42%, rgba(24,35,54,.47), transparent 58%),
-    linear-gradient(150deg, rgba(13,15,24,.76), rgba(6,7,12,.84));
-  backdrop-filter: blur(1.5px);
+    radial-gradient(ellipse at 50% 48%, rgba(13,18,29,.17), rgba(6,7,12,.08) 62%, rgba(6,7,12,.22)),
+    linear-gradient(150deg, rgba(13,15,24,.16), rgba(6,7,12,.29));
+  backdrop-filter: none;
 }
+.welcome-panel {
+  min-height: 100%;
+  padding: 0;
+  animation: none;
+  pointer-events: none;
+}
+.welcome-panel > * { display: none !important; }
 .topbar {
   background: linear-gradient(105deg, rgba(17,20,31,.82), rgba(8,10,16,.76));
 }
