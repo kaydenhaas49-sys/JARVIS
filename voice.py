@@ -227,7 +227,7 @@ class WakeWordManager:
 
             # The public hey_jarvis model is downloaded on first opt-in and then
             # cached locally by openWakeWord.
-            openwakeword.utils.download_models(models=[_WAKE_MODEL_NAME])
+            openwakeword.utils.download_models(model_names=[_WAKE_MODEL_NAME])
             model = Model(
                 wakeword_models=[_WAKE_MODEL_NAME],
                 inference_framework="onnx",
