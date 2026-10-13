@@ -44,10 +44,11 @@ Voice input and the "Hey JARVIS" wake word use local speech recognition and loca
 cd ~/JARVIS
 python3 -m venv .venv
 .venv/bin/pip install -e ".[voice]"
+.venv/bin/pip install --no-deps "openwakeword>=0.6.0"
 .venv/bin/python jarvis.py
 ```
 
-Use the mic button to record a short command, then tap it again to finish; recordings stop automatically after 12 seconds. The first transcription downloads the selected Whisper model. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
+The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX backend, but upstream currently declares `tflite-runtime` unconditionally on Linux, and that package has no compatible wheel for newer Python versions. JARVIS installs the ONNX runtime dependencies explicitly instead. Use the mic button to record a short command, then tap it again to finish; recordings stop automatically after 12 seconds. The first transcription downloads the selected Whisper model. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
 
 ## Configuration
 
@@ -70,4 +71,4 @@ Run `python3 -m unittest discover -s tests -v`.
 
 ## Current scope
 
-JARVIS is a practical, extensible foundation—not a magical always-on operating-system replacement. Browser voice recognition depends on browser support and permissions. A compatible model server must be running for AI chat; non-AI status endpoints work independently.
+JARVIS is a practical, extensible foundation—not a magical always-on-operating-system replacement. Browser voice recognition depends on browser support and permissions. A compatible model server must be running for AI chat; non-AI status endpoints work independently.
