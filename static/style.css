@@ -87,6 +87,8 @@ kbd { margin-left: auto; padding: 3px 5px; color: #7b8ba4; border: 1px solid rgb
 .connection-pill.disconnected .connection-dot { background: var(--red); box-shadow: 0 0 8px rgba(242, 140, 146, .3); }
 .connection-pill.disconnected { color: #e3a0a5; }
 .top-action { height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #8191a7; cursor: pointer; font-size: 10px; transition: color .16s, background .16s, border-color .16s; white-space: nowrap; }
+.wake-word-btn.active { color: var(--cyan); border-color: rgba(111, 226, 245, .34); background: rgba(111, 226, 245, .08); }
+.top-action:disabled { opacity: .55; cursor: wait; }
 .top-action svg, .icon-btn svg { width: 15px; height: 15px; }
 .top-action:hover, .top-action.active { color: var(--cyan); border-color: rgba(111, 226, 245, .18); background: rgba(111, 226, 245, .06); }
 .top-action.spinning svg { animation: spin .9s linear infinite; }
