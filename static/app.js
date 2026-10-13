@@ -857,6 +857,265 @@
     if (event.key === "Escape") { closeSidebar(); closeUtility(); }
   });
 
+
+  // Quick Notes: browser-local notes, deliberately separate from AI memory.
+  function initQuickNotes() {
+    let notes = [];
+    let editingId = null;
+    let searchText = "";
+    try {
+      const stored = JSON.parse(localStorage.getItem("jarvis-notes-v1") || "[]");
+      if (Array.isArray(stored)) notes = stored.filter((n) => n && typeof n.id === "string").slice(0, 100);
+    } catch (_) {}
+
+    const navButton = document.createElement("button");
+    navButton.className = "nav-item nav-button";
+    navButton.id = "notesBtn";
+    navButton.type = "button";
+    navButton.innerHTML = '<span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 3h9l4 4v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v5h5M8 12h7M8 16h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>Quick notes</span>';
+    const memoryButton = document.getElementById("memoryBtn");
+    if (memoryButton && !document.getElementById("notesBtn")) memoryButton.insertAdjacentElement("afterend", navButton);
+
+    const style = document.createElement("style");
+    style.textContent =
+      ".quick-notes-layout{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);gap:14px;align-items:start}" +
+      ".quick-notes-form{display:flex;flex-direction:column;gap:12px}" +
+      ".quick-notes-form label,.quick-notes-search label{display:flex;flex-direction:column;gap:7px;color:#9aa9bd;font-size:10px;font-weight:700}" +
+      ".quick-notes-form input,.quick-notes-form textarea,.quick-notes-search input{box-sizing:border-box;width:100%;padding:11px 12px;border:1px solid rgba(148,173,207,.19);border-radius:7px;outline:none;background:rgba(3,7,13,.55);color:#dce7f6;font:11px/1.65 Inter,system-ui,sans-serif}" +
+      ".quick-notes-form textarea{min-height:160px;resize:vertical;white-space:pre-wrap}" +
+      ".quick-notes-form input:focus,.quick-notes-form textarea:focus,.quick-notes-search input:focus{border-color:rgba(120,228,238,.6)}" +
+      ".quick-notes-form input::placeholder,.quick-notes-form textarea::placeholder,.quick-notes-search input::placeholder{color:#596b83}" +
+      ".quick-notes-actions,.quick-note-actions{display:flex;flex-wrap:wrap;gap:6px}" +
+      ".quick-notes-search{display:flex;align-items:end;gap:12px;margin-bottom:12px}" +
+      ".quick-notes-search label{flex:1;min-width:0}.quick-notes-search input{padding:9px 10px}" +
+      ".quick-notes-list{display:flex;flex-direction:column;gap:10px}" +
+      ".quick-note{min-width:0;padding:14px;border:1px solid rgba(148,173,207,.13);border-radius:9px;background:rgba(4,9,16,.42)}" +
+      ".quick-note.pinned{border-color:rgba(120,228,238,.35);background:rgba(120,228,238,.035)}" +
+      ".quick-note-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}" +
+      ".quick-note-heading h3{margin:0;color:#e2edf9;font-size:12px;line-height:1.5;overflow-wrap:anywhere}" +
+      ".quick-note-heading time{display:block;margin-top:4px;color:#687c95;font:9px/1.5 ui-monospace,monospace}" +
+      ".quick-note-pin{flex:0 0 auto;padding:4px 6px;border:1px solid rgba(120,228,238,.22);border-radius:4px;color:var(--lcars-cyan);font:700 8px/1 ui-monospace,monospace;letter-spacing:.1em}" +
+      ".quick-note-body{margin:11px 0 14px;color:#a8b8cb;font-size:11px;line-height:1.75;overflow-wrap:anywhere;white-space:pre-wrap}" +
+      ".quick-note-actions{padding-top:10px;border-top:1px solid rgba(148,173,207,.08)}" +
+      ".quick-note-actions button{min-height:29px;padding:6px 9px;font-size:9px}" +
+      ".quick-note-delete{border:1px solid rgba(255,107,120,.18);border-radius:6px;background:rgba(255,107,120,.04);color:#e99aa2;cursor:pointer}" +
+      ".quick-note-delete:hover{border-color:rgba(255,107,120,.48);background:rgba(255,107,120,.09)}" +
+      ".quick-notes-export{display:flex;justify-content:flex-end;margin-top:13px}" +
+      "@media(max-width:700px){.quick-notes-layout{grid-template-columns:1fr}.quick-notes-search{align-items:stretch;flex-direction:column}.quick-notes-search label{width:100%}}";
+    document.head.appendChild(style);
+
+    function persist() {
+      try {
+        localStorage.setItem("jarvis-notes-v1", JSON.stringify(notes));
+        return true;
+      } catch (_) {
+        showToast("Browser storage is full or unavailable.", "error");
+        return false;
+      }
+    }
+    function updatedLabel(note) {
+      try {
+        return new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString([], {
+          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
+      } catch (_) { return "Saved"; }
+    }
+    function renderList() {
+      const list = document.getElementById("quickNotesList");
+      if (!list) return;
+      const counter = document.getElementById("quickNotesCount");
+      if (counter) counter.textContent = notes.length + " / 100";
+      const query = searchText.trim().toLocaleLowerCase();
+      const filtered = notes.slice().sort((a, b) =>
+        Number(!!b.pinned) - Number(!!a.pinned) ||
+        Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0)
+      ).filter((note) => !query || (String(note.title || "") + "\n" + String(note.content || "")).toLocaleLowerCase().includes(query));
+      if (!notes.length) {
+        list.innerHTML = '<div class="empty-state">No notes yet. Save a reminder, idea, or reusable snippet here.</div>';
+        return;
+      }
+      if (!filtered.length) {
+        list.innerHTML = '<div class="empty-state">No notes match that search.</div>';
+        return;
+      }
+      list.innerHTML = filtered.map((note) =>
+        '<article class="quick-note' + (note.pinned ? ' pinned' : '') + '">' +
+          '<div class="quick-note-heading"><div><h3>' + escapeHtml(note.title || "Untitled note") + '</h3><time>' + escapeHtml(updatedLabel(note)) + '</time></div>' +
+          (note.pinned ? '<span class="quick-note-pin">PINNED</span>' : '') + '</div>' +
+          '<p class="quick-note-body">' + escapeHtml(note.content || "") + '</p>' +
+          '<div class="quick-note-actions">' +
+            '<button class="utility-secondary" type="button" data-quick-note-action="edit" data-id="' + escapeHtml(note.id) + '">Edit</button>' +
+            '<button class="utility-secondary" type="button" data-quick-note-action="pin" data-id="' + escapeHtml(note.id) + '">' + (note.pinned ? "Unpin" : "Pin") + '</button>' +
+            '<button class="utility-secondary" type="button" data-quick-note-action="copy" data-id="' + escapeHtml(note.id) + '">Copy</button>' +
+            '<button class="quick-note-delete" type="button" data-quick-note-action="delete" data-id="' + escapeHtml(note.id) + '">Delete</button>' +
+          '</div></article>'
+      ).join("");
+    }
+    function renderPanel() {
+      const edit = notes.find((note) => note.id === editingId) || null;
+      elements.utilityEyebrow.textContent = "PERSONAL / NOTES";
+      elements.utilityTitle.textContent = "Quick notes";
+      elements.utilityContent.innerHTML =
+        '<p class="utility-intro">Keep ideas, reminders, and reusable snippets here. Notes stay in this browser and are not automatically sent to the AI model.</p>' +
+        '<div class="quick-notes-layout">' +
+          '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">01</span><div><h3>' + (edit ? "Edit note" : "New note") + '</h3><p>Up to 100 notes · 5,000 characters each</p></div></div>' +
+            '<form class="quick-notes-form" id="quickNotesForm" data-form="quick-notes">' +
+              '<label for="quickNoteTitle">Title <span class="utility-muted">optional</span><input id="quickNoteTitle" name="title" maxlength="120" value="' + escapeHtml(edit?.title || "") + '" placeholder="A useful title"></label>' +
+              '<label for="quickNoteContent">Note<textarea id="quickNoteContent" name="content" maxlength="5000" rows="9" required placeholder="Write a reminder, idea, or snippet…">' + escapeHtml(edit?.content || "") + '</textarea></label>' +
+              '<div class="quick-notes-actions"><button class="utility-primary" type="submit">' + (edit ? "Save changes" : "Save note") + '</button>' +
+              (edit ? '<button class="utility-secondary" type="button" data-quick-note-action="cancel">Cancel</button>' : '') + '</div>' +
+            '</form></section>' +
+          '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">02</span><div><h3>Your notes</h3><p>Pinned notes stay at the top</p></div></div>' +
+            '<div class="quick-notes-search"><label for="quickNoteSearch">Search notes<input id="quickNoteSearch" type="search" value="' + escapeHtml(searchText) + '" placeholder="Search title or text…" data-quick-note-search></label><span class="utility-muted" id="quickNotesCount">' + notes.length + ' / 100</span></div>' +
+            '<div class="quick-notes-list" id="quickNotesList"></div>' +
+            '<div class="quick-notes-export"><button class="utility-secondary" type="button" data-quick-note-action="export">Export JSON</button></div>' +
+          '</section></div>';
+      renderList();
+    }
+    function openPanel() {
+      currentUtilityView = "quick-notes";
+      elements.utilityPanel.classList.remove("hidden");
+      closeSidebar();
+      renderPanel();
+      logActivity("Panel opened", "Quick notes", "panel");
+      document.getElementById("utilityCloseBtn")?.focus({ preventScroll: true });
+    }
+    async function copyNote(note) {
+      const value = (note.title ? note.title + "\n\n" : "") + note.content;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          const area = document.createElement("textarea");
+          area.value = value;
+          area.style.position = "fixed";
+          area.style.opacity = "0";
+          document.body.appendChild(area);
+          area.select();
+          const copied = document.execCommand("copy");
+          area.remove();
+          if (!copied) throw new Error("copy failed");
+        }
+        showToast("Note copied.", "success");
+      } catch (_) {
+        showToast("Could not copy this note in this browser context.", "error");
+      }
+    }
+
+    navButton.addEventListener("click", openPanel);
+    elements.utilityContent.addEventListener("input", (event) => {
+      const search = event.target.closest("[data-quick-note-search]");
+      if (!search) return;
+      searchText = search.value;
+      renderList();
+    });
+    elements.utilityContent.addEventListener("submit", (event) => {
+      const form = event.target.closest("#quickNotesForm");
+      if (!form) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const data = new FormData(form);
+      const content = String(data.get("content") || "").trim().slice(0, 5000);
+      const typedTitle = String(data.get("title") || "").trim().slice(0, 120);
+      if (!content) {
+        showToast("Write something in the note first.", "error");
+        return;
+      }
+      const now = Date.now();
+      const title = typedTitle || content.split("\n")[0].slice(0, 120) || "Untitled note";
+      if (editingId) {
+        const note = notes.find((item) => item.id === editingId);
+        if (!note) {
+          editingId = null;
+          renderPanel();
+          showToast("That note could not be found.", "error");
+          return;
+        }
+        note.title = title;
+        note.content = content;
+        note.updatedAt = now;
+      } else {
+        if (notes.length >= 100) {
+          showToast("Notes are full (100). Delete an old note first.", "error");
+          return;
+        }
+        notes.unshift({ id: makeId(), title, content, pinned: false, createdAt: now, updatedAt: now });
+      }
+      editingId = null;
+      if (persist()) {
+        logActivity("Quick note saved", title.slice(0, 80), "notes");
+        showToast("Note saved.", "success");
+      }
+      renderPanel();
+    }, true);
+    elements.utilityContent.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-quick-note-action]");
+      if (!button) return;
+      const action = button.dataset.quickNoteAction;
+      const id = button.dataset.id;
+      if (action === "cancel") {
+        editingId = null;
+        renderPanel();
+        return;
+      }
+      if (action === "edit") {
+        editingId = id;
+        renderPanel();
+        document.getElementById("quickNoteTitle")?.focus({ preventScroll: true });
+        return;
+      }
+      if (action === "pin") {
+        const note = notes.find((item) => item.id === id);
+        if (!note) return;
+        note.pinned = !note.pinned;
+        note.updatedAt = Date.now();
+        if (persist()) logActivity(note.pinned ? "Quick note pinned" : "Quick note unpinned", note.title, "notes");
+        renderPanel();
+        return;
+      }
+      if (action === "copy") {
+        const note = notes.find((item) => item.id === id);
+        if (note) copyNote(note);
+        return;
+      }
+      if (action === "delete") {
+        const note = notes.find((item) => item.id === id);
+        if (!note || !window.confirm("Delete this note? This cannot be undone.")) return;
+        notes = notes.filter((item) => item.id !== id);
+        if (editingId === id) editingId = null;
+        if (persist()) logActivity("Quick note deleted", note.title, "notes");
+        renderPanel();
+        return;
+      }
+      if (action === "export") {
+        const payload = notes.map((note) => ({
+          title: note.title, content: note.content, pinned: !!note.pinned,
+          createdAt: note.createdAt || null, updatedAt: note.updatedAt || null
+        }));
+        const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "jarvis-notes-" + new Date().toISOString().slice(0, 10) + ".json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        showToast("Notes exported as JSON.", "success");
+      }
+    });
+    window.addEventListener("storage", (event) => {
+      if (event.key !== "jarvis-notes-v1") return;
+      try {
+        const value = JSON.parse(event.newValue || "[]");
+        notes = Array.isArray(value) ? value.filter((n) => n && typeof n.id === "string").slice(0, 100) : [];
+        if (currentUtilityView === "quick-notes") renderPanel();
+      } catch (_) {}
+    });
+  }
+
+  initQuickNotes();
+
   loadConfig();
   logActivity("JARVIS ready", "Local assistant interface initialized", "system");
   elements.input.focus({ preventScroll: true });
