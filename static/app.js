@@ -595,7 +595,9 @@
     const models = Array.isArray(data.models) ? data.models : [];
     const options = models.map((item) => '<option value="' + escapeHtml(item.id) + '"></option>').join("");
     const status = data.available
-      ? '<div class="inline-status status-good">Endpoint responded · ' + models.length + ' model' + (models.length === 1 ? "" : "s") + ' found</div>'
+      ? (models.length
+        ? '<div class="inline-status status-good">' + escapeHtml(data.api_mode === "ollama" ? "Ollama connected" : "OpenAI-compatible server connected") + ' · ' + models.length + ' model' + (models.length === 1 ? "" : "s") + ' found' + (data.auto_detected ? ' · auto-detected' : '') + '</div>'
+        : '<div class="inline-status status-warn">Server is reachable, but it returned no models. Check <code>ollama list</code> in a terminal, then refresh.</div>')
       : '<div class="inline-status status-warn">' + escapeHtml(data.error || "Refresh models to check the endpoint. You can still enter a model ID manually.") + '</div>';
     elements.utilityContent.innerHTML =
       '<p class="utility-intro">Choose a model from Ollama’s native API or another OpenAI-compatible server. Your endpoint and model choice are saved locally.</p>' +
@@ -620,8 +622,14 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load model list.");
       latestModelList = data;
-      renderModelPanel(data, endpoint, model);
-      if (showNotice) showToast(data.available ? "Model list refreshed." : (data.error || "Model server is offline."), data.available ? "success" : "error");
+      const discoveredEndpoint = data.available && data.auto_detected ? data.base_url : endpoint;
+      renderModelPanel(data, discoveredEndpoint, model);
+      if (showNotice) {
+        const message = data.available
+          ? (data.auto_detected ? data.message : (data.models.length ? "Model list refreshed." : "Connected, but no models were returned."))
+          : (data.error || "Model server is offline.");
+        showToast(message, data.available && data.models.length ? "success" : "error");
+      }
     } catch (error) {
       latestModelList = { available: false, models: [], model, base_url: endpoint, error: error.message };
       renderModelPanel(latestModelList, endpoint, model);

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import tempfile
 import unittest
 from unittest import mock
@@ -54,6 +55,32 @@ class ModelAndMemoryTests(unittest.TestCase):
             jarvis.ollama_api_url("http://127.0.0.1:11434", "tags"),
             "http://127.0.0.1:11434/api/tags",
         )
+
+    def test_model_discovery_falls_back_to_other_local_ollama_hosts(self) -> None:
+        with mock.patch("jarvis.urllib.request.urlopen") as urlopen:
+            failed_response = mock.MagicMock()
+            good_response = mock.MagicMock()
+            good_response.__enter__.return_value.read.return_value = b'{"models":[{"name":"qwen3-coder:30b"}]}'
+            urlopen.side_effect = [urllib.error.URLError("connection refused"), good_response]
+            result = jarvis.available_models("http://127.0.0.1:11434")
+        second_request = urlopen.call_args_list[1].args[0]
+        self.assertEqual(second_request.full_url, "http://localhost:11434/api/tags")
+        self.assertTrue(result["available"])
+        self.assertTrue(result["auto_detected"])
+        self.assertEqual(result["base_url"], "http://localhost:11434")
+        self.assertEqual(result["models"][0]["id"], "qwen3-coder:30b")
+
+    def test_old_local_openai_endpoint_falls_back_to_native_ollama(self) -> None:
+        with mock.patch("jarvis.urllib.request.urlopen") as urlopen:
+            good_response = mock.MagicMock()
+            good_response.__enter__.return_value.read.return_value = b'{"models":[{"name":"qwen3-coder:30b"}]}'
+            urlopen.side_effect = [urllib.error.URLError("no OpenAI server here"), good_response]
+            result = jarvis.available_models("http://127.0.0.1:8080/v1")
+        second_request = urlopen.call_args_list[1].args[0]
+        self.assertEqual(second_request.full_url, "http://localhost:11434/api/tags")
+        self.assertTrue(result["available"])
+        self.assertTrue(result["auto_detected"])
+        self.assertEqual(result["api_mode"], "ollama")
 
     def test_ollama_model_list_uses_native_tags_endpoint(self) -> None:
         with mock.patch("jarvis.urllib.request.urlopen") as urlopen:

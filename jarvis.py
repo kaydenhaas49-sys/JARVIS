@@ -199,39 +199,91 @@ def current_system_prompt() -> str:
 
 
 def available_models(base_url: str | None = None) -> dict[str, Any]:
-    endpoint = normalize_model_base_url(base_url or BASE_URL)
-    native = is_ollama_native_api(endpoint)
-    request_url = ollama_api_url(endpoint, "tags") if native else endpoint + "/models"
-    request = urllib.request.Request(request_url, headers={"Accept": "application/json"})
-    if API_KEY:
-        request.add_header("Authorization", "Bearer " + API_KEY)
-    try:
-        with urllib.request.urlopen(request, timeout=6) as response:
-            parsed = json.loads(response.read(1_000_000).decode("utf-8"))
-        if native:
-            raw_models = parsed.get("models", []) if isinstance(parsed, dict) else []
-            models = []
-            if isinstance(raw_models, list):
+    requested = normalize_model_base_url(base_url or BASE_URL)
+    parsed_requested = urlsplit(requested)
+    local_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+    is_local = parsed_requested.hostname in local_hosts or (
+        parsed_requested.hostname or ""
+    ).endswith(".localhost")
+
+    candidates = [requested]
+    if is_local:
+        # Ollama may bind to IPv4 or IPv6 loopback depending on the host setup.
+        # Try both standard loopback names and the native default port.
+        candidates.extend([
+            "http://localhost:11434",
+            "http://127.0.0.1:11434",
+            "http://[::1]:11434",
+        ])
+
+    unique_candidates: list[str] = []
+    for candidate in candidates:
+        try:
+            normalized = normalize_model_base_url(candidate)
+        except ValueError:
+            continue
+        if normalized not in unique_candidates:
+            unique_candidates.append(normalized)
+
+    errors: list[str] = []
+    for endpoint in unique_candidates:
+        native = is_ollama_native_api(endpoint)
+        request_url = ollama_api_url(endpoint, "tags") if native else endpoint + "/models"
+        request = urllib.request.Request(request_url, headers={"Accept": "application/json"})
+        # Never forward a configured credential while probing a different local endpoint.
+        if API_KEY and endpoint == requested:
+            request.add_header("Authorization", "Bearer " + API_KEY)
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response:
+                parsed = json.loads(response.read(1_000_000).decode("utf-8"))
+
+            if native:
+                raw_models = parsed.get("models", []) if isinstance(parsed, dict) else None
+                if not isinstance(raw_models, list):
+                    raise ValueError("The native Ollama endpoint did not return a models list.")
+                models = []
                 for item in raw_models[:300]:
                     if not isinstance(item, dict):
                         continue
                     model_id = item.get("name") or item.get("model")
                     if isinstance(model_id, str) and model_id.strip():
                         models.append({"id": model_id[:250], "owned_by": "ollama"})
-        else:
-            raw_models = parsed.get("data", []) if isinstance(parsed, dict) else []
-            models = []
-            if isinstance(raw_models, list):
+            else:
+                raw_models = parsed.get("data", []) if isinstance(parsed, dict) else None
+                if not isinstance(raw_models, list):
+                    raise ValueError("The OpenAI-compatible endpoint did not return a data list.")
+                models = []
                 for item in raw_models[:300]:
                     if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip():
                         models.append({"id": item["id"][:250], "owned_by": str(item.get("owned_by", ""))[:100]})
-        return {"available": True, "models": models, "model": MODEL, "base_url": endpoint,
-                "api_mode": "ollama" if native else "openai"}
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError,
-            json.JSONDecodeError, UnicodeDecodeError) as exc:
-        return {"available": False, "models": [], "model": MODEL, "base_url": endpoint,
+
+            auto_detected = endpoint != requested
+            return {
+                "available": True,
+                "models": models,
+                "model": MODEL,
+                "base_url": endpoint,
                 "api_mode": "ollama" if native else "openai",
-                "error": f"Could not load models: {exc}"[:500]}
+                "auto_detected": auto_detected,
+                "requested_base_url": requested,
+                "message": (
+                    f"Found Ollama at {endpoint} instead of {requested}."
+                    if auto_detected else "Connected successfully."
+                ),
+            }
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError,
+                json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            errors.append(f"{request_url}: {exc}")
+
+    tried = "; ".join(errors[:4]) or "No valid endpoint candidates."
+    return {
+        "available": False,
+        "models": [],
+        "model": MODEL,
+        "base_url": requested,
+        "api_mode": "ollama" if is_ollama_native_api(requested) else "openai",
+        "error": f"Could not connect to the model server. Tried: {tried}"[:800],
+    }
 
 
 def save_model_config(payload: dict[str, Any]) -> dict[str, Any]:
