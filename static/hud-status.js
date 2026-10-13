@@ -61,6 +61,8 @@
     } else if (pill.classList.contains("disconnected") ||
                /DISCONNECTED|OFFLINE|UNAVAILABLE|FAILED|ERROR/.test(label)) {
       setReadout("hudModelState", "LINK OFFLINE", "offline");
+    } else if (label.includes("NOT TESTED")) {
+      setReadout("hudModelState", "LINK UNTESTED", "untested");
     } else {
       setReadout("hudModelState", "CHECKING LINK", "checking");
     }
