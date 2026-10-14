@@ -824,6 +824,91 @@ def _voice_audio_suffix(mime_type: Any) -> str:
     return ".webm"
 
 
+
+DESKTOP_APP_CATALOG: dict[str, dict[str, Any]] = {
+    "browser_firefox": {"name": "Firefox", "description": "Web browser", "commands": ("firefox", "firefox-developer-edition")},
+    "browser_chromium": {"name": "Chromium", "description": "Alternative web browser", "commands": ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome")},
+    "file_manager": {"name": "File manager", "description": "Browse files and folders", "commands": ("thunar", "dolphin", "nautilus", "nemo", "pcmanfm")},
+    "terminal": {"name": "Terminal", "description": "Open a terminal window", "commands": ("kitty", "alacritty", "foot", "wezterm", "konsole", "xfce4-terminal", "gnome-terminal", "xterm")},
+    "code_editor": {"name": "Code editor", "description": "Open a graphical code editor", "commands": ("code", "codium", "code-oss", "zed")},
+    "steam": {"name": "Steam", "description": "Game library and launcher", "commands": ("steam",)},
+    "discord": {"name": "Discord", "description": "Voice and text chat", "commands": ("vesktop", "discord", "discord-canary")},
+    "spotify": {"name": "Spotify", "description": "Music player", "commands": ("spotify",)},
+    "media_player": {"name": "Media player", "description": "Play video and audio", "commands": ("mpv", "vlc", "celluloid")},
+    "blender": {"name": "Blender", "description": "3D modeling and animation", "commands": ("blender",)},
+    "obs": {"name": "OBS Studio", "description": "Screen recording and streaming", "commands": ("obs", "obs-studio")},
+    "image_editor": {"name": "Image editor", "description": "Edit images and artwork", "commands": ("krita", "gimp", "pinta")},
+    "libreoffice": {"name": "LibreOffice", "description": "Documents and spreadsheets", "commands": ("libreoffice", "soffice")},
+    "calculator": {"name": "Calculator", "description": "Desktop calculator", "commands": ("qalculate-gtk", "gnome-calculator", "kcalc", "galculator")},
+    "system_monitor": {"name": "System monitor", "description": "Inspect system resource usage", "commands": ("missioncenter", "gnome-system-monitor", "xfce4-taskmanager", "ksysguard")},
+    "prismlauncher": {"name": "Prism Launcher", "description": "Minecraft instance launcher", "commands": ("prismlauncher", "prismlauncher-qt6")},
+    "lutris": {"name": "Lutris", "description": "Game library launcher", "commands": ("lutris",)},
+    "heroic": {"name": "Heroic Games Launcher", "description": "Epic and GOG game launcher", "commands": ("heroic", "heroic-games-launcher")},
+    "settings": {"name": "System settings", "description": "Desktop configuration", "commands": ("gnome-control-center", "systemsettings", "xfce4-settings-manager")},
+    "audacity": {"name": "Audacity", "description": "Audio recording and editing", "commands": ("audacity",)},
+    "kdenlive": {"name": "Kdenlive", "description": "Video editing", "commands": ("kdenlive",)},
+}
+
+
+def _resolve_desktop_application(application_id: str) -> tuple[dict[str, Any], str]:
+    """Resolve only a catalog entry and installed executable; never accept arbitrary commands."""
+    if not isinstance(application_id, str) or application_id not in DESKTOP_APP_CATALOG:
+        raise ValueError("That app is not in JARVIS's desktop application allowlist.")
+    if platform.system() != "Linux":
+        raise ValueError("Desktop app launching is currently supported on Linux desktops only.")
+    app = DESKTOP_APP_CATALOG[application_id]
+    for candidate in app["commands"]:
+        executable = shutil.which(candidate)
+        if executable:
+            return app, executable
+    raise ValueError(f"{app['name']} is not installed or its launcher is not on PATH.")
+
+
+def desktop_apps_status() -> dict[str, Any]:
+    """Return an allowlisted desktop app catalog with local installation status."""
+    linux_supported = platform.system() == "Linux"
+    rows = []
+    for application_id, app in DESKTOP_APP_CATALOG.items():
+        executable = None
+        if linux_supported:
+            for candidate in app["commands"]:
+                executable = shutil.which(candidate)
+                if executable:
+                    break
+        rows.append({
+            "id": application_id,
+            "name": app["name"],
+            "description": app["description"],
+            "available": bool(executable),
+        })
+    return {"ok": True, "platform": platform.system(), "supported": linux_supported, "apps": rows}
+
+
+def launch_desktop_app(application_id: str) -> dict[str, Any]:
+    """Start one approved graphical app with a fixed executable and no shell or caller arguments."""
+    app, executable = _resolve_desktop_application(application_id)
+    try:
+        process = subprocess.Popen(
+            [executable],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            shell=False,
+            close_fds=True,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        raise ValueError(f"Could not start {app['name']}: {exc}") from exc
+    _log_dashboard_tool_action("Desktop app launched", app["name"])
+    return {
+        "ok": True,
+        "application_id": application_id,
+        "application": app["name"],
+        "pid": process.pid,
+        "message": f"Started {app['name']}.",
+    }
+
+
 SYSTEM_PROMPT = """You are JARVIS, a practical, calm, technically capable personal assistant.
 Be friendly without being theatrical. Give useful answers, and be honest about uncertainty.
 You can use tools to inspect the user's dedicated workspace at the path reported by tools.
@@ -845,9 +930,22 @@ Kitchen data in kitchen.json, chat archives in chat-history.json, and activity i
 the user explicitly asks to change the active model. These are real persisted records, not pretend actions. For a
 requested recipe, include a name, ingredients and clear steps. Only say a change succeeded when the tool confirms it.
 Delete or overwrite data only on an explicit request in the current turn.
+Desktop application launches are limited to the fixed Linux app allowlist and always require approval in the dashboard. Use launch_app for app requests; never compose a shell command to launch software.
 Current workspace: """ + str(WORKSPACE)
 
 TOOL_SPECS: list[dict[str, Any]] = [
+    {"type": "function", "function": {
+        "name": "launch_app",
+        "description": "Request to open one known, installed Linux desktop application. This action always requires the user to approve it in the dashboard. Use only an application_id from the fixed allowlist; never pass shell commands, paths, or arguments.",
+        "parameters": {"type": "object", "properties": {
+            "application_id": {"type": "string", "enum": [
+                "browser_firefox", "browser_chromium", "file_manager", "terminal", "code_editor",
+                "steam", "discord", "spotify", "media_player", "blender", "obs", "image_editor",
+                "libreoffice", "calculator", "system_monitor", "prismlauncher", "lutris", "heroic",
+                "settings", "audacity", "kdenlive"
+            ], "description": "One exact application ID from the allowlist."}
+        }, "required": ["application_id"], "additionalProperties": False},
+    }},
     {"type": "function", "function": {
         "name": "get_current_time",
         "description": "Get the current local date and time on this computer.",
@@ -933,7 +1031,7 @@ TOOL_SPECS: list[dict[str, Any]] = [
     }},
 ]
 
-APPROVAL_TOOLS = {"write_file", "run_command", "remember_fact"}
+APPROVAL_TOOLS = {"write_file", "run_command", "remember_fact", "launch_app"}
 ALLOWED_COMMANDS = {
     "pwd", "ls", "tree", "find", "rg", "grep", "cat", "head", "tail", "wc",
     "git", "python", "python3", "pytest", "node", "npm", "go", "cargo",
@@ -1141,6 +1239,8 @@ def run_command(command: str, cwd: str = ".") -> dict[str, Any]:
 
 
 def execute_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if tool_name == "launch_app":
+        return launch_desktop_app(str(arguments.get("application_id", "")))
     if tool_name == "get_current_time":
         return get_current_time()
     if tool_name == "system_status":
@@ -1302,6 +1402,13 @@ def _compact_tool_result(result: dict[str, Any]) -> str:
 
 
 def _pending_action_payload(pending_id: str, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if tool_name == "launch_app":
+        application_id = str(arguments.get("application_id", ""))
+        app = DESKTOP_APP_CATALOG.get(application_id, {"name": "Unknown app"})
+        command = next((candidate for candidate in app.get("commands", ()) if shutil.which(candidate)), "unknown")
+        return {"id": pending_id, "tool": tool_name, "title": "Open desktop application",
+                "summary": "Launch " + str(app["name"]) + " on this computer",
+                "details": {"application_id": application_id, "application": app["name"], "executable": command}}
     if tool_name == "remember_fact":
         fact = str(arguments.get("fact", ""))[:2_000]
         return {"id": pending_id, "tool": tool_name, "title": "Save persistent memory",
@@ -1357,6 +1464,8 @@ def agent_turn(session_id: str) -> dict[str, Any]:
                 raise ValueError("Tool arguments must be a JSON object.")
             if tool_name == "run_command":
                 validate_command(str(arguments.get("command", "")), str(arguments.get("cwd", ".")))
+            if tool_name == "launch_app":
+                _resolve_desktop_application(str(arguments.get("application_id", "")))
             if tool_name == "remember_fact":
                 fact = arguments.get("fact", "")
                 if not isinstance(fact, str) or not fact.strip() or len(fact) > 2_000:
@@ -1468,6 +1577,8 @@ class JarvisHandler(BaseHTTPRequestHandler):
             return self._send_json(200, {"model": MODEL, "base_url": BASE_URL,
                 "workspace": str(WORKSPACE), "voice_supported": True,
                 "memory_count": len(memory_items())})
+        if route == "/api/apps":
+            return self._send_json(200, desktop_apps_status())
         if route == "/api/models":
             endpoint = parse_qs(urlsplit(self.path).query).get("base_url", [BASE_URL])[0]
             try:
