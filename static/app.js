@@ -1000,10 +1000,11 @@
     elements.utilityPanel.classList.remove("hidden");
     closeSidebar();
     renderUtility();
-    logActivity("Panel opened", ({kitchen:"Kitchen",system:"System Console",models:"Model manager",memory:"Memory & archive",activity:"Activity feed",coding:"Coding agent",history:"Memory & archive"})[view] || view, "panel");
+    logActivity("Panel opened", ({kitchen:"Kitchen",system:"System Console",models:"Model manager",memory:"Memory & archive",activity:"Activity feed",coding:"Coding agent",apps:"Desktop app launcher",history:"Memory & archive"})[view] || view, "panel");
     if (view === "models") refreshModelList(false);
     if (view === "memory") refreshMemoryPanel();
     if (view === "coding") refreshCodingPanel();
+    if (view === "apps") refreshDesktopAppPanel();
     const close = document.getElementById("utilityCloseBtn");
     if (close) close.focus({ preventScroll: true });
   }
@@ -1021,6 +1022,7 @@
       memory: ["PERSONAL / STORAGE", "Memory & archive"],
       activity: ["SYSTEM / TELEMETRY", "Live activity feed"],
       coding: ["WORKSPACE / DEVELOPER TOOLS", "Coding agent"],
+      apps: ["DESKTOP / LAUNCHER", "Desktop app launcher"],
       history: ["PERSONAL / STORAGE", "Memory & archive"],
     };
     const selected = config[currentUtilityView] || ["JARVIS / SYSTEM", "Utility panel"];
@@ -1035,6 +1037,8 @@
     else if (currentUtilityView === "history") renderHistoryPanel();
     else if (currentUtilityView === "coding") {
       elements.utilityContent.innerHTML = '<div class="utility-loading">Checking workspace…</div>';
+    } else if (currentUtilityView === "apps") {
+      elements.utilityContent.innerHTML = '<div class="utility-loading">Scanning approved desktop apps…</div>';
     }
   }
 
@@ -1278,6 +1282,42 @@
     }
   }
 
+  async function refreshDesktopAppPanel() {
+    try {
+      const response = await fetch("/api/apps", { cache: "no-store" });
+      const catalog = await response.json();
+      if (!response.ok) throw new Error(catalog.error || "Could not load the desktop app catalog.");
+      if (currentUtilityView !== "apps") return;
+      const apps = Array.isArray(catalog.apps) ? catalog.apps : [];
+      const cards = apps.map((app, index) => {
+        const available = app.available === true;
+        const status = available ? "READY" : (catalog.supported ? "NOT INSTALLED" : "LINUX ONLY");
+        const prompt = "Open the " + app.name + " desktop application now. Use launch_app with application_id \"" +
+          app.id + "\". This request came from the Desktop app launcher; still ask for my normal approval before starting it.";
+        const button = available
+          ? '<button class="desktop-app-launch" type="button" data-prompt="' + escapeHtml(prompt) + '">Request launch <span aria-hidden="true">↗</span></button>'
+          : '<button class="desktop-app-launch" type="button" disabled>Unavailable</button>';
+        return '<article class="desktop-app-card' + (available ? ' is-available' : ' is-unavailable') + '">' +
+          '<div class="desktop-app-card-top"><span class="utility-index">' + String(index + 1).padStart(2, "0") +
+          '</span><span class="desktop-app-status">' + status + '</span></div>' +
+          '<h3>' + escapeHtml(app.name || "Application") + '</h3>' +
+          '<p>' + escapeHtml(app.description || "Desktop application") + '</p>' + button + '</article>';
+      }).join("");
+      elements.utilityContent.innerHTML =
+        '<p class="utility-intro">Request to open an installed desktop app without giving the AI a free-form terminal. JARVIS uses a fixed application allowlist and asks you to approve each launch.</p>' +
+        '<div class="desktop-app-toolbar"><span>PLATFORM / ' + escapeHtml(catalog.platform || "UNKNOWN") +
+        '</span><span>LOCAL DESKTOP ONLY</span><span>APPROVAL REQUIRED</span></div>' +
+        (!catalog.supported ? '<div class="utility-card"><p class="inline-status status-warn">The desktop launcher currently supports Linux sessions only.</p></div>' : '') +
+        (apps.length ? '<div class="desktop-app-grid">' + cards + '</div>' : '<div class="empty-state">No apps were found in the launcher catalog.</div>') +
+        '<p class="desktop-app-footnote">You can also type a request in chat, such as <strong>“Open Firefox”</strong>. Apps marked unavailable are not on this computer\'s PATH.</p>';
+    } catch (error) {
+      if (currentUtilityView === "apps") {
+        elements.utilityContent.innerHTML = '<div class="utility-card"><p class="inline-status status-warn">' +
+          escapeHtml(error.message) + '</p></div>';
+      }
+    }
+  }
+
   function addKitchenItem(bucket, text) {
     const value = String(text || "").trim();
     if (!value) return;
@@ -1450,6 +1490,7 @@
   $("#kitchenBtn").addEventListener("click", () => openUtility("kitchen"));
   $("#memoryBtn").addEventListener("click", () => openUtility("memory"));
   $("#codingBtn").addEventListener("click", () => openUtility("coding"));
+  $("#appsBtn").addEventListener("click", () => openUtility("apps"));
   $("#utilityCloseBtn").addEventListener("click", closeUtility);
   $("#utilityPanel").addEventListener("click", (event) => {
     if (event.target === elements.utilityPanel) closeUtility();
