@@ -19,6 +19,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Live activity feed, saved as a local JSON file without copying full message text into the feed.
 - Kitchen panel with grocery checklist, pantry inventory, weekly meal notes, and browser-based timers.
 - Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
+- Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools; app launches are allowlisted and approval-gated.
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
 - File writes and terminal commands pause for your explicit approval in the UI.
 - Local-only HTTP server by default; model API credentials remain on the server.
@@ -63,7 +64,7 @@ The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX
 
 ## Safety model
 
-The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. Writing files and running allowlisted developer commands requires a clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
+The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. Writing files, running allowlisted developer commands, and launching allowlisted desktop apps requires a clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
 
 ## Tests
 
