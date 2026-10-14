@@ -346,8 +346,40 @@ class ApprovalAndCommandTests(unittest.TestCase):
     def test_changes_require_approval(self) -> None:
         self.assertTrue(jarvis.is_approval_required("write_file"))
         self.assertTrue(jarvis.is_approval_required("run_command"))
+        self.assertTrue(jarvis.is_approval_required("launch_app"))
         self.assertFalse(jarvis.is_approval_required("read_file"))
         self.assertFalse(jarvis.is_approval_required("system_status"))
+
+    def test_desktop_launcher_only_accepts_known_application_ids(self) -> None:
+        self.assertIn("browser_firefox", jarvis.DESKTOP_APP_CATALOG)
+        for invalid in ("firefox", "firefox; rm -rf ~", "/usr/bin/firefox", ""):
+            with self.subTest(application_id=invalid):
+                with self.assertRaisesRegex(ValueError, "allowlist"):
+                    jarvis._resolve_desktop_application(invalid)
+
+    def test_desktop_launch_uses_only_resolved_binary_without_a_shell(self) -> None:
+        process = mock.Mock(pid=4242)
+        with mock.patch.object(jarvis.platform, "system", return_value="Linux"), \
+             mock.patch.object(jarvis.shutil, "which",
+                               side_effect=lambda name: "/usr/bin/firefox" if name == "firefox" else None), \
+             mock.patch.object(jarvis.subprocess, "Popen", return_value=process) as popen, \
+             mock.patch.object(jarvis, "_log_dashboard_tool_action") as audit:
+            result = jarvis.launch_desktop_app("browser_firefox")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["application"], "Firefox")
+        self.assertEqual(result["pid"], 4242)
+        self.assertEqual(popen.call_args.args, (["/usr/bin/firefox"],))
+        self.assertFalse(popen.call_args.kwargs["shell"])
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        audit.assert_called_once_with("Desktop app launched", "Firefox")
+
+    def test_desktop_launch_fails_cleanly_when_app_is_missing(self) -> None:
+        with mock.patch.object(jarvis.platform, "system", return_value="Linux"), \
+             mock.patch.object(jarvis.shutil, "which", return_value=None), \
+             mock.patch.object(jarvis.subprocess, "Popen") as popen:
+            with self.assertRaisesRegex(ValueError, "not installed"):
+                jarvis.launch_desktop_app("browser_firefox")
+        popen.assert_not_called()
 
     def test_simple_read_only_command_is_accepted(self) -> None:
         parts, cwd = jarvis.validate_command("git status")
