@@ -26,6 +26,7 @@
   let sessionRestorePromise = null;
   let busy = false;
   let listening = false;
+  let startingVoiceCapture = false;
   let voiceReplies = false;
   let handsFreeMode = false;
   let voiceActivityTimer = null;
