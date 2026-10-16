@@ -311,9 +311,22 @@
       return;
     }
     const text = String(textOverride ?? elements.input.value).trim();
-    if (!text) return;
-    renderMessage("user", text);
-    logActivity("Message sent", "Message submitted to JARVIS", "chat");
+    let bundle = { message: text, images: [], names: [] };
+    try {
+      if (options.attachments) bundle = options.attachments;
+      else if (window.JARVISAdvancedTools?.consumeAttachments) bundle = await window.JARVISAdvancedTools.consumeAttachments(text);
+    } catch (error) {
+      showToast(error.message || "Could not prepare attachments.", "error");
+      return;
+    }
+    const submittedMessage = String(bundle.message ?? text).trim();
+    const images = Array.isArray(bundle.images) ? bundle.images : [];
+    const names = Array.isArray(bundle.names) ? bundle.names : [];
+    if (!submittedMessage && !images.length) return;
+    const displayText = (text || (names.length ? "Please analyze the attached files." : submittedMessage)) +
+      (names.length ? "\n\nAttached: " + names.join(", ") : "");
+    renderMessage("user", displayText);
+    logActivity("Message sent", "Message submitted to JARVIS" + (names.length ? " with attachments" : ""), "chat");
     setOrbState("thinking");
     elements.input.value = "";
     resizeInput();
@@ -321,11 +334,9 @@
     try {
       await dashboardSyncPromise;
       await flushDashboardWrites();
-      const result = await apiPost("/api/chat", { session_id: sessionId, message: text });
+      const result = await apiPost("/api/chat", { session_id: sessionId, message: submittedMessage, images });
       await refreshDashboardDataFromServer();
-      if (result.session_id) {
-        sessionId = result.session_id;
-      }
+      if (result.session_id) sessionId = result.session_id;
       renderMessage("assistant", result.reply || "I’m here.");
       logActivity("Assistant replied", result.pending_action ? "Waiting for action approval" : "Response received", "chat");
       await speak(result.reply || "");
@@ -352,7 +363,6 @@
       }
     }
   }
-
 
   function browserDashboardBuckets() {
     const fallback = {
