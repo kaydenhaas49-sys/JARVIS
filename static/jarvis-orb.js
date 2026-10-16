@@ -378,13 +378,9 @@
     var r = Math.min(displayWidth * .34, displayHeight * .42);
     r = Math.max(mobile ? 70 : 100, Math.min(r, 430));
 
-    // Strong presence on the idle screen; fade back under conversation text.
-    var chatLog = document.getElementById("chatLog");
-    var hasConversation = !!(chatLog && chatLog.children.length);
-    var active = assistantState !== "idle";
-    canvas.style.opacity = hasConversation
-      ? (active ? (mobile ? ".28" : ".4") : (mobile ? ".18" : ".23"))
-      : (mobile ? ".78" : ".92");
+    // Keep the animated background at a consistent brightness while chatting.
+    // Messages and assistant activity must not dim the sphere or grid.
+    canvas.style.opacity = mobile ? ".78" : ".92";
     drawSphere(x, y, r, animationTime);
   }
 
