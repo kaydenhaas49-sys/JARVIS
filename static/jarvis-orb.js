@@ -1,5 +1,4 @@
-/* JARVIS holographic sphere backdrop, inspired by lcars-reference/static/screensaver.js.
-   It renders a static frame while idle and animates only during active assistant states. */
+/* JARVIS holographic sphere backdrop. Continuously animated with a reduced render budget. */
 (function () {
   "use strict";
   if (!document.body || document.getElementById("jarvis-orb-canvas")) return;
@@ -37,15 +36,14 @@
       if (assistantState === "idle" && next !== "idle") animationStart = performance.now();
       assistantState = next;
       canvas.dataset.state = next;
-      if (assistantState === "idle") stop();
-      else start();
+      start();
     }
   });
 
   function resize() {
     width = window.innerWidth;
     height = window.innerHeight;
-    dpr = Math.min(window.devicePixelRatio || 1, 1.35);
+    dpr = Math.min(window.devicePixelRatio || 1, 1.1);
     canvas.width = Math.max(1, Math.round(width * dpr));
     canvas.height = Math.max(1, Math.round(height * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -166,19 +164,19 @@
 
     // Concentric circular scopes: the main visual signature of the JARVIS HUD.
     drawOrbitalRing(orbitX, orbitY, r * 1.37, r * 1.37, phase * .18,
-      colors.cyan, .24, 120, -phase * .12);
+      colors.cyan, .24, 72, -phase * .12);
     drawOrbitalRing(orbitX, orbitY, r * 1.18, r * 1.18, -phase * .22,
-      colors.blue, .27, 96, phase * .2);
+      colors.blue, .27, 60, phase * .2);
     drawOrbitalRing(orbitX, orbitY, r * .91, r * .91, phase * .28,
-      colors.cyan, .13, 72, -phase * .25);
+      colors.cyan, .13, 48, -phase * .25);
 
     // Two tilted orbits provide depth without the clutter of a dozen rings.
     drawOrbitalRing(orbitX, orbitY, r * 1.43, r * .34, -.43 + phase * .6,
-      colors.cyan, .52, 72, phase * .7);
+      colors.cyan, .52, 48, phase * .7);
     drawOrbitalRing(orbitX, orbitY, r * 1.27, r * .22, .78 - phase * .42,
-      colors.blue, .32, 64, -phase * .8);
+      colors.blue, .32, 40, -phase * .8);
     drawOrbitalRing(orbitX, orbitY, r * 1.55, r * .11, .18 + phase * .3,
-      colors.gold, .25, 80, phase);
+      colors.gold, .25, 48, phase);
 
     drawEnergyArc(orbitX, orbitY, r * 1.37, r * 1.37, phase * .18,
       .18 + phase * 1.2, 1.03 + phase * 1.2, colors.cyan, 2.1, .85, 12);
@@ -193,9 +191,9 @@
     ctx.save();
     ctx.translate(orbitX, orbitY);
     ctx.rotate(-phase * .14);
-    for (var tick = 0; tick < 144; tick++) {
-      var angle = tick * Math.PI * 2 / 144;
-      var major = tick % 12 === 0;
+    for (var tick = 0; tick < 96; tick++) {
+      var angle = tick * Math.PI * 2 / 96;
+      var major = tick % 8 === 0;
       var medium = tick % 3 === 0;
       var inner = r * 1.49;
       var outer = inner + (major ? 13 : medium ? 7 : 3.2);
@@ -231,7 +229,7 @@
     ctx.arc(orbitX, orbitY, globeR, 0, Math.PI * 2);
     ctx.clip();
 
-    for (var meridian = -5; meridian <= 5; meridian++) {
+    for (var meridian = -4; meridian <= 4; meridian++) {
       var widthFactor = Math.max(.055, Math.abs(Math.cos(meridian * .28 + phase * 1.8)));
       ctx.globalAlpha = meridian % 2 === 0 ? .32 : .17;
       ctx.strokeStyle = meridian % 3 === 0
@@ -365,7 +363,7 @@
     ctx.clearRect(0, 0, width, height);
     // Use a carefully composed, repeatable frame while idle rather than freezing
     // at a random point in the previous animation.
-    var elapsed = assistantState === "idle" ? 0 : Math.max(0, time - animationStart);
+    var elapsed = Math.max(0, time);
     var animationTime = reducedMotion ? elapsed * .42 : elapsed;
     drawBackgroundGrid(animationTime);
 
@@ -392,14 +390,14 @@
 
   function tick(time) {
     raf = 0;
-    if (document.hidden || assistantState === "idle") {
+    if (document.hidden) {
       lastFrameTime = 0;
       return;
     }
 
-    // Cap active rendering at 60 FPS, even on high-refresh displays.
+    // Keep the sphere moving continuously while using a modest frame budget.
     // Reduced-motion users keep a lower 12 FPS cap.
-    var frameInterval = reducedMotion ? 1000 / 12 : 1000 / 60;
+    var frameInterval = reducedMotion ? 1000 / 12 : 1000 / 24;
     if (!lastFrameTime || time - lastFrameTime >= frameInterval) {
       lastFrameTime = time;
       render(time);
@@ -408,7 +406,7 @@
   }
 
   function start() {
-    if (!raf && !document.hidden && assistantState !== "idle") {
+    if (!raf && !document.hidden) {
       lastFrameTime = 0;
       raf = window.requestAnimationFrame(tick);
     }
@@ -448,11 +446,9 @@
     if (motionQuery.addEventListener) {
       motionQuery.addEventListener("change", function (event) {
         reducedMotion = event.matches;
-        // The next active frame will use the updated reduced-motion frame cap.
-        if (assistantState !== "idle") {
-          lastFrameTime = 0;
-          start();
-        }
+        // Apply the updated frame cap without interrupting continuous animation.
+        lastFrameTime = 0;
+        start();
       });
     }
   }
