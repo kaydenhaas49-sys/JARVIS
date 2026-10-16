@@ -1,4 +1,13 @@
 /* Stark-style J.A.R.V.I.S. HUD skin. Keeps the existing app controls and ids intact. */
+/* Self-host Orbitron because JARVIS intentionally blocks third-party font requests. */
+@font-face {
+  font-family: "Orbitron";
+  src: url("/fonts/Orbitron-Variable.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+}
+
 :root {
   --lcars-black: #030912;
   --lcars-bg: #030912;
