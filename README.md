@@ -20,10 +20,16 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Recipe Saver with ingredients, instructions, category/search filters, favorites, servings and cooking time, and JSON import/export compatible with the older JARVIS Kitchen `recipes.json` format.
 - Live activity feed, saved as a local JSON file without copying full message text into the feed.
 - Kitchen panel with grocery checklist, pantry inventory, weekly meal notes, and browser-based timers.
-- Coding workspace tools for listing, reading, searching, editing files, reviewing diffs, and approval-gated developer commands.
+- Code review cards show unified file diffs before Accept/Reject. Accepted workspace writes receive exact recovery backups, with per-file Undo in Code Review.
+- Drag/drop text and code files (read locally into the prompt) plus PNG/JPEG/WebP/GIF images for vision-capable endpoints. Attachments are size-limited and not uploaded to a separate storage service.
+- Knowledge Vault: ranked local workspace search with exact file paths and line numbers, plus an action to ask JARVIS using those source excerpts.
+- Project profiles and task checklists stored locally, scoped to existing folders inside the JARVIS workspace.
+- Local model benchmark for up to three endpoint models, showing wall time and generated-token rate when server metrics are available.
+- Ctrl/Cmd+K command palette for fast navigation. A tiny draggable voice-only sphere stays inside the JARVIS browser tab and toggles hands-free voice mode.
+- Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
 - Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools; app launches are allowlisted and approval-gated.
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
-- File writes and terminal commands pause for your explicit approval in the UI.
+- File writes and terminal commands pause for your explicit approval in the UI. Proposed file writes show a unified diff; accepted writes back up prior bytes and can be undone in Code Review.
 - Local-only HTTP server by default; model API credentials remain on the server.
 - Python standard library backend with no required pip dependencies; local voice features are an optional extra.
 
@@ -37,7 +43,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 
 The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama serve` API. JARVIS discovers models via `/api/tags` and chats via `/api/chat` (no `/v1` required). For llama.cpp or LM Studio, enter the documented OpenAI-compatible endpoint, usually ending in `/v1`.
 
-JARVIS creates ~/JARVIS-workspace for files it can browse and edit. Persistent application data is saved as ordinary files under ~/.local/share/jarvis/ (or the directory set by JARVIS_DATA_DIR): recipes.json, notes.json, kitchen.json, chat-history.json, activity.json, memory.json, routines.json, settings.json, and system-memory.md. dashboard-index.json tracks one-time migration state. Existing browser-local data from older versions is imported once and then removed from browser storage. Older dashboard-data.json files are read as a migration source and left in place as a backup; ongoing writes go to the separate JSON files. Chat archives retain the latest 25 conversations and up to 40 messages per conversation. File tools are deliberately scoped to the workspace, while JARVIS's internal dashboard tools maintain the app's own data files. Terminal actions and workspace file writes require you to approve the exact action in the dashboard.
+JARVIS creates ~/JARVIS-workspace for files it can browse and edit. Persistent application data is saved as ordinary files under ~/.local/share/jarvis/ (or the directory set by JARVIS_DATA_DIR): recipes.json, notes.json, kitchen.json, chat-history.json, activity.json, memory.json, routines.json, projects.json, code-backups.json, settings.json, and system-memory.md. Exact file recovery bytes live under code-backups/. dashboard-index.json tracks one-time migration state. Existing browser-local data from older versions is imported once and then removed from browser storage. Older dashboard-data.json files are read as a migration source and left in place as a backup; ongoing writes go to the separate JSON files. Chat archives retain the latest 25 conversations and up to 40 messages per conversation. File tools are deliberately scoped to the workspace, while JARVIS's internal dashboard tools maintain the app's own data files. Terminal actions and workspace file writes require you to approve the exact action in the dashboard.
 
 ## Optional local voice setup
 
