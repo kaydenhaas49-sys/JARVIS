@@ -1,4 +1,4 @@
-/* JARVIS holographic sphere backdrop. Continuously animated with a reduced render budget. */
+/* JARVIS holographic sphere backdrop. Continuously animated with a balanced render budget. */
 (function () {
   "use strict";
   if (!document.body || document.getElementById("jarvis-orb-canvas")) return;
@@ -395,9 +395,9 @@
       return;
     }
 
-    // Keep the sphere moving continuously while using a modest frame budget.
+    // Render more smoothly while keeping a predictable frame budget.
     // Reduced-motion users keep a lower 12 FPS cap.
-    var frameInterval = reducedMotion ? 1000 / 12 : 1000 / 24;
+    var frameInterval = reducedMotion ? 1000 / 12 : 1000 / 40;
     if (!lastFrameTime || time - lastFrameTime >= frameInterval) {
       lastFrameTime = time;
       render(time);
