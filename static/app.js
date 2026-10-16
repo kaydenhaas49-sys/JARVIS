@@ -217,7 +217,19 @@
       if (action.preview !== undefined) {
         const preview = document.createElement("pre");
         preview.className = "action-preview";
-        preview.textContent = action.preview + (action.preview_truncated ? "\n… preview shortened" : "");
+        const previewText = action.preview + (action.preview_truncated ? "\n… preview shortened" : "");
+        if (action.tool === "write_file") {
+          preview.classList.add("diff-preview");
+          preview.innerHTML = previewText.split("\n").map((line) => {
+            const kind = line.startsWith("+++") || line.startsWith("---") ? "diff-file"
+              : line.startsWith("+") ? "diff-add"
+              : line.startsWith("-") ? "diff-remove"
+              : line.startsWith("@@") ? "diff-hunk" : "";
+            return '<span class="diff-line ' + kind + '">' + escapeHtml(line) + '</span>';
+          }).join("\n");
+        } else {
+          preview.textContent = previewText;
+        }
         details.appendChild(preview);
       }
     }
