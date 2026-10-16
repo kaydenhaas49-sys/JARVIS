@@ -203,6 +203,7 @@ def memory_items() -> list[dict[str, Any]]:
                 "id": item["id"][:80],
                 "fact": item["fact"][:2_000],
                 "created_at": str(item.get("created_at", ""))[:80],
+                "updated_at": str(item.get("updated_at", ""))[:80],
             })
     return items
 

@@ -662,6 +662,14 @@
     elements.mic.title = label || (isListening ? "Stop voice input" : "Voice input");
   }
 
+  function updateHandsFreeButton(capturing) {
+    listening = Boolean(capturing);
+    elements.mic.classList.toggle("listening", handsFreeMode);
+    const label = handsFreeMode ? "Hands-free on — click mic to stop" : (listening ? "Stop voice input" : "Use voice input");
+    elements.mic.setAttribute("aria-label", label);
+    elements.mic.title = label;
+  }
+
   function clearVoiceActivityWatch() {
     if (voiceActivityTimer !== null) window.clearInterval(voiceActivityTimer);
     voiceActivityTimer = null;
@@ -703,7 +711,7 @@
       instance.interimResults = false;
       instance.maxAlternatives = 1;
       instance.onstart = () => {
-        updateMicButton(true, "Hands-free on — click mic to stop");
+        updateHandsFreeButton(true);
         setOrbState("listening");
       };
       instance.onresult = async (event) => {
@@ -734,6 +742,7 @@
       };
       instance.onend = () => {
         if (recognition === instance) recognition = null;
+        updateHandsFreeButton(false);
         if (handsFreeMode && !busy && !browserRecognitionPending) scheduleHandsFreeCapture(400);
         else if (!handsFreeMode) updateMicButton(false);
       };
@@ -791,12 +800,12 @@
         clearVoiceActivityWatch();
         if (recordingStopTimer) window.clearTimeout(recordingStopTimer);
         recordingStopTimer = null;
-        if (handsFreeMode) updateMicButton(true, "Hands-free on — click mic to stop");
+        if (handsFreeMode) updateHandsFreeButton(false);
         else updateMicButton(false);
         if (currentOrbState === "listening") setOrbState("idle");
         if (Date.now() - recordingStartedAt < 600 || blob.size < 2_000) {
           if (handsFreeMode) {
-            showToast("I didn't catch that. Keep talking after the listening tone.", "error");
+            showToast("I didn't catch that. Try speaking a little closer to the microphone.", "error");
             scheduleHandsFreeCapture(700);
           } else {
             showToast("I didn't get enough audio. Hold the mic for a little longer.", "error");
@@ -835,7 +844,8 @@
         }
       };
       mediaRecorder.start();
-      updateMicButton(true, handsFreeCapture ? "Hands-free on — click mic to stop" : "Stop recording");
+      if (handsFreeCapture) updateHandsFreeButton(true);
+      else updateMicButton(true, "Stop recording");
       setOrbState("listening");
       logActivity("Voice input started", handsFreeCapture ? "Hands-free local voice conversation is listening" : "Recording a short local voice command", "voice");
       if (handsFreeCapture) {
