@@ -77,6 +77,7 @@ Keep persistent JARVIS data in local files under ~/.local/share/jarvis/ (or JARV
 - chat-history.json: saved conversations.
 - activity.json: the activity feed.
 - memory.json: user-approved persistent facts and preferences.
+- routines.json: reusable local prompt workflows.
 - settings.json: model and endpoint settings.
 - system-memory.md: this storage policy and durable system context.
 

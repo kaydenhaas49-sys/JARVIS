@@ -839,6 +839,13 @@
         } catch (error) {
           showToast("Voice input failed: " + error.message, "error");
           setOrbState("idle");
+          // Stop instead of repeatedly capturing audio if local transcription is unavailable.
+          if (handsFreeMode) {
+            handsFreeMode = false;
+            if (handsFreeRestartTimer !== null) window.clearTimeout(handsFreeRestartTimer);
+            handsFreeRestartTimer = null;
+            updateMicButton(false);
+          }
         } finally {
           if (handsFreeMode) scheduleHandsFreeCapture(650);
         }

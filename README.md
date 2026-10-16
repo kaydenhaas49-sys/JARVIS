@@ -5,20 +5,22 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 ## Features
 
 - Chat with a local model through llama.cpp, LM Studio, or another OpenAI-compatible endpoint.
-- Spoken replies through browser text-to-speech, plus short local speech-to-text recordings for browsers without Web Speech recognition.
+- Hands-free voice conversations: local speech-to-text detects pauses, JARVIS answers aloud, then resumes listening; click the mic again to stop. Browser speech recognition is used only as a fallback when local recording is unavailable.
+- Spoken replies through browser text-to-speech, plus short local speech-to-text recordings; microphone audio is processed locally and not saved.
 - Opt-in local "Hey JARVIS" wake word with one-shot command capture, automatic re-arming after the answer, and a visible on/off indicator.
 - Voice input and wake-word processing can run on-device with the optional voice dependencies; microphone audio is not stored.
 - Model manager to discover compatible server models and save the selected model/endpoint locally.
-- Persistent memory injected into future chats; memory requests made in chat require approval.
+- Persistent memory injected into future chats, with review, edit, save, and delete controls; memory requests made in chat require approval.
 - Searchable local-file chat history with reopen, delete, and JSON export; reopening restores saved user/assistant text context.
-- Consolidated sidebar: System Console groups system status, model configuration, and activity; Memory & archive groups AI memory, Quick Notes, and Chat History.
+- Consolidated sidebar: System Console includes live CPU/RAM/disk and supported NVIDIA telemetry, model configuration, saved routines, and activity; Memory & archive groups editable AI memory, Quick Notes, and Chat History.
+- Saved routines: built-in Gaming prep, Start coding, and Daily briefing templates plus custom reusable prompts. Routines use the regular approval-gated tools when an action would change files, run a command, or launch an app.
 - Combined Kitchen / Recipe Saver panel with groceries, pantry, meal plans, timers, searchable recipes, favorites, and JSON import/export.
 - Assistant data tools for recipes, Quick Notes, groceries, pantry, meal-plan entries, timers, memories, chat archives, activity, and dashboard status, connected to the same saved records shown in the UI.
 - Combined Memory / Quick Notes panel: both AI memory and Quick Notes are saved to local files; Quick Notes stay separate from AI memory.
 - Recipe Saver with ingredients, instructions, category/search filters, favorites, servings and cooking time, and JSON import/export compatible with the older JARVIS Kitchen `recipes.json` format.
 - Live activity feed, saved as a local JSON file without copying full message text into the feed.
 - Kitchen panel with grocery checklist, pantry inventory, weekly meal notes, and browser-based timers.
-- Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
+- Coding workspace tools for listing, reading, searching, editing files, reviewing diffs, and approval-gated developer commands.
 - Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools; app launches are allowlisted and approval-gated.
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
 - File writes and terminal commands pause for your explicit approval in the UI.
@@ -35,7 +37,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 
 The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama serve` API. JARVIS discovers models via `/api/tags` and chats via `/api/chat` (no `/v1` required). For llama.cpp or LM Studio, enter the documented OpenAI-compatible endpoint, usually ending in `/v1`.
 
-JARVIS creates ~/JARVIS-workspace for files it can browse and edit. Persistent application data is saved as ordinary files under ~/.local/share/jarvis/ (or the directory set by JARVIS_DATA_DIR): recipes.json, notes.json, kitchen.json, chat-history.json, activity.json, memory.json, settings.json, and system-memory.md. dashboard-index.json tracks one-time migration state. Existing browser-local data from older versions is imported once and then removed from browser storage. Older dashboard-data.json files are read as a migration source and left in place as a backup; ongoing writes go to the separate JSON files. Chat archives retain the latest 25 conversations and up to 40 messages per conversation. File tools are deliberately scoped to the workspace, while JARVIS's internal dashboard tools maintain the app's own data files. Terminal actions and workspace file writes require you to approve the exact action in the dashboard.
+JARVIS creates ~/JARVIS-workspace for files it can browse and edit. Persistent application data is saved as ordinary files under ~/.local/share/jarvis/ (or the directory set by JARVIS_DATA_DIR): recipes.json, notes.json, kitchen.json, chat-history.json, activity.json, memory.json, routines.json, settings.json, and system-memory.md. dashboard-index.json tracks one-time migration state. Existing browser-local data from older versions is imported once and then removed from browser storage. Older dashboard-data.json files are read as a migration source and left in place as a backup; ongoing writes go to the separate JSON files. Chat archives retain the latest 25 conversations and up to 40 messages per conversation. File tools are deliberately scoped to the workspace, while JARVIS's internal dashboard tools maintain the app's own data files. Terminal actions and workspace file writes require you to approve the exact action in the dashboard.
 
 ## Optional local voice setup
 
@@ -49,7 +51,7 @@ python3 -m venv .venv
 .venv/bin/python jarvis.py
 ```
 
-The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX backend, but upstream currently declares `tflite-runtime` unconditionally on Linux, and that package has no compatible wheel for newer Python versions. JARVIS installs the ONNX runtime dependencies explicitly instead. Use the mic button to record a short command, then tap it again to finish; recordings stop automatically after 12 seconds. The first transcription downloads the selected Whisper model. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
+The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX backend, but upstream currently declares `tflite-runtime` unconditionally on Linux, and that package has no compatible wheel for newer Python versions. JARVIS installs the ONNX runtime dependencies explicitly instead. Tap the mic button once to start hands-free conversation. JARVIS listens locally for your speech, detects a pause, transcribes the turn, speaks its reply, and resumes listening. Tap the mic again to stop. If silence detection is unavailable, a turn is capped at 12 seconds. The first transcription downloads the selected Whisper model. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
 
 ## Configuration
 
