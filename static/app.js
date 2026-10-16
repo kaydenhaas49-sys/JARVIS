@@ -666,7 +666,7 @@
   function updateHandsFreeButton(capturing) {
     listening = Boolean(capturing);
     elements.mic.classList.toggle("listening", handsFreeMode);
-    const label = handsFreeMode ? "Hands-free on — click mic to stop" : (listening ? "Stop voice input" : "Use voice input");
+    const label = handsFreeMode ? "Hands-free on — click mic to interrupt or stop" : (listening ? "Stop voice input" : "Use voice input");
     elements.mic.setAttribute("aria-label", label);
     elements.mic.title = label;
   }
@@ -925,6 +925,13 @@
   }
 
   function toggleMicrophone() {
+    if (handsFreeMode && window.speechSynthesis?.speaking) {
+      // A deliberate mic click interrupts the spoken reply and returns to capture.
+      window.speechSynthesis.cancel();
+      scheduleHandsFreeCapture(180);
+      showToast("Response interrupted. Listening…");
+      return;
+    }
     if (handsFreeMode) {
       handsFreeMode = false;
       if (handsFreeRestartTimer !== null) window.clearTimeout(handsFreeRestartTimer);
