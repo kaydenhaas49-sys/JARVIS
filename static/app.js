@@ -1844,7 +1844,8 @@
   document.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
-      elements.input.focus();
+      if (event.shiftKey) newChat();
+      else window.dispatchEvent(new CustomEvent("jarvis:palette-toggle"));
     }
     if (event.key === "Escape") { closeSidebar(); closeUtility(); }
   });
@@ -2295,6 +2296,8 @@
     });
   }
   initRecipeSaver();
+
+  window.JARVISApp = { sendMessage, openUtility, closeUtility, newChat, showToast, logActivity, apiPost, escapeHtml };
 
   loadConfig();
   dashboardSyncPromise = bootstrapDashboardData().then(() => {
