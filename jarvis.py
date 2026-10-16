@@ -65,6 +65,7 @@ USER_DATA_DIR = Path(os.environ.get(
 )).expanduser().resolve()
 SETTINGS_PATH = USER_DATA_DIR / "settings.json"
 MEMORY_PATH = USER_DATA_DIR / "memory.json"
+ROUTINES_PATH = USER_DATA_DIR / "routines.json"
 SYSTEM_MEMORY_PATH = USER_DATA_DIR / "system-memory.md"
 SYSTEM_MEMORY_DEFAULT = """# JARVIS persistent storage memory
 
@@ -238,6 +239,120 @@ def delete_memory_fact(item_id: str) -> dict[str, Any]:
         raise ValueError("That memory no longer exists.")
     save_memory_items(remaining)
     return {"ok": True, "deleted_id": key}
+
+
+def update_memory_fact(item_id: str, fact: str) -> dict[str, Any]:
+    key = str(item_id or "").strip()
+    text = str(fact or "").strip()
+    if not key:
+        raise ValueError("Memory ID is required.")
+    if not text or len(text) > 2_000:
+        raise ValueError("Memory must contain 1–2,000 characters.")
+    items = memory_items()
+    item = next((row for row in items if row["id"] == key), None)
+    if item is None:
+        raise ValueError("That memory no longer exists.")
+    duplicate = next((row for row in items if row["id"] != key and row["fact"].casefold() == text.casefold()), None)
+    if duplicate:
+        raise ValueError("Another saved memory already contains that fact.")
+    item["fact"] = text
+    item["updated_at"] = datetime.now().astimezone().isoformat(timespec="minutes")
+    save_memory_items(items)
+    return {"ok": True, "item": item}
+
+
+ROUTINES_LOCK = threading.RLock()
+DEFAULT_ROUTINES: list[dict[str, Any]] = [
+    {
+        "id": "routine-gaming-mode",
+        "name": "Gaming prep",
+        "prompt": "Check the current system metrics, local model status, and available game launchers. Recommend a concise gaming-ready checklist. Do not launch or close applications, change settings, or run commands without asking first.",
+        "created_at": "Built in",
+        "builtin": True,
+    },
+    {
+        "id": "routine-start-coding",
+        "name": "Start coding",
+        "prompt": "Inspect the configured workspace and summarize its project structure, current source/test setup, and the smallest sensible next step. Do not edit files or run commands until I approve the exact action.",
+        "created_at": "Built in",
+        "builtin": True,
+    },
+    {
+        "id": "routine-daily-briefing",
+        "name": "Daily briefing",
+        "prompt": "Give me a short local briefing using the current date/time, live system metrics, recent JARVIS activity, and relevant saved memories. Clearly separate measured facts from suggestions. Do not browse the internet.",
+        "created_at": "Built in",
+        "builtin": True,
+    },
+]
+
+
+def routine_items() -> list[dict[str, Any]]:
+    with ROUTINES_LOCK:
+        raw = _read_json_object(ROUTINES_PATH).get("items")
+        if not isinstance(raw, list):
+            _write_json_atomically(ROUTINES_PATH, {"items": DEFAULT_ROUTINES})
+            raw = DEFAULT_ROUTINES
+        items: list[dict[str, Any]] = []
+        for row in raw[:30]:
+            if not isinstance(row, dict):
+                continue
+            routine_id = row.get("id")
+            name = row.get("name")
+            prompt = row.get("prompt")
+            if not isinstance(routine_id, str) or not routine_id or not isinstance(name, str) or not isinstance(prompt, str):
+                continue
+            if not name.strip() or not prompt.strip():
+                continue
+            items.append({
+                "id": routine_id[:100],
+                "name": name.strip()[:60],
+                "prompt": prompt.strip()[:4_000],
+                "created_at": str(row.get("created_at", "Saved"))[:80],
+                "builtin": bool(row.get("builtin", False)),
+            })
+        return items
+
+
+def save_routine(routine_id: str, name: str, prompt: str) -> dict[str, Any]:
+    clean_name = str(name or "").strip()
+    clean_prompt = str(prompt or "").strip()
+    key = str(routine_id or "").strip()
+    if not clean_name or len(clean_name) > 60:
+        raise ValueError("Routine name must contain 1–60 characters.")
+    if not clean_prompt or len(clean_prompt) > 4_000:
+        raise ValueError("Routine instructions must contain 1–4,000 characters.")
+    with ROUTINES_LOCK:
+        items = routine_items()
+        current = next((row for row in items if row["id"] == key), None) if key else None
+        if not current and len(items) >= 30:
+            raise ValueError("Routine limit reached (30). Delete a routine before adding another.")
+        routine = {
+            "id": current["id"] if current else secrets.token_urlsafe(12),
+            "name": clean_name,
+            "prompt": clean_prompt,
+            "created_at": current.get("created_at", datetime.now().astimezone().isoformat(timespec="minutes")) if current else datetime.now().astimezone().isoformat(timespec="minutes"),
+            "builtin": False,
+        }
+        if current:
+            items = [routine if row["id"] == current["id"] else row for row in items]
+        else:
+            items.append(routine)
+        _write_json_atomically(ROUTINES_PATH, {"items": items[-30:]})
+        return {"ok": True, "item": routine}
+
+
+def delete_routine(routine_id: str) -> dict[str, Any]:
+    key = str(routine_id or "").strip()
+    if not key:
+        raise ValueError("Routine ID is required.")
+    with ROUTINES_LOCK:
+        items = routine_items()
+        remaining = [row for row in items if row["id"] != key]
+        if len(remaining) == len(items):
+            raise ValueError("That routine no longer exists.")
+        _write_json_atomically(ROUTINES_PATH, {"items": remaining})
+        return {"ok": True, "deleted_id": key}
 
 
 # Separate, human-readable local files are the source of truth for dashboard modules.
@@ -1122,25 +1237,117 @@ def get_current_time() -> dict[str, str]:
     return {"local_time": now.strftime("%A, %B %d, %Y at %I:%M:%S %p %Z"), "iso": now.isoformat()}
 
 
+def _read_gpu_metrics() -> list[dict[str, Any]]:
+    """Read NVIDIA telemetry when nvidia-smi exists; unavailable GPUs are not errors."""
+    if not shutil.which("nvidia-smi"):
+        return []
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+             "--format=csv,noheader,nounits"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=2, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    gpus: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines()[:8]:
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) < 6:
+            continue
+        def number(value: str) -> float | None:
+            try:
+                parsed = float(value)
+                return parsed if parsed >= 0 else None
+            except (TypeError, ValueError):
+                return None
+        gpus.append({
+            "name": parts[0][:120],
+            "utilization_percent": number(parts[1]),
+            "memory_used_mib": number(parts[2]),
+            "memory_total_mib": number(parts[3]),
+            "temperature_c": number(parts[4]),
+            "power_w": number(parts[5]),
+        })
+    return gpus
+
+
 def get_system_status() -> dict[str, Any]:
+    """Return best-effort live metrics without requiring third-party Python packages."""
     details: dict[str, Any] = {
         "operating_system": platform.platform(),
         "python": platform.python_version(),
         "logical_cpu_threads": os.cpu_count() or "unknown",
         "workspace": str(WORKSPACE),
+        "collected_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "cpu_load_1m": None,
+        "memory": None,
+        "workspace_disk": "unavailable",
+        "root_disk": "unavailable",
+        "gpus": _read_gpu_metrics(),
+        "cpu_temperature_c": None,
     }
     try:
-        details["memory_gib"] = round((os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")) / (1024 ** 3), 1)
+        details["cpu_load_1m"] = round(float(os.getloadavg()[0]), 2)
+    except (OSError, AttributeError):
+        pass
+    try:
+        if Path("/proc/meminfo").is_file():
+            values: dict[str, int] = {}
+            for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        values[parts[0].rstrip(":")] = int(parts[1]) * 1024
+                    except ValueError:
+                        continue
+            total = values.get("MemTotal")
+            available = values.get("MemAvailable")
+            if total and available is not None:
+                used = max(0, total - available)
+                details["memory"] = {
+                    "total_gib": round(total / (1024 ** 3), 2),
+                    "used_gib": round(used / (1024 ** 3), 2),
+                    "available_gib": round(available / (1024 ** 3), 2),
+                    "used_percent": round(used / total * 100, 1),
+                }
+                details["memory_gib"] = round(total / (1024 ** 3), 1)
+        if details["memory"] is None:
+            total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+            details["memory_gib"] = round(total / (1024 ** 3), 1)
     except (ValueError, OSError, AttributeError):
         details["memory_gib"] = "unavailable"
+    for key, path in (("workspace_disk", WORKSPACE), ("root_disk", Path("/"))):
+        try:
+            usage = shutil.disk_usage(path)
+            used = usage.total - usage.free
+            details[key] = {
+                "total_gib": round(usage.total / (1024 ** 3), 2),
+                "used_gib": round(used / (1024 ** 3), 2),
+                "free_gib": round(usage.free / (1024 ** 3), 2),
+                "used_percent": round(used / usage.total * 100, 1) if usage.total else None,
+            }
+        except OSError:
+            details[key] = "unavailable"
     try:
-        usage = shutil.disk_usage(WORKSPACE)
-        details["workspace_disk"] = {
-            "total_gib": round(usage.total / (1024 ** 3), 1),
-            "free_gib": round(usage.free / (1024 ** 3), 1),
-        }
-    except OSError:
-        details["workspace_disk"] = "unavailable"
+        sensors = shutil.which("sensors")
+        if sensors:
+            result = subprocess.run(
+                [sensors], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, text=True, timeout=1.5, check=False,
+            )
+            if result.returncode == 0:
+                import re
+                for line in result.stdout.splitlines():
+                    if any(label in line.casefold() for label in ("package id 0:", "tctl:", "cpu temp")):
+                        match = re.search(r"([+-]?\d+(?:\.\d+)?)\s*°?C", line)
+                        if match:
+                            details["cpu_temperature_c"] = float(match.group(1))
+                            break
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     return details
 
 
@@ -1587,6 +1794,10 @@ class JarvisHandler(BaseHTTPRequestHandler):
                 return self._send_json(400, {"error": str(exc)})
         if route == "/api/memory":
             return self._send_json(200, {"items": memory_items(), "limit": 100})
+        if route == "/api/routines":
+            return self._send_json(200, {"items": routine_items(), "limit": 30})
+        if route == "/api/status":
+            return self._send_json(200, get_system_status())
         if route == "/api/app-data":
             return self._send_json(200, _dashboard_data_payload())
         if route == "/api/voice/status":
@@ -1671,6 +1882,27 @@ class JarvisHandler(BaseHTTPRequestHandler):
                 if not isinstance(item_id, str):
                     raise ValueError("Memory ID is invalid.")
                 return self._send_json(200, delete_memory_fact(item_id))
+            if route == "/api/memory/update":
+                item_id = payload.get("id", "")
+                fact = payload.get("fact", "")
+                if not isinstance(item_id, str) or not isinstance(fact, str):
+                    raise ValueError("Memory ID and fact must be text.")
+                return self._send_json(200, update_memory_fact(item_id, fact))
+            if route == "/api/routines":
+                action = payload.get("action", "")
+                if action == "save":
+                    routine_id = payload.get("id", "")
+                    name = payload.get("name", "")
+                    prompt = payload.get("prompt", "")
+                    if not all(isinstance(value, str) for value in (routine_id, name, prompt)):
+                        raise ValueError("Routine ID, name, and instructions must be text.")
+                    return self._send_json(200, save_routine(routine_id, name, prompt))
+                if action == "delete":
+                    routine_id = payload.get("id", "")
+                    if not isinstance(routine_id, str):
+                        raise ValueError("Routine ID is invalid.")
+                    return self._send_json(200, delete_routine(routine_id))
+                raise ValueError("Unknown routine action.")
             return self._send_json(404, {"error": "Unknown API route."})
         except ValueError as exc:
             return self._send_json(400, {"error": str(exc)})

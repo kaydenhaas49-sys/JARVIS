@@ -27,6 +27,16 @@
   let busy = false;
   let listening = false;
   let voiceReplies = false;
+  let handsFreeMode = false;
+  let voiceActivityTimer = null;
+  let handsFreeRestartTimer = null;
+  let voiceAudioContext = null;
+  let voiceAudioAnalyser = null;
+  let voiceHasDetectedSpeech = false;
+  let lastVoiceActivityAt = 0;
+  let browserRecognitionPending = false;
+  let savedMemoryItems = [];
+  let routineItems = [];
   let recognition = null;
   let mediaRecorder = null;
   let microphoneStream = null;
@@ -312,7 +322,7 @@
       }
     } catch (error) {
       renderMessage("assistant", "I couldn’t complete that request.\n\n" + error.message +
-        "\n\nCheck that your local model server is running and that JARVIS_BASE_URL and JARVIS_MODEL match its settings.");
+        "\n\nJARVIS is local-first and does not silently switch to a cloud model. Your saved memories, routines, and system diagnostics remain available; check that your local model server is running and that the model endpoint is correct.");
       logActivity("Request failed", error.message, "error");
       setOrbState("error");
       window.setTimeout(() => { if (currentOrbState === "error") setOrbState("idle"); }, 1800);
@@ -652,17 +662,115 @@
     elements.mic.title = label || (isListening ? "Stop voice input" : "Voice input");
   }
 
-  async function startRecordedVoiceInput() {
+  function clearVoiceActivityWatch() {
+    if (voiceActivityTimer !== null) window.clearInterval(voiceActivityTimer);
+    voiceActivityTimer = null;
+    voiceAudioAnalyser = null;
+    if (voiceAudioContext) {
+      const context = voiceAudioContext;
+      voiceAudioContext = null;
+      context.close().catch(() => {});
+    }
+  }
+
+  function scheduleHandsFreeCapture(delay = 650) {
+    if (handsFreeRestartTimer !== null) window.clearTimeout(handsFreeRestartTimer);
+    handsFreeRestartTimer = window.setTimeout(() => {
+      handsFreeRestartTimer = null;
+      if (!handsFreeMode || document.hidden) return;
+      if (busy || listening) {
+        scheduleHandsFreeCapture(400);
+        return;
+      }
+      startRecordedVoiceInput({ handsFree: true });
+    }, delay);
+  }
+
+  function startBrowserHandsFreeRecognition() {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+      handsFreeMode = false;
+      updateMicButton(false);
+      showToast("Hands-free voice needs microphone recording support or browser speech recognition.", "error");
+      return;
+    }
+    if (!handsFreeMode || busy || recognition) return;
+    try {
+      const instance = new Recognition();
+      recognition = instance;
+      instance.lang = "en-CA";
+      instance.continuous = true;
+      instance.interimResults = false;
+      instance.maxAlternatives = 1;
+      instance.onstart = () => {
+        updateMicButton(true, "Hands-free on — click mic to stop");
+        setOrbState("listening");
+      };
+      instance.onresult = async (event) => {
+        if (browserRecognitionPending) return;
+        const transcript = [];
+        for (let index = event.resultIndex; index < event.results.length; index++) {
+          const row = event.results[index];
+          if (row?.isFinal && row[0]?.transcript) transcript.push(row[0].transcript.trim());
+        }
+        const text = transcript.join(" ").trim();
+        if (!text) return;
+        browserRecognitionPending = true;
+        try {
+          instance.stop();
+          await sendMessage(text, { fromHandsFree: true });
+        } finally {
+          browserRecognitionPending = false;
+          if (handsFreeMode) scheduleHandsFreeCapture(450);
+        }
+      };
+      instance.onerror = (event) => {
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          handsFreeMode = false;
+          showToast("Microphone permission was denied. Allow microphone access and try again.", "error");
+        } else if (event.error !== "no-speech" && event.error !== "aborted") {
+          showToast("Hands-free speech recognition failed (" + (event.error || "unknown error") + ").", "error");
+        }
+      };
+      instance.onend = () => {
+        if (recognition === instance) recognition = null;
+        if (handsFreeMode && !busy && !browserRecognitionPending) scheduleHandsFreeCapture(400);
+        else if (!handsFreeMode) updateMicButton(false);
+      };
+      instance.start();
+    } catch (error) {
+      recognition = null;
+      handsFreeMode = false;
+      updateMicButton(false);
+      showToast("Could not start hands-free recognition: " + error.message, "error");
+    }
+  }
+
+  async function startRecordedVoiceInput(options = {}) {
+    const handsFreeCapture = Boolean(options.handsFree || handsFreeMode);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      if (handsFreeCapture) {
+        startBrowserHandsFreeRecognition();
+        return;
+      }
       showToast("This browser can't record microphone audio. Check microphone permissions and browser support.", "error");
       return;
     }
+    if (startingVoiceCapture || mediaRecorder || document.hidden) return;
+    startingVoiceCapture = true;
     try {
       microphoneStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
+      if (handsFreeCapture && !handsFreeMode) {
+        microphoneStream.getTracks().forEach((track) => track.stop());
+        microphoneStream = null;
+        return;
+      }
       recordedChunks = [];
       recordingStartedAt = Date.now();
+      voiceHasDetectedSpeech = false;
+      lastVoiceActivityAt = recordingStartedAt;
       const formats = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
       const mimeType = formats.find((type) => MediaRecorder.isTypeSupported?.(type));
       mediaRecorder = mimeType ? new MediaRecorder(microphoneStream, { mimeType }) : new MediaRecorder(microphoneStream);
@@ -674,26 +782,35 @@
         stopRecordedVoiceInput();
       };
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || mimeType || "audio/webm" });
+        const blobType = mediaRecorder?.mimeType || mimeType || "audio/webm";
+        const blob = new Blob(recordedChunks, { type: blobType });
         recordedChunks = [];
         if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
         microphoneStream = null;
         mediaRecorder = null;
+        clearVoiceActivityWatch();
         if (recordingStopTimer) window.clearTimeout(recordingStopTimer);
         recordingStopTimer = null;
-        updateMicButton(false);
+        if (handsFreeMode) updateMicButton(true, "Hands-free on — click mic to stop");
+        else updateMicButton(false);
         if (currentOrbState === "listening") setOrbState("idle");
         if (Date.now() - recordingStartedAt < 600 || blob.size < 2_000) {
-          showToast("I didn't get enough audio. Hold the mic for a little longer.", "error");
+          if (handsFreeMode) {
+            showToast("I didn't catch that. Keep talking after the listening tone.", "error");
+            scheduleHandsFreeCapture(700);
+          } else {
+            showToast("I didn't get enough audio. Hold the mic for a little longer.", "error");
+          }
           return;
         }
         if (blob.size > 720_000) {
           showToast("That recording is too large. Try a shorter command.", "error");
+          if (handsFreeMode) scheduleHandsFreeCapture(700);
           return;
         }
         try {
           setOrbState("thinking");
-          showToast("Transcribing locally…");
+          showToast(handsFreeMode ? "Transcribing your turn locally…" : "Transcribing locally…");
           const dataUrl = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result || ""));
@@ -705,28 +822,75 @@
           if (!result.text?.trim()) {
             showToast("I couldn't make out the audio. Try speaking closer to the mic.", "error");
             setOrbState("idle");
+            if (handsFreeMode) scheduleHandsFreeCapture(700);
             return;
           }
           logActivity("Voice input captured", "Transcribed locally", "voice");
-          await sendMessage(result.text);
+          await sendMessage(result.text, { fromHandsFree: handsFreeCapture });
         } catch (error) {
           showToast("Voice input failed: " + error.message, "error");
           setOrbState("idle");
+        } finally {
+          if (handsFreeMode) scheduleHandsFreeCapture(650);
         }
       };
       mediaRecorder.start();
-      updateMicButton(true, "Stop recording");
+      updateMicButton(true, handsFreeCapture ? "Hands-free on — click mic to stop" : "Stop recording");
       setOrbState("listening");
-      logActivity("Voice input started", "Recording a short local voice command", "voice");
-      showToast("Recording… tap the mic to finish (12-second limit).");
+      logActivity("Voice input started", handsFreeCapture ? "Hands-free local voice conversation is listening" : "Recording a short local voice command", "voice");
+      if (handsFreeCapture) {
+        try {
+          const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextCtor) {
+            voiceAudioContext = new AudioContextCtor();
+            const source = voiceAudioContext.createMediaStreamSource(microphoneStream);
+            voiceAudioAnalyser = voiceAudioContext.createAnalyser();
+            voiceAudioAnalyser.fftSize = 512;
+            source.connect(voiceAudioAnalyser);
+            const sample = new Uint8Array(voiceAudioAnalyser.fftSize);
+            voiceActivityTimer = window.setInterval(() => {
+              if (!handsFreeMode || !voiceAudioAnalyser || !mediaRecorder || mediaRecorder.state !== "recording") return;
+              voiceAudioAnalyser.getByteTimeDomainData(sample);
+              let squareSum = 0;
+              for (let i = 0; i < sample.length; i++) {
+                const value = (sample[i] - 128) / 128;
+                squareSum += value * value;
+              }
+              const rms = Math.sqrt(squareSum / sample.length);
+              const now = Date.now();
+              if (rms > 0.04) {
+                voiceHasDetectedSpeech = true;
+                lastVoiceActivityAt = now;
+              } else if (voiceHasDetectedSpeech && now - lastVoiceActivityAt >= 1_250) {
+                stopRecordedVoiceInput();
+              }
+            }, 90);
+          } else {
+            showToast("Automatic silence detection is unavailable; each turn will end at the 12-second limit.");
+          }
+        } catch (_) {
+          clearVoiceActivityWatch();
+          showToast("Silence detection could not start; each turn will end at the 12-second limit.");
+        }
+        showToast("Hands-free is on. Speak naturally; pause when you're done. Click the mic to stop.");
+      } else {
+        showToast("Recording… tap the mic to finish (12-second limit).");
+      }
       recordingStopTimer = window.setTimeout(stopRecordedVoiceInput, 12_000);
     } catch (error) {
+      clearVoiceActivityWatch();
       if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
       microphoneStream = null;
       mediaRecorder = null;
-      listening = false;
+      if (handsFreeMode) {
+        showToast("Hands-free microphone error: " + error.message, "error");
+        handsFreeMode = false;
+      } else {
+        showToast("Couldn't access the microphone: " + error.message, "error");
+      }
       updateMicButton(false);
-      showToast("Couldn't access the microphone: " + error.message, "error");
+    } finally {
+      startingVoiceCapture = false;
     }
   }
 
@@ -743,60 +907,49 @@
   }
 
   function toggleMicrophone() {
-    if (listening) {
+    if (handsFreeMode) {
+      handsFreeMode = false;
+      if (handsFreeRestartTimer !== null) window.clearTimeout(handsFreeRestartTimer);
+      handsFreeRestartTimer = null;
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
       if (recognition) {
-        recognition.stop();
-      } else {
-        stopRecordedVoiceInput();
-      }
-      return;
-    }
-    // Prefer recording a short clip and transcribing it on the local JARVIS
-    // server. This works in Firefox and avoids relying on remote browser STT.
-    if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined") {
-      startRecordedVoiceInput();
-      return;
-    }
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) {
-      showToast("This browser cannot record audio or provide speech recognition. Try allowing microphone access.", "error");
-      return;
-    }
-    try {
-      recognition = new Recognition();
-      recognition.lang = "en-CA";
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onstart = () => {
-        updateMicButton(true, "Stop voice input");
-        setOrbState("listening");
-        logActivity("Voice input started", "Browser speech recognition is listening", "voice");
-        showToast("Listening…");
-      };
-      recognition.onresult = (event) => {
-        const transcript = event.results?.[0]?.[0]?.transcript;
-        if (transcript) {
-          logActivity("Voice input captured", "Speech recognized", "voice");
-          sendMessage(transcript);
-        }
-      };
-      recognition.onerror = (event) => {
-        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-          showToast("Microphone permission was denied. Allow microphone access for JARVIS and retry.", "error");
-        } else {
-          showToast("Browser speech recognition failed (" + (event.error || "unknown error") + ").", "error");
-        }
-      };
-      recognition.onend = () => {
+        const active = recognition;
         recognition = null;
+        active.onend = null;
+        try { active.stop(); } catch (_) {}
+      }
+      if (mediaRecorder && mediaRecorder.state !== "inactive") stopRecordedVoiceInput();
+      else {
+        clearVoiceActivityWatch();
+        if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
+        microphoneStream = null;
         updateMicButton(false);
-        if (currentOrbState === "listening") setOrbState("idle");
-      };
-      recognition.start();
-    } catch (error) {
-      recognition = null;
-      showToast("Browser speech recognition could not start. Trying local transcription instead.", "error");
-      startRecordedVoiceInput();
+      }
+      showToast("Hands-free conversation stopped.");
+      return;
+    }
+    if (listening) {
+      if (recognition) recognition.stop();
+      else stopRecordedVoiceInput();
+      return;
+    }
+    handsFreeMode = true;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (!voiceReplies) {
+      voiceReplies = true;
+      elements.voiceOutput.setAttribute("aria-pressed", "true");
+      elements.voiceOutput.classList.add("active");
+      elements.voiceOutput.querySelector("span").textContent = "Voice on";
+    }
+    if (wakeWordEnabled) {
+      apiPost("/api/voice/wakeword", { enabled: false })
+        .then((result) => { wakeWordStatus = result.status; wakeWordEnabled = false; renderWakeWordButton(); syncWakeWordPolling(); })
+        .catch(() => {});
+    }
+    if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined") {
+      startRecordedVoiceInput({ handsFree: true });
+    } else {
+      startBrowserHandsFreeRecognition();
     }
   }
 
@@ -1060,6 +1213,7 @@
     return '<nav class="utility-module-tabs" aria-label="System console sections">' +
       '<button type="button" data-system-tab="status" class="' + (active === "status" ? "active" : "") + '" aria-pressed="' + (active === "status") + '">Status</button>' +
       '<button type="button" data-system-tab="models" class="' + (active === "models" ? "active" : "") + '" aria-pressed="' + (active === "models") + '">Models</button>' +
+      '<button type="button" data-system-tab="routines" class="' + (active === "routines" ? "active" : "") + '" aria-pressed="' + (active === "routines") + '">Routines</button>' +
       '<button type="button" data-system-tab="activity" class="' + (active === "activity" ? "active" : "") + '" aria-pressed="' + (active === "activity") + '">Activity feed</button></nav>';
   }
 
@@ -1073,11 +1227,82 @@
       renderActivityPanel();
       return;
     }
+    if (activeSystemTab === "routines") {
+      elements.utilityContent.innerHTML = renderSystemTabs("routines") + '<div class="utility-loading">Loading saved routines…</div>';
+      refreshRoutineList(false);
+      return;
+    }
     elements.utilityContent.innerHTML = renderSystemTabs("status") +
-      '<p class="utility-intro">System health, model settings, and recent activity live here now. Use the tabs above to switch sections.</p>' +
-      '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">STATUS</span><div><h3>JARVIS diagnostics</h3><p>Ask the assistant for a live system check, or open Models to change the active model.</p></div></div>' +
-      '<div class="utility-button-row"><button class="utility-primary" type="button" data-prompt="Check my system status and summarize the basics.">Ask JARVIS for diagnostics</button>' +
-      '<button class="utility-secondary" type="button" data-system-tab="models">Configure model</button></div></section>';
+      '<p class="utility-intro">Live local metrics, model configuration, and recent activity. These diagnostics run on this computer; JARVIS does not send them to a cloud model.</p>' +
+      '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">LIVE TELEMETRY</span><div><h3>System monitor</h3><p>CPU load, RAM, disk capacity, and supported NVIDIA GPU metrics.</p></div></div>' +
+      '<div class="utility-button-row"><span class="utility-muted" id="systemMetricsUpdated">Collecting metrics…</span><button class="utility-secondary" type="button" data-utility-action="metrics-refresh">Refresh metrics</button></div>' +
+      '<div class="kitchen-grid" id="systemMetrics"><div class="inline-status">Collecting local system metrics…</div></div></section>' +
+      '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">LOCAL-FIRST</span><div><h3>Offline-ready controls</h3><p>Memories, routines, workspace tools, and diagnostics are stored or executed locally. Chat generation needs your configured local model server; JARVIS does not silently switch to a cloud provider.</p></div></div>' +
+      '<div class="utility-button-row"><button class="utility-primary" type="button" data-system-tab="models">Check model connection</button>' +
+      '<button class="utility-secondary" type="button" data-prompt="Check the local model connection and system status. Report unavailable components honestly and do not use a cloud model.">Run local diagnostics</button></div></section>';
+    refreshSystemMetrics();
+  }
+
+  async function refreshSystemMetrics() {
+    const container = document.getElementById("systemMetrics");
+    if (!container) return;
+    try {
+      const response = await fetch("/api/status", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "System metrics unavailable.");
+      if (!document.contains(container) || currentUtilityView !== "system" || activeSystemTab !== "status") return;
+      const memory = data.memory && typeof data.memory === "object" ? data.memory : null;
+      const workspaceDisk = data.workspace_disk && typeof data.workspace_disk === "object" ? data.workspace_disk : null;
+      const rootDisk = data.root_disk && typeof data.root_disk === "object" ? data.root_disk : null;
+      const gpus = Array.isArray(data.gpus) ? data.gpus : [];
+      const metrics = [
+        ["CPU", (data.logical_cpu_threads ?? "—") + " threads", data.cpu_load_1m == null ? "Load average unavailable" : "1-minute load " + data.cpu_load_1m],
+        ["Memory", memory ? memory.used_gib + " / " + memory.total_gib + " GiB" : "Usage unavailable", memory ? memory.used_percent + "% used · " + memory.available_gib + " GiB available" : "RAM telemetry unavailable on this platform"],
+        ["Workspace disk", workspaceDisk ? workspaceDisk.free_gib + " GiB free" : "Unavailable", workspaceDisk ? workspaceDisk.used_percent + "% used" : "Disk telemetry unavailable"],
+        ["System disk", rootDisk ? rootDisk.free_gib + " GiB free" : "Unavailable", rootDisk ? rootDisk.used_percent + "% used" : "Disk telemetry unavailable"],
+        ["CPU temperature", data.cpu_temperature_c == null ? "Unavailable" : data.cpu_temperature_c + " °C", data.cpu_temperature_c == null ? "Needs supported sensors output" : "Reported by local sensors"],
+        ["GPU", gpus.length ? gpus.map((gpu) => gpu.name + (gpu.utilization_percent == null ? "" : " · " + gpu.utilization_percent + "%") + (gpu.temperature_c == null ? "" : " · " + gpu.temperature_c + " °C")).join("; ") : "No NVIDIA telemetry found", gpus.length ? gpus.map((gpu) => gpu.memory_used_mib == null || gpu.memory_total_mib == null ? "VRAM unavailable" : Math.round(gpu.memory_used_mib) + " / " + Math.round(gpu.memory_total_mib) + " MiB VRAM").join("; ") : "Works best when nvidia-smi is installed"]
+      ];
+      container.innerHTML = metrics.map((metric) =>
+        '<article class="utility-card"><div class="utility-index">' + escapeHtml(metric[0].toUpperCase()) + '</div><h3>' + escapeHtml(metric[1]) + '</h3><p>' + escapeHtml(metric[2]) + '</p></article>'
+      ).join("");
+      const updated = document.getElementById("systemMetricsUpdated");
+      if (updated) updated.textContent = "Updated " + new Date(data.collected_at || Date.now()).toLocaleTimeString();
+    } catch (error) {
+      if (document.contains(container)) container.innerHTML = '<div class="inline-status status-warn">' + escapeHtml(error.message) + '</div>';
+    }
+  }
+
+  async function refreshRoutineList(showNotice = false) {
+    try {
+      const response = await fetch("/api/routines", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not load saved routines.");
+      routineItems = Array.isArray(data.items) ? data.items : [];
+      if (currentUtilityView === "system" && activeSystemTab === "routines") renderRoutinePanel(data.limit || 30);
+      if (showNotice) showToast("Routines refreshed.", "success");
+    } catch (error) {
+      if (currentUtilityView === "system" && activeSystemTab === "routines") {
+        elements.utilityContent.innerHTML = renderSystemTabs("routines") + '<div class="utility-card"><p class="inline-status status-warn">' + escapeHtml(error.message) + '</p></div>';
+      }
+    }
+  }
+
+  function renderRoutinePanel(limit = 30) {
+    const rows = routineItems.map((routine) =>
+      '<article class="memory-row"><div><strong>' + escapeHtml(routine.name) + '</strong><p>' + escapeHtml(routine.prompt) + '</p><time>' + escapeHtml(routine.builtin ? "Built in" : routine.created_at || "Saved locally") + '</time></div>' +
+      '<div class="routine-actions"><button class="utility-secondary" type="button" data-utility-action="routine-run" data-id="' + escapeHtml(routine.id) + '">Run</button>' +
+      '<button class="utility-secondary" type="button" data-utility-action="routine-edit" data-id="' + escapeHtml(routine.id) + '">Edit</button>' +
+      '<button class="mini-icon-button" type="button" data-utility-action="routine-delete" data-id="' + escapeHtml(routine.id) + '" aria-label="Delete routine">×</button></div></article>'
+    ).join("");
+    elements.utilityContent.innerHTML = renderSystemTabs("routines") +
+      '<p class="utility-intro">Save reusable workflows. Running a routine sends its instructions to JARVIS; file writes, terminal commands, app launches, and other sensitive actions still require the normal approval step.</p>' +
+      '<section class="utility-card"><form class="utility-form" data-form="routine-save">' +
+      '<input type="hidden" id="routineId" name="id" value="">' +
+      '<label>Routine name<input id="routineName" name="name" maxlength="60" required placeholder="Gaming prep / Start coding…"></label>' +
+      '<label>Instructions<textarea id="routinePrompt" name="prompt" maxlength="4000" rows="4" required placeholder="Describe the steps JARVIS should follow. Include what it must ask you before changing."></textarea></label>' +
+      '<div class="utility-button-row"><button class="utility-secondary" type="button" data-utility-action="routine-reset">Clear form</button><button class="utility-primary" type="submit">Save routine</button></div></form></section>' +
+      '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">SAVED</span><div><h3>Your routines</h3><p>' + routineItems.length + ' / ' + limit + ' saved locally</p></div></div><div class="memory-list">' + (rows || '<div class="empty-state">No routines saved yet.</div>') + '</div></section>';
   }
 
   function renderKitchenPanel() {
@@ -1130,6 +1355,10 @@
     return (hours ? String(hours).padStart(2, "0") + ":" : "") +
       String(minutes).padStart(2, "0") + ":" + String(remainder).padStart(2, "0");
   }
+
+  window.setInterval(() => {
+    if (currentUtilityView === "system" && activeSystemTab === "status") refreshSystemMetrics();
+  }, 10_000);
 
   function tickKitchenTimers() {
     const now = Date.now();
@@ -1244,7 +1473,8 @@
       const response = await fetch("/api/memory", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load saved memories.");
-      if (currentUtilityView === "memory") renderMemoryPanel(data.items || [], data.limit || 100);
+      savedMemoryItems = Array.isArray(data.items) ? data.items : [];
+      if (currentUtilityView === "memory") renderMemoryPanel(savedMemoryItems, data.limit || 100);
     } catch (error) {
       if (currentUtilityView === "memory") {
         elements.utilityContent.innerHTML = '<div class="utility-card"><p class="inline-status status-warn">' + escapeHtml(error.message) + '</p></div>';
@@ -1254,8 +1484,8 @@
 
   function renderMemoryPanel(items, limit) {
     const rows = items.map((item) =>
-      '<article class="memory-row"><div><p>' + escapeHtml(item.fact) + '</p><time>' + escapeHtml(item.created_at || "Saved") + '</time></div>' +
-      '<button class="mini-icon-button" type="button" data-utility-action="memory-delete" data-id="' + escapeHtml(item.id) + '" aria-label="Delete memory">×</button></article>'
+      '<article class="memory-row"><div><p>' + escapeHtml(item.fact) + '</p><time>' + escapeHtml(item.updated_at || item.created_at || "Saved") + '</time></div>' +
+      '<div class="routine-actions"><button class="utility-secondary" type="button" data-utility-action="memory-edit" data-id="' + escapeHtml(item.id) + '">Edit</button><button class="mini-icon-button" type="button" data-utility-action="memory-delete" data-id="' + escapeHtml(item.id) + '" aria-label="Delete memory">×</button></div></article>'
     ).join("");
     elements.utilityContent.innerHTML = renderMemoryNotesTabs("memory") +
       '<p class="utility-intro">Saved notes are stored in a private local data file and included as context in future chats. JARVIS must ask before saving a note from conversation.</p>' +
@@ -1276,6 +1506,7 @@
           '<button class="coding-action-card" type="button" data-prompt="Review my current project for likely bugs, security problems, and easy performance wins. Inspect files first and report findings before editing anything."><strong>Find bugs</strong><span>Audit before making changes</span><b>↗</b></button>' +
           '<button class="coding-action-card" type="button" data-prompt="Help me implement the next feature in my project. First inspect the existing architecture and propose a small, testable plan; wait for my approval before editing files."><strong>Build a feature</strong><span>Plan and test changes</span><b>↗</b></button>' +
           '<button class="coding-action-card" type="button" data-prompt="Run the existing project tests and explain any failures. Inspect the project test setup first; ask for approval before running commands."><strong>Run tests</strong><span>Check the project health</span><b>↗</b></button>' +
+          '<button class="coding-action-card" type="button" data-prompt="Review the current uncommitted git changes inside my workspace. Inspect git status and the diff, check for accidental or risky changes, and summarize the exact files changed. Do not modify or commit anything."><strong>Review changes</strong><span>Inspect the working diff</span><b>↗</b></button>' +
         '</div>';
     } catch (error) {
       if (currentUtilityView === "coding") elements.utilityContent.innerHTML = '<div class="utility-card"><p class="inline-status status-warn">' + escapeHtml(error.message) + '</p></div>';
@@ -1359,6 +1590,18 @@
         .catch((error) => showToast(error.message, "error"));
     }
     if (form.dataset.form === "model-manager") applyModelForm(form);
+    if (form.dataset.form === "routine-save") {
+      const id = String(data.get("id") || "");
+      const name = String(data.get("name") || "").trim();
+      const prompt = String(data.get("prompt") || "").trim();
+      apiPost("/api/routines", { action: "save", id, name, prompt })
+        .then((result) => {
+          logActivity("Routine saved", result.item?.name || name, "routine");
+          showToast("Routine saved locally.", "success");
+          refreshRoutineList(false);
+        })
+        .catch((error) => showToast(error.message, "error"));
+    }
   }
 
   function handleUtilityClick(event) {
@@ -1387,6 +1630,52 @@
     if (!button) return;
     const action = button.dataset.utilityAction;
     const id = button.dataset.id;
+    if (action === "metrics-refresh") { refreshSystemMetrics(); return; }
+    if (action === "routine-reset") {
+      const form = elements.utilityContent.querySelector('form[data-form="routine-save"]');
+      if (form) form.reset();
+      const routineIdInput = document.getElementById("routineId");
+      if (routineIdInput) routineIdInput.value = "";
+      return;
+    }
+    if (action === "routine-edit") {
+      const routine = routineItems.find((item) => item.id === id);
+      if (!routine) return;
+      const routineIdInput = document.getElementById("routineId");
+      const routineNameInput = document.getElementById("routineName");
+      const routinePromptInput = document.getElementById("routinePrompt");
+      if (routineIdInput) routineIdInput.value = routine.id;
+      if (routineNameInput) routineNameInput.value = routine.name;
+      if (routinePromptInput) routinePromptInput.value = routine.prompt;
+      routineNameInput?.focus();
+      elements.utilityContent.querySelector('form[data-form="routine-save"]')?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+    if (action === "routine-run") {
+      const routine = routineItems.find((item) => item.id === id);
+      if (!routine) return;
+      const routinePrompt = "Run this saved JARVIS routine: " + routine.name + "\n\nInstructions:\n" + routine.prompt +
+        "\n\nSafety: inspect before acting. Use the existing approval flow for every file write, terminal command, app launch, settings change, or deletion. If the model is offline or a capability is unavailable, say so clearly.";
+      closeUtility();
+      sendMessage(routinePrompt);
+      return;
+    }
+    if (action === "routine-delete") {
+      apiPost("/api/routines", { action: "delete", id })
+        .then(() => { logActivity("Routine deleted", "", "routine"); showToast("Routine deleted.", "success"); refreshRoutineList(false); })
+        .catch((error) => showToast(error.message, "error"));
+      return;
+    }
+    if (action === "memory-edit") {
+      const item = savedMemoryItems.find((row) => row.id === id);
+      if (!item) return;
+      const revised = window.prompt("Edit this saved memory. It will update future JARVIS chats:", item.fact);
+      if (revised === null) return;
+      apiPost("/api/memory/update", { id, fact: revised })
+        .then((result) => { logActivity("Persistent memory edited", result.item?.fact || "", "memory"); showToast("Memory updated for future chats.", "success"); refreshMemoryPanel(); })
+        .catch((error) => showToast(error.message, "error"));
+      return;
+    }
     if (action === "history-open") {
       const conversation = chatHistory.find((item) => item.id === id);
       if (conversation) restoreArchivedConversation(conversation, true);
