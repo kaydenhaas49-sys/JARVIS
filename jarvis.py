@@ -1908,16 +1908,24 @@ def _pending_action_payload(pending_id: str, tool_name: str, arguments: dict[str
                 "summary": fact, "details": {"fact": fact}}
     if tool_name == "write_file":
         path = str(arguments.get("path", ""))
-        try:
-            exists = resolve_workspace_path(path).exists()
-        except ValueError:
-            exists = False
         content = str(arguments.get("content", ""))
+        try:
+            target = resolve_workspace_path(path)
+            exists = target.is_file()
+            old_text = target.read_text(encoding="utf-8") if exists else ""
+            diff = "".join(difflib.unified_diff(
+                old_text.splitlines(keepends=True), content.splitlines(keepends=True),
+                fromfile=("a/" + path if exists else "/dev/null"), tofile="b/" + path, n=3))
+            if not diff:
+                diff = "(No textual changes.)"
+        except (ValueError, OSError, UnicodeDecodeError) as exc:
+            exists = False
+            diff = "Diff preview unavailable: " + str(exc)
         return {
-            "id": pending_id, "tool": tool_name, "title": "Write a workspace file",
+            "id": pending_id, "tool": tool_name, "title": "Review workspace diff",
             "summary": ("Replace" if exists else "Create") + f" {path}",
             "details": {"path": path, "exists": exists, "bytes": len(content.encode("utf-8"))},
-            "preview": content[:8_000], "preview_truncated": len(content) > 8_000,
+            "preview": diff[:12_000], "preview_truncated": len(diff) > 12_000,
         }
     if tool_name == "run_command":
         command = str(arguments.get("command", ""))
