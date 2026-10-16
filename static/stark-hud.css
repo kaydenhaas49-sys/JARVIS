@@ -8,6 +8,22 @@
   font-display: swap;
 }
 
+/* Locally bundled Chakra Petch; external font loads are blocked by the app CSP. */
+@font-face {
+  font-family: "Chakra Petch";
+  src: url("/fonts/ChakraPetch-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Chakra Petch";
+  src: url("/fonts/ChakraPetch-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   --lcars-black: #030912;
   --lcars-bg: #030912;
@@ -171,7 +187,7 @@ kbd { background: rgba(10, 43, 65, .55) !important; border-color: rgba(70, 202, 
 }
 .user-avatar { color: #a6bdff !important; border-color: rgba(120, 161, 255, .3) !important; background: rgba(33, 63, 120, .22) !important; }
 .message-name { color: #69e6ff !important; font: 700 8px/1.4 ui-monospace, monospace !important; letter-spacing: .16em !important; }
-.message-content { color: #b7d4e3 !important; font-family: "Orbitron", "Trebuchet MS", ui-sans-serif, system-ui, sans-serif !important; font-size: 14px !important; font-weight: 400 !important; line-height: 1.78 !important; letter-spacing: .005em !important; }
+.message-content { color: #b7d4e3 !important; font-family: "Chakra Petch", "Trebuchet MS", ui-sans-serif, system-ui, sans-serif !important; font-size: 14px !important; font-weight: 400 !important; line-height: 1.78 !important; letter-spacing: .005em !important; }
 .message-content strong { color: #e3fbff !important; }
 .message-content em { color: #80cfff !important; }
 .code-block {
