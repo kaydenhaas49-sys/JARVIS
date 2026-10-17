@@ -60,10 +60,13 @@ def load_engine() -> None:
 
 
 def prepare_target_text(text: str) -> str:
-    """Normalize the assistant's name so TTS won't spell the all-caps acronym aloud."""
+    """Use a pronunciation-friendly spelling for the name in generated speech only."""
     clean_text = str(text or "").strip()
-    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\s*\.?\b", "Jarvis", clean_text, flags=re.IGNORECASE)
-    clean_text = re.sub(r"\bJARVIS\b", "Jarvis", clean_text, flags=re.IGNORECASE)
+    # The cloned voice tends to stretch the unfamiliar proper noun "Jarvis".
+    # "Jarviss" cues a familiar two-syllable English reading without adding a
+    # hyphen/pause; this only affects synthesized audio, not the displayed reply.
+    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\s*\.?\b", "Jarviss", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"\bJARVIS\b", "Jarviss", clean_text, flags=re.IGNORECASE)
     return clean_text
 
 
