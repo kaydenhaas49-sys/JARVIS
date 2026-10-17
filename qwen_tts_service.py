@@ -62,11 +62,11 @@ def load_engine() -> None:
 def prepare_target_text(text: str) -> str:
     """Use a pronunciation-friendly spelling for the name in generated speech only."""
     clean_text = str(text or "").strip()
-    # The cloned voice tends to stretch the unfamiliar proper noun "Jarvis".
-    # "Jarviss" cues a familiar two-syllable English reading without adding a
-    # hyphen/pause; this only affects synthesized audio, not the displayed reply.
-    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\.?(?=\W|$)", "Jarviss", clean_text, flags=re.IGNORECASE)
-    clean_text = re.sub(r"\bJARVIS\b", "Jarviss", clean_text, flags=re.IGNORECASE)
+    # Mark the stress and separate the final syllable so Qwen is less likely
+    # to voice the final /s/ as /z/. This only changes synthesized audio text.
+    spoken_name = "JAR-viss"
+    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\.?(?=\W|$)", spoken_name, clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"\bJARVIS\b", spoken_name, clean_text, flags=re.IGNORECASE)
     return clean_text
 
 
