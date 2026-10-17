@@ -681,7 +681,7 @@
     }
     const fence = String.fromCharCode(96).repeat(3);
     const clean = String(text).replace(new RegExp(fence + "[\\s\\S]*?" + fence, "g"), " code block omitted ")
-      .replace(/[*_#>]/g, "").replace(/\\s+/g, " ").trim().slice(0, 3_500);
+      .replace(/[*_#>]/g, "").replace(/\s+/g, " ").trim().slice(0, 3_500);
     if (!clean) return Promise.resolve();
 
     cancelSpokenReply();
