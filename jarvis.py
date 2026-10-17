@@ -26,6 +26,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from voice import WakeWordManager, missing_voice_packages, transcribe_audio_bytes
+from jarvis_tts import status as tts_voice_status, synthesize_wav as synthesize_tts_wav
 
 
 def _load_env_file(path: Path) -> None:
@@ -2133,6 +2134,8 @@ class JarvisHandler(BaseHTTPRequestHandler):
             return self._send_json(200, get_system_status())
         if route == "/api/app-data":
             return self._send_json(200, _dashboard_data_payload())
+        if route == "/api/tts/status":
+            return self._send_json(200, tts_voice_status())
         if route == "/api/voice/status":
             return self._send_json(200, voice_status())
         if route == "/api/voice/events":
@@ -2199,6 +2202,19 @@ class JarvisHandler(BaseHTTPRequestHandler):
                     raise ValueError("That voice recording is empty or too large. Keep clips under 12 seconds.")
                 text = transcribe_audio_bytes(audio_bytes, _voice_audio_suffix(payload.get("mime_type")))
                 return self._send_json(200, {"ok": True, "text": text})
+            if route == "/api/tts/synthesize":
+                text_value = payload.get("text")
+                if not isinstance(text_value, str):
+                    raise ValueError("Speech text must be a string.")
+                audio_bytes = synthesize_tts_wav(text_value)
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(audio_bytes)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(audio_bytes)
+                return
             if route == "/api/chat":
                 return self._send_json(200, handle_chat(payload))
             if route == "/api/approve":

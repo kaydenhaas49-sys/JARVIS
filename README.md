@@ -6,7 +6,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 
 - Chat with a local model through llama.cpp, LM Studio, or another OpenAI-compatible endpoint.
 - Hands-free voice conversations: local speech-to-text detects pauses, JARVIS answers aloud, then resumes listening; click the mic again to stop. Browser speech recognition is used only as a fallback when local recording is unavailable.
-- Spoken replies through browser text-to-speech, plus short local speech-to-text recordings; microphone audio is processed locally and not saved.
+- Spoken replies use the bundled JARVIS High Piper ONNX voice locally when the model and optional Piper package are available, with browser speech as a fallback. Microphone speech-to-text is also processed locally; microphone audio is not saved.
 - Opt-in local "Hey JARVIS" wake word with one-shot command capture, automatic re-arming after the answer, and a visible on/off indicator.
 - Voice input and wake-word processing can run on-device with the optional voice dependencies; microphone audio is not stored.
 - Model manager to discover compatible server models and save the selected model/endpoint locally.
@@ -57,7 +57,7 @@ python3 -m venv .venv
 .venv/bin/python jarvis.py
 ```
 
-The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX backend, but upstream currently declares `tflite-runtime` unconditionally on Linux, and that package has no compatible wheel for newer Python versions. JARVIS installs the ONNX runtime dependencies explicitly instead. Tap the mic button once to start hands-free conversation. JARVIS listens locally for your speech, detects a pause, transcribes the turn, speaks its reply, and resumes listening. Tap the mic again to stop. If silence detection is unavailable, a turn is capped at 12 seconds. The first transcription downloads the selected Whisper model. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
+The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX backend, but upstream currently declares `tflite-runtime` unconditionally on Linux, and that package has no compatible wheel for newer Python versions. JARVIS installs the ONNX runtime dependencies explicitly instead. Tap the mic button once to start hands-free conversation. JARVIS listens locally for your speech, detects a pause, transcribes the turn, speaks its reply using lcars-reference/jarvis-high.onnx when Piper is available, and resumes listening. Spoken replies fall back to the browser voice if Piper or the model is unavailable. Tap the mic again to stop. If silence detection is unavailable, a turn is capped at 12 seconds. The first transcription downloads the selected Whisper model. The local Piper ONNX voice is bundled through Git LFS; make sure git lfs pull has downloaded its actual model bytes. Install the .[voice] extra in the same virtual environment used to run JARVIS to enable Piper TTS. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
 
 ## Configuration
 

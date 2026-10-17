@@ -28,6 +28,11 @@
   let listening = false;
   let startingVoiceCapture = false;
   let voiceReplies = false;
+  let localTtsStatusPromise = null;
+  let activeTtsAudio = null;
+  let activeTtsObjectUrl = null;
+  let activeSpeechFinish = null;
+  let speechPlaybackToken = 0;
   let handsFreeMode = false;
   let voiceActivityTimer = null;
   let handsFreeRestartTimer = null;
@@ -632,39 +637,154 @@
     closeSidebar();
   }
 
+  async function refreshLocalTtsStatus() {
+    if (!localTtsStatusPromise) {
+      localTtsStatusPromise = fetch("/api/tts/status", { cache: "no-store" })
+        .then(async (response) => {
+          const status = await response.json();
+          if (!response.ok) throw new Error(status.error || "Local voice status unavailable.");
+          return status;
+        })
+        .catch(() => ({ available: false }));
+    }
+    return localTtsStatusPromise;
+  }
+
+  function cancelSpokenReply() {
+    speechPlaybackToken += 1;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    const finish = activeSpeechFinish;
+    if (finish) {
+      finish();
+      return;
+    }
+    if (activeTtsAudio) {
+      activeTtsAudio.onended = null;
+      activeTtsAudio.onerror = null;
+      activeTtsAudio.pause();
+      activeTtsAudio.removeAttribute("src");
+      try { activeTtsAudio.load(); } catch (_) {}
+      activeTtsAudio = null;
+    }
+    if (activeTtsObjectUrl) {
+      URL.revokeObjectURL(activeTtsObjectUrl);
+      activeTtsObjectUrl = null;
+    }
+    setOrbState("idle");
+  }
+
   function speak(text) {
+    if (!voiceReplies || !text) {
+      cancelSpokenReply();
+      setOrbState("idle");
+      return Promise.resolve();
+    }
+    const fence = String.fromCharCode(96).repeat(3);
+    const clean = String(text).replace(new RegExp(fence + "[\\s\\S]*?" + fence, "g"), " code block omitted ")
+      .replace(/[*_#>]/g, "").replace(/\\s+/g, " ").trim().slice(0, 3_500);
+    if (!clean) return Promise.resolve();
+
+    cancelSpokenReply();
+    const token = speechPlaybackToken;
     return new Promise((resolve) => {
-      if (!voiceReplies || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined" || !text) {
-        setOrbState("idle");
-        resolve();
-        return;
-      }
-      const synthesis = window.speechSynthesis;
-      synthesis.cancel();
-      const fence = String.fromCharCode(96).repeat(3);
-      const clean = String(text).replace(new RegExp(fence + "[\\s\\S]*?" + fence, "g"), " code block omitted ")
-        .replace(/[*_#>]/g, "").replace(/\s+/g, " ").trim().slice(0, 3_500);
-      if (!clean) { resolve(); return; }
-      const utterance = new SpeechSynthesisUtterance(clean);
-      const voices = synthesis.getVoices();
-      utterance.voice = voices.find((voice) => /^en-CA$/i.test(voice.lang)) ||
-        voices.find((voice) => /^en-(US|GB)/i.test(voice.lang)) || null;
-      utterance.lang = utterance.voice?.lang || "en-CA";
-      utterance.rate = 1.02;
-      utterance.pitch = 0.94;
       let settled = false;
+      let watchdog = null;
+      let audio = null;
+      let objectUrl = null;
+
       const finish = () => {
         if (settled) return;
         settled = true;
+        if (watchdog !== null) window.clearTimeout(watchdog);
+        if (activeSpeechFinish === finish) activeSpeechFinish = null;
+        if (activeTtsAudio === audio) activeTtsAudio = null;
+        if (audio) {
+          audio.onended = null;
+          audio.onerror = null;
+          audio.pause();
+          audio.removeAttribute("src");
+          try { audio.load(); } catch (_) {}
+        }
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+          if (activeTtsObjectUrl === objectUrl) activeTtsObjectUrl = null;
+        }
         setOrbState("idle");
         resolve();
       };
-      utterance.onstart = () => setOrbState("speaking");
-      utterance.onend = finish;
-      utterance.onerror = finish;
-      synthesis.speak(utterance);
-      // Resolve on cancellation too, so wake-word re-arming cannot get stuck.
-      window.setTimeout(finish, 120_000);
+      activeSpeechFinish = finish;
+
+      const speakInBrowser = () => {
+        if (token !== speechPlaybackToken) { finish(); return; }
+        if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+          finish();
+          return;
+        }
+        const synthesis = window.speechSynthesis;
+        synthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(clean);
+        const voices = synthesis.getVoices();
+        utterance.voice = voices.find((voice) => /^en-CA$/i.test(voice.lang)) ||
+          voices.find((voice) => /^en-(US|GB)/i.test(voice.lang)) || null;
+        utterance.lang = utterance.voice?.lang || "en-CA";
+        utterance.rate = 1.02;
+        utterance.pitch = 0.94;
+        utterance.onstart = () => setOrbState("speaking");
+        utterance.onend = finish;
+        utterance.onerror = finish;
+        synthesis.speak(utterance);
+        watchdog = window.setTimeout(finish, 120_000);
+      };
+
+      const fallbackFromAudio = () => {
+        if (token !== speechPlaybackToken) return;
+        if (activeTtsAudio === audio) activeTtsAudio = null;
+        if (audio) {
+          audio.onended = null;
+          audio.onerror = null;
+          audio.pause();
+          audio.removeAttribute("src");
+          try { audio.load(); } catch (_) {}
+        }
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+          if (activeTtsObjectUrl === objectUrl) activeTtsObjectUrl = null;
+        }
+        audio = null;
+        objectUrl = null;
+        speakInBrowser();
+      };
+
+      (async () => {
+        const status = await refreshLocalTtsStatus();
+        if (token !== speechPlaybackToken) return;
+        if (!status.available) {
+          speakInBrowser();
+          return;
+        }
+        try {
+          const response = await fetch("/api/tts/synthesize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: clean }),
+          });
+          if (!response.ok) throw new Error("Local speech generation failed.");
+          const blob = await response.blob();
+          if (token !== speechPlaybackToken) return;
+          objectUrl = URL.createObjectURL(blob);
+          activeTtsObjectUrl = objectUrl;
+          audio = new Audio(objectUrl);
+          activeTtsAudio = audio;
+          audio.onplay = () => setOrbState("speaking");
+          audio.onended = finish;
+          audio.onerror = fallbackFromAudio;
+          watchdog = window.setTimeout(finish, 120_000);
+          const playback = audio.play();
+          if (playback && typeof playback.catch === "function") playback.catch(fallbackFromAudio);
+        } catch (_) {
+          if (token === speechPlaybackToken) speakInBrowser();
+        }
+      })();
     });
   }
 
@@ -673,7 +793,7 @@
     elements.voiceOutput.setAttribute("aria-pressed", String(voiceReplies));
     elements.voiceOutput.classList.toggle("active", voiceReplies);
     elements.voiceOutput.querySelector("span").textContent = voiceReplies ? "Voice on" : "Voice off";
-    if (!voiceReplies && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (!voiceReplies) cancelSpokenReply();
     logActivity(voiceReplies ? "Spoken replies enabled" : "Spoken replies disabled", "Browser speech synthesis setting changed", "voice");
     showToast(voiceReplies ? "Spoken replies enabled." : "Spoken replies disabled.");
   }
@@ -947,9 +1067,9 @@
   }
 
   function toggleMicrophone() {
-    if (handsFreeMode && window.speechSynthesis?.speaking) {
+    if (handsFreeMode && (window.speechSynthesis?.speaking || (activeTtsAudio && !activeTtsAudio.paused))) {
       // A deliberate mic click interrupts the spoken reply and returns to capture.
-      window.speechSynthesis.cancel();
+      cancelSpokenReply();
       scheduleHandsFreeCapture(180);
       showToast("Response interrupted. Listening…");
       return;
@@ -958,7 +1078,7 @@
       handsFreeMode = false;
       if (handsFreeRestartTimer !== null) window.clearTimeout(handsFreeRestartTimer);
       handsFreeRestartTimer = null;
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      cancelSpokenReply();
       if (recognition) {
         const active = recognition;
         recognition = null;
@@ -981,7 +1101,7 @@
       return;
     }
     handsFreeMode = true;
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    cancelSpokenReply();
     if (!voiceReplies) {
       voiceReplies = true;
       elements.voiceOutput.setAttribute("aria-pressed", "true");

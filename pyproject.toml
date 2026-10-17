@@ -22,6 +22,7 @@ voice = [
   "scipy>=1.3,<2",
   "scikit-learn>=1,<2",
   "requests>=2,<3",
+  "piper-tts>=1.2.0,<2",
 ]
 
 [tool.ruff]
@@ -35,5 +36,5 @@ testpaths = ["tests"]
 # in the editable distribution. The static/ and reference folders are app data,
 # not Python packages that setuptools should auto-discover.
 [tool.setuptools]
-py-modules = ["jarvis", "voice"]
+py-modules = ["jarvis", "voice", "jarvis_tts"]
 include-package-data = false
