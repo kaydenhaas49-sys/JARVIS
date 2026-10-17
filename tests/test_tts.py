@@ -38,6 +38,23 @@ class LocalTtsTests(unittest.TestCase):
             self.assertTrue(result["model_ready"])
             self.assertTrue(result["local"])
 
+    def test_malformed_wav_is_rejected_before_browser_playback(self):
+        with self.assertRaisesRegex(RuntimeError, "invalid WAV"):
+            jarvis_tts._validate_wav(b"not a wav file")
+
+    def test_valid_wav_is_preserved(self):
+        import io
+        import wave
+
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(22050)
+            wav_file.writeframes(bytes([0, 0]) * 100)
+        payload = output.getvalue()
+        self.assertEqual(jarvis_tts._validate_wav(payload), payload)
+
     def test_empty_text_is_rejected(self):
         with self.assertRaises(ValueError):
             jarvis_tts.synthesize_wav("   ")

@@ -88,6 +88,23 @@ def _prepare_text(text: str) -> str:
     return text
 
 
+def _validate_wav(audio_bytes: bytes) -> bytes:
+    """Reject empty or malformed WAV output before it reaches the browser."""
+    try:
+        with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            sample_rate = wav_file.getframerate()
+            frame_count = wav_file.getnframes()
+            if channels < 1 or sample_width not in {1, 2, 3, 4} or sample_rate < 8_000 or frame_count < 1:
+                raise RuntimeError("Piper returned an empty or invalid WAV stream.")
+            if not wav_file.readframes(1):
+                raise RuntimeError("Piper returned a WAV file with no audio frames.")
+    except (wave.Error, EOFError, OSError) as exc:
+        raise RuntimeError("Piper returned an invalid WAV file that browsers cannot decode.") from exc
+    return audio_bytes
+
+
 def synthesize_wav(text: str) -> bytes:
     """Generate a WAV file using the local ONNX voice model."""
     clean_text = _prepare_text(text)
@@ -115,6 +132,6 @@ def synthesize_wav(text: str) -> bytes:
             settings = SynthesisConfig(length_scale=1.0, noise_scale=0.45, noise_w_scale=0.55)
             with wave.open(output, "wb") as wav_file:
                 _VOICE.synthesize_wav(clean_text, wav_file, syn_config=settings)
-            return output.getvalue()
+            return _validate_wav(output.getvalue())
         except Exception as exc:
             raise RuntimeError(f"Local Piper synthesis failed: {exc}") from exc

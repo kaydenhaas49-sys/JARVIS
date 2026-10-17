@@ -742,9 +742,24 @@
         watchdog = window.setTimeout(finish, 120_000);
       };
 
-      const fallbackFromAudio = () => {
+      const fallbackFromAudio = (playbackError) => {
         if (token !== speechPlaybackToken) return;
-        warnLocalTtsOnce("JARVIS generated audio, but your browser could not play it. Check the local Piper voice status and audio output.");
+        const mediaError = audio?.error;
+        const mediaReasons = {
+          1: "playback was aborted",
+          2: "the browser could not load the generated audio",
+          3: "the browser could not decode the WAV file",
+          4: "the browser does not support the generated audio format",
+        };
+        let reason = mediaReasons[mediaError?.code] || "the browser did not provide a media error code";
+        if (playbackError?.name === "NotAllowedError") reason = "the browser blocked autoplay (NotAllowedError)";
+        else if (playbackError?.name === "NotSupportedError") reason = "the browser rejected the audio format (NotSupportedError)";
+        else if (playbackError?.name && playbackError.name !== "Event") reason = playbackError.name + (playbackError.message ? ": " + playbackError.message : "");
+        console.error("JARVIS local audio playback failed", {
+          reason: reason, mediaErrorCode: mediaError?.code ?? null,
+          mediaErrorMessage: mediaError?.message || "", hasAudioSource: Boolean(audio?.src),
+        });
+        warnLocalTtsOnce("JARVIS audio playback failed: " + reason + ". Browser speech will be tried instead.");
         if (activeTtsAudio === audio) activeTtsAudio = null;
         if (audio) {
           audio.onended = null;
