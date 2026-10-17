@@ -55,8 +55,9 @@ class WorkspaceFeatureTests(unittest.TestCase):
             with p1, p2, mock.patch.object(jarvis, "PROJECTS_PATH", root / "projects.json"):
                 result = jarvis.manage_project({"action": "save", "name": "Game", "path": "game", "description": "Prototype", "status": "active"})
                 project_id = result["item"]["id"]
-                task = jarvis.manage_project({"action": "task-add", "id": project_id, "title": "Add controller"})["task"]
-                jarvis.manage_project({"action": "task-toggle", "id": project_id, "task_id": task["id"], "done": True})
+                added = jarvis.manage_project({"action": "task-add", "id": project_id, "title": "Add controller"})
+                task_id = added["item"]["tasks"][0]["id"]
+                jarvis.manage_project({"action": "task-toggle", "id": project_id, "task_id": task_id, "done": True})
                 item = jarvis.project_items()[0]
                 self.assertEqual(item["path"], "game")
                 self.assertTrue(item["tasks"][0]["done"])
