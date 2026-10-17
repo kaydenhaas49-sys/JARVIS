@@ -95,7 +95,7 @@ def synthesize_wav(text: str) -> bytes:
     if not model_ready:
         raise RuntimeError(message)
     if not _piper_installed():
-        raise RuntimeError("Piper is not installed. Run .venv/bin/pip install -e .[voice] from the JARVIS folder.")
+        raise RuntimeError("Piper is not installed. From the JARVIS folder, run the optional voice install command from the README.")
 
     global _VOICE
     try:
