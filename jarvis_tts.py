@@ -107,7 +107,7 @@ def synthesize_wav(text: str) -> bytes:
     with _LOCK:
         try:
             if _VOICE is None:
-                _VOICE = PiperVoice.load(str(MODEL_PATH))
+                _VOICE = PiperVoice.load(str(MODEL_PATH), config_path=str(CONFIG_PATH))
             output = io.BytesIO()
             settings = SynthesisConfig(length_scale=1.0, noise_scale=0.45, noise_w_scale=0.55)
             with wave.open(output, "wb") as wav_file:

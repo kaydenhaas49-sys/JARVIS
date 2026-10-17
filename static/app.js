@@ -28,7 +28,7 @@
   let listening = false;
   let startingVoiceCapture = false;
   let voiceReplies = false;
-  let localTtsStatusPromise = null;
+  let lastLocalTtsWarning = "";
   let activeTtsAudio = null;
   let activeTtsObjectUrl = null;
   let activeSpeechFinish = null;
@@ -638,16 +638,21 @@
   }
 
   async function refreshLocalTtsStatus() {
-    if (!localTtsStatusPromise) {
-      localTtsStatusPromise = fetch("/api/tts/status", { cache: "no-store" })
-        .then(async (response) => {
-          const status = await response.json();
-          if (!response.ok) throw new Error(status.error || "Local voice status unavailable.");
-          return status;
-        })
-        .catch(() => ({ available: false }));
+    try {
+      const response = await fetch("/api/tts/status", { cache: "no-store" });
+      const status = await response.json();
+      if (!response.ok) throw new Error(status.error || "Local voice status unavailable.");
+      return status;
+    } catch (_) {
+      return { available: false, message: "Could not check the local JARVIS voice service." };
     }
-    return localTtsStatusPromise;
+  }
+
+  function warnLocalTtsOnce(message) {
+    const warning = String(message || "Local JARVIS voice is unavailable.");
+    if (warning === lastLocalTtsWarning) return;
+    lastLocalTtsWarning = warning;
+    showToast(warning, "error");
   }
 
   function cancelSpokenReply() {
@@ -759,16 +764,25 @@
         const status = await refreshLocalTtsStatus();
         if (token !== speechPlaybackToken) return;
         if (!status.available) {
+          warnLocalTtsOnce((status.message || "The local JARVIS voice is unavailable.") + " Using browser speech instead.");
           speakInBrowser();
           return;
         }
+        lastLocalTtsWarning = "";
         try {
           const response = await fetch("/api/tts/synthesize", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text: clean }),
           });
-          if (!response.ok) throw new Error("Local speech generation failed.");
+          if (!response.ok) {
+            let detail = "Local speech generation failed (HTTP " + response.status + ").";
+            try {
+              const body = await response.json();
+              if (typeof body.error === "string" && body.error.trim()) detail = body.error.trim();
+            } catch (_) {}
+            throw new Error(detail);
+          }
           const blob = await response.blob();
           if (token !== speechPlaybackToken) return;
           objectUrl = URL.createObjectURL(blob);
@@ -781,8 +795,11 @@
           watchdog = window.setTimeout(finish, 120_000);
           const playback = audio.play();
           if (playback && typeof playback.catch === "function") playback.catch(fallbackFromAudio);
-        } catch (_) {
-          if (token === speechPlaybackToken) speakInBrowser();
+        } catch (error) {
+          if (token === speechPlaybackToken) {
+            warnLocalTtsOnce((error?.message || "Local speech generation failed.") + " Using browser speech instead.");
+            speakInBrowser();
+          }
         }
       })();
     });
