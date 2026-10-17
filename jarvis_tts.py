@@ -8,9 +8,12 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import logging
 import os
 import re
 import threading
+import urllib.error
+import urllib.request
 import wave
 from pathlib import Path
 from typing import Any
@@ -57,18 +60,43 @@ def _model_state() -> tuple[bool, str]:
     return True, ""
 
 
+QWEN_TTS_URL = os.environ.get("JARVIS_QWEN_TTS_URL", "http://127.0.0.1:8766").rstrip("/")
+
+
+def _qwen_service_status(timeout: float = 0.35) -> dict[str, Any] | None:
+    """Return local Qwen sidecar health, or None if it is not running."""
+    try:
+        request = urllib.request.Request(QWEN_TTS_URL + "/health", headers={"Accept": "application/json"})
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read(16_384).decode("utf-8"))
+        return data if isinstance(data, dict) and data.get("available") is True else None
+    except (OSError, urllib.error.URLError, TimeoutError, ValueError, UnicodeDecodeError):
+        return None
+
+
 def status() -> dict[str, Any]:
     model_ready, model_message = _model_state()
     piper_ready = _piper_installed()
-    if not piper_ready:
-        message = "Piper is not installed. From the JARVIS folder, run the optional voice install command from the README."
+    qwen_ready = _qwen_service_status() is not None
+    available = qwen_ready or bool(model_ready and piper_ready)
+    if qwen_ready:
+        message = "Qwen3-TTS voice cloning is active; Piper remains available as the fallback."
+        voice = "Qwen3-TTS JARVIS voice clone"
+    elif model_ready and piper_ready:
+        message = "Qwen voice service is not running; using the bundled Piper JARVIS voice."
+        voice = "JARVIS High (Piper ONNX)"
+    elif not piper_ready:
+        message = "Qwen voice service is not running and Piper is not installed. Start the Qwen launcher or install optional voice packages."
+        voice = "Unavailable"
     else:
         message = model_message
+        voice = "JARVIS High (Piper ONNX)"
     return {
-        "available": bool(model_ready and piper_ready),
+        "available": available,
         "model_ready": model_ready,
         "piper_installed": piper_ready,
-        "voice": "JARVIS High (Piper ONNX)",
+        "qwen_available": qwen_ready,
+        "voice": voice,
         "message": message,
         "local": True,
     }
@@ -105,14 +133,29 @@ def _validate_wav(audio_bytes: bytes) -> bytes:
     return audio_bytes
 
 
-def synthesize_wav(text: str) -> bytes:
-    """Generate a WAV file using the local ONNX voice model."""
-    clean_text = _prepare_text(text)
+def _synthesize_with_qwen(text: str, timeout: float = 240.0) -> bytes:
+    request = urllib.request.Request(
+        QWEN_TTS_URL + "/synthesize",
+        data=json.dumps({"text": text}, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "audio/wav"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            audio_bytes = response.read(32_000_000)
+            if not audio_bytes:
+                raise RuntimeError("Qwen returned an empty audio response.")
+            return _validate_wav(audio_bytes)
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise RuntimeError("Qwen voice service is unavailable or could not finish synthesis.") from exc
+
+
+def _synthesize_with_piper(clean_text: str) -> bytes:
     model_ready, message = _model_state()
     if not model_ready:
         raise RuntimeError(message)
     if not _piper_installed():
-        raise RuntimeError("Piper is not installed. From the JARVIS folder, run the optional voice install command from the README.")
+        raise RuntimeError("Piper is not installed. Start the Qwen voice launcher or install optional voice packages.")
 
     global _VOICE
     try:
@@ -135,3 +178,14 @@ def synthesize_wav(text: str) -> bytes:
             return _validate_wav(output.getvalue())
         except Exception as exc:
             raise RuntimeError(f"Local Piper synthesis failed: {exc}") from exc
+
+
+def synthesize_wav(text: str) -> bytes:
+    """Prefer Qwen voice cloning and keep Piper available as an automatic fallback."""
+    clean_text = _prepare_text(text)
+    if _qwen_service_status() is not None:
+        try:
+            return _synthesize_with_qwen(clean_text)
+        except Exception as exc:
+            logging.warning("Qwen speech failed; falling back to Piper: %s", exc)
+    return _synthesize_with_piper(clean_text)

@@ -59,6 +59,26 @@ python3 -m venv .venv
 
 The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX backend, but upstream currently declares `tflite-runtime` unconditionally on Linux, and that package has no compatible wheel for newer Python versions. JARVIS installs the ONNX runtime dependencies explicitly instead. Tap the mic button once to start hands-free conversation. JARVIS listens locally for your speech, detects a pause, transcribes the turn, speaks its reply using lcars-reference/jarvis-high.onnx when Piper is available, and resumes listening. Spoken replies fall back to the browser voice if Piper or the model is unavailable. Tap the mic again to stop. If silence detection is unavailable, a turn is capped at 12 seconds. The first transcription downloads the selected Whisper model. The local Piper ONNX voice is bundled through Git LFS; make sure git lfs pull has downloaded its actual model bytes. Install the .[voice] extra in the same virtual environment used to run JARVIS to enable Piper TTS. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
 
+## Qwen JARVIS voice (optional)
+
+JARVIS can use Qwen3-TTS voice cloning as its preferred local speech engine, with the bundled Piper JARVIS voice as a fallback. Qwen runs in the separate environment where its PyTorch dependencies are installed.
+
+Requirements:
+- Qwen installed in `~/qwen-tts-test/.venv` (the environment used by the Qwen demo).
+- The reference recording at `~/jarvis-reference.wav`, with transcript: `Good evening. All systems are operational. Shall I proceed, sir?`.
+
+Stop the standalone Qwen demo first (press Ctrl+C in its terminal) so it releases GPU memory. Then stop the normal JARVIS server and run:
+
+```bash
+cd ~/JARVIS
+git pull
+git lfs pull
+chmod +x run_jarvis_qwen.sh
+./run_jarvis_qwen.sh
+```
+
+The launcher starts a loopback-only Qwen service on `127.0.0.1:8766`, waits for the model and reference prompt to load, then starts JARVIS. Ctrl+C stops both. Logs are saved at `~/.local/share/jarvis/qwen-tts.log`. If Qwen fails during an individual synthesis, JARVIS falls back to Piper. To change the reference recording, set `JARVIS_QWEN_REFERENCE_AUDIO` and `JARVIS_QWEN_REFERENCE_TEXT` before launching.
+
 ## Configuration
 
 | Variable | Default | Purpose |

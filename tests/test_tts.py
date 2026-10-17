@@ -1,4 +1,4 @@
-"""Tests for local Piper TTS readiness and input validation."""
+"""Tests for local TTS readiness and WAV validation."""
 from __future__ import annotations
 
 import json
@@ -37,6 +37,10 @@ class LocalTtsTests(unittest.TestCase):
             self.assertTrue(result["available"])
             self.assertTrue(result["model_ready"])
             self.assertTrue(result["local"])
+
+    def test_qwen_status_endpoint_failure_reports_unavailable(self):
+        with mock.patch.object(jarvis_tts.urllib.request, "urlopen", side_effect=OSError("offline")):
+            self.assertIsNone(jarvis_tts._qwen_service_status())
 
     def test_malformed_wav_is_rejected_before_browser_playback(self):
         with self.assertRaisesRegex(RuntimeError, "invalid WAV"):
