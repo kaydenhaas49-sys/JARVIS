@@ -61,7 +61,7 @@ def status() -> dict[str, Any]:
     model_ready, model_message = _model_state()
     piper_ready = _piper_installed()
     if not piper_ready:
-        message = "Piper is not installed. Run .venv/bin/pip install -e ".[voice]" from the JARVIS folder."
+        message = "Piper is not installed. From the JARVIS folder, run the optional voice install command from the README."
     else:
         message = model_message
     return {
