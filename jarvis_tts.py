@@ -100,7 +100,10 @@ def synthesize_wav(text: str) -> bytes:
     global _VOICE
     try:
         from piper import PiperVoice
-        from piper.config import SynthesisConfig
+        try:
+            from piper import SynthesisConfig
+        except ImportError:
+            from piper.config import SynthesisConfig
     except ImportError as exc:
         raise RuntimeError("Piper could not be imported. Reinstall the optional voice packages.") from exc
 

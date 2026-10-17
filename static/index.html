@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/stark-hud.css?v=12">
   <link rel="stylesheet" href="/advanced-tools.css?v=1">
   <script src="/jarvis-orb.js?v=9" defer></script>
-  <script src="/app.js?v=8" defer></script>
+  <script src="/app.js?v=9" defer></script>
   <script src="/hud-status.js?v=1" defer></script>
   <script src="/advanced-tools.js?v=1" defer></script>
 </head>
@@ -53,7 +53,7 @@
           <div class="connection-pill" id="connectionPill"><span class="connection-dot"></span><span id="connectionLabel">CHECKING MODEL</span></div>
           <button class="top-action" id="testModelBtn" type="button" title="Test the model connection"><svg viewBox="0 0 24 24" fill="none"><path d="M20 7v5h-5M4 17v-5h5M6.2 9a6.5 6.5 0 0 1 10.7-2L20 12M4 12l3.1 5a6.5 6.5 0 0 0 10.7-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Test link</span></button>
           <button class="top-action wake-word-btn" id="wakeWordBtn" type="button" aria-pressed="false" title='Enable local "Hey JARVIS" wake word'><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 5 6v5c0 4.7 3 8 7 10 4-2 7-5.3 7-10V6l-7-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12a3 3 0 0 1 6 0m-3-6v1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Wake off</span></button>
-          <button class="top-action voice-output-btn" id="voiceOutputBtn" type="button" aria-pressed="false" title="Toggle spoken replies"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10v4h4l5 4V6l-5 4H4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M17 9a5 5 0 0 1 0 6M19.5 6.5a9 9 0 0 1 0 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Voice off</span></button>
+          <button class="top-action voice-output-btn active" id="voiceOutputBtn" type="button" aria-pressed="true" title="Toggle spoken replies"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10v4h4l5 4V6l-5 4H4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M17 9a5 5 0 0 1 0 6M19.5 6.5a9 9 0 0 1 0 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Voice on</span></button>
         </div>
       </header>
 

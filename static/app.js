@@ -27,7 +27,7 @@
   let busy = false;
   let listening = false;
   let startingVoiceCapture = false;
-  let voiceReplies = false;
+  let voiceReplies = true;
   let lastLocalTtsWarning = "";
   let activeTtsAudio = null;
   let activeTtsObjectUrl = null;
@@ -722,6 +722,7 @@
       const speakInBrowser = () => {
         if (token !== speechPlaybackToken) { finish(); return; }
         if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+          warnLocalTtsOnce("This browser does not provide text-to-speech, and the local JARVIS voice is unavailable.");
           finish();
           return;
         }
@@ -743,6 +744,7 @@
 
       const fallbackFromAudio = () => {
         if (token !== speechPlaybackToken) return;
+        warnLocalTtsOnce("JARVIS generated audio, but your browser could not play it. Check the local Piper voice status and audio output.");
         if (activeTtsAudio === audio) activeTtsAudio = null;
         if (audio) {
           audio.onended = null;
