@@ -65,7 +65,7 @@ def prepare_target_text(text: str) -> str:
     # The cloned voice tends to stretch the unfamiliar proper noun "Jarvis".
     # "Jarviss" cues a familiar two-syllable English reading without adding a
     # hyphen/pause; this only affects synthesized audio, not the displayed reply.
-    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\s*\.?\b", "Jarviss", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\.?(?=\W|$)", "Jarviss", clean_text, flags=re.IGNORECASE)
     clean_text = re.sub(r"\bJARVIS\b", "Jarviss", clean_text, flags=re.IGNORECASE)
     return clean_text
 
