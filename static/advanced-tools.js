@@ -27,7 +27,9 @@
         if(isImage&&file.size>3000000){toast("Each image must be 3 MB or smaller.","error");continue;}
         if(!isImage&&file.size>1000000){toast("Text attachments must be 1 MB or smaller.","error");continue;}
         try{Object.defineProperty(file,"_jarvisMime",{value:isImage?(typeof image==="string"?image:file.type):"",configurable:true});}catch(_){}
-        const imageBytes=[...queued,file].filter(f=>Boolean(f._jarvisMime)).reduce((sum,f)=>sum+f.size,0);
+        const imageFiles=[...queued,file].filter(f=>Boolean(f._jarvisMime));
+        if(imageFiles.length>3){toast("Attach up to three images per message.","error");try{delete file._jarvisMime;}catch(_){}continue;}
+        const imageBytes=imageFiles.reduce((sum,f)=>sum+f.size,0);
         if(imageBytes>6000000){toast("Keep image attachments under 6 MB total.","error");try{delete file._jarvisMime;}catch(_){}continue;}
         queued.push(file);
       }draw();
