@@ -60,13 +60,12 @@ def load_engine() -> None:
 
 
 def prepare_target_text(text: str) -> str:
-    """Use a pronunciation-friendly spelling for the name in generated speech only."""
+    """Normalize the name without forcing a phonetic spelling on Qwen."""
     clean_text = str(text or "").strip()
-    # Mark the stress and separate the final syllable so Qwen is less likely
-    # to voice the final /s/ as /z/. This only changes synthesized audio text.
-    spoken_name = "JAR-viss"
-    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\.?(?=\W|$)", spoken_name, clean_text, flags=re.IGNORECASE)
-    clean_text = re.sub(r"\bJARVIS\b", spoken_name, clean_text, flags=re.IGNORECASE)
+    # Keep the same normal spelling used in the reference transcript. Qwen's
+    # reference audio should teach the pronunciation; ad-hoc spellings did not.
+    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\.?(?=\W|$)", "Jarvis", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"\bJARVIS\b", "Jarvis", clean_text, flags=re.IGNORECASE)
     return clean_text
 
 
