@@ -10,6 +10,7 @@ import io
 import json
 import logging
 import os
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -58,8 +59,16 @@ def load_engine() -> None:
     logging.info("Qwen voice engine is ready.")
 
 
-def make_wav(text: str) -> bytes:
+def prepare_target_text(text: str) -> str:
+    """Normalize the assistant's name so TTS won't spell the all-caps acronym aloud."""
     clean_text = str(text or "").strip()
+    clean_text = re.sub(r"\bJ\s*\.\s*A\s*\.\s*R\s*\.\s*V\s*\.\s*I\s*\.\s*S\s*\.?\b", "Jarvis", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"\bJARVIS\b", "Jarvis", clean_text, flags=re.IGNORECASE)
+    return clean_text
+
+
+def make_wav(text: str) -> bytes:
+    clean_text = prepare_target_text(text)
     if not clean_text:
         raise ValueError("Speech text is empty.")
     if len(clean_text) > MAX_TEXT_CHARS:
