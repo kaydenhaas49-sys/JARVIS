@@ -516,8 +516,8 @@ class AppInventoryTests(unittest.TestCase):
     def test_inventory_request_returns_directly_without_model_call(self) -> None:
         session = {"messages": [], "updated_at": 0.0}
         inventory = "Categorized installed app inventory."
-        with mock.patch.object(jarvis, "_get_session", return_value=session), \\
-             mock.patch.object(jarvis, "format_installed_app_inventory", return_value=inventory), \\
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \
+             mock.patch.object(jarvis, "format_installed_app_inventory", return_value=inventory), \
              mock.patch.object(jarvis, "agent_turn") as agent_turn:
             result = jarvis.handle_chat({
                 "session_id": "app-inventory-test",
