@@ -1,134 +1,71 @@
-# JARVIS — Local AI Assistant
+# JARVIS — Personal AI Chatbot
 
-JARVIS is a local-first personal AI assistant with a futuristic web dashboard, optional browser voice controls, and tools for working inside a dedicated development workspace. It connects to an OpenAI-compatible model API, so your prompts and code can stay on your own machine when you use a local model server.
+JARVIS is a focused, local-first chatbot with a voice interface. This branch intentionally has **no System Console, app launcher, kitchen, memory/archive pages, workspace dashboard, or settings screens**. The interface is just the conversation, microphone input, spoken replies, and optional local “Hey JARVIS” wake word.
 
-## Features
+The chatbot can keep everyday conversation with its configured local model and automatically hand clear, advanced engineering or multi-step project tasks to a separately configured OpenClaw agent.
 
-- Chat with a local model through llama.cpp, LM Studio, or another OpenAI-compatible endpoint.
-- Hands-free voice conversations: local speech-to-text detects pauses, JARVIS answers aloud, then resumes listening; click the mic again to stop. Browser speech recognition is used only as a fallback when local recording is unavailable.
-- Spoken replies use the bundled JARVIS High Piper ONNX voice locally when the model and optional Piper package are available, with browser speech as a fallback. Microphone speech-to-text is also processed locally; microphone audio is not saved.
-- Opt-in local "Hey JARVIS" wake word with one-shot command capture, automatic re-arming after the answer, and a visible on/off indicator.
-- Voice input and wake-word processing can run on-device with the optional voice dependencies; microphone audio is not stored.
-- Model manager to discover compatible server models and save the selected model/endpoint locally.
-- Persistent memory injected into future chats, with review, edit, save, and delete controls; memory requests made in chat require approval.
-- Searchable local-file chat history with reopen, delete, and JSON export; reopening restores saved user/assistant text context.
-- Consolidated sidebar: System Console includes live CPU/RAM/disk and supported NVIDIA telemetry, model configuration, saved routines, and activity; Memory & archive groups editable AI memory, Quick Notes, and Chat History.
-- Saved routines: built-in Gaming prep, Start coding, and Daily briefing templates plus custom reusable prompts. Routines can launch allowlisted desktop apps without approval; file changes and terminal commands still use the regular approval-gated tools.
-- Combined Kitchen / Recipe Saver panel with groceries, pantry, meal plans, timers, searchable recipes, favorites, and JSON import/export.
-- Assistant data tools for recipes, Quick Notes, groceries, pantry, meal-plan entries, timers, memories, chat archives, activity, and dashboard status, connected to the same saved records shown in the UI.
-- Combined Memory / Quick Notes panel: both AI memory and Quick Notes are saved to local files; Quick Notes stay separate from AI memory.
-- Recipe Saver with ingredients, instructions, category/search filters, favorites, servings and cooking time, and JSON import/export compatible with the older JARVIS Kitchen `recipes.json` format.
-- Live activity feed, saved as a local JSON file without copying full message text into the feed.
-- Kitchen panel with grocery checklist, pantry inventory, weekly meal notes, and browser-based timers.
-- Code review cards show unified file diffs before Accept/Reject. Accepted workspace writes receive exact recovery backups, with per-file Undo in Code Review.
-- Drag/drop text and code files (read locally into the prompt) plus PNG/JPEG/WebP/GIF images for vision-capable endpoints. Attachments are size-limited and not uploaded to a separate storage service.
-- Knowledge Vault: ranked local workspace search with exact file paths and line numbers, plus an action to ask JARVIS using those source excerpts.
-- Project profiles and task checklists stored locally, scoped to existing folders inside the JARVIS workspace.
-- Local model benchmark for up to three endpoint models, showing wall time and generated-token rate when server metrics are available.
-- Ctrl/Cmd+K command palette for fast navigation. A tiny draggable voice-only sphere stays inside the JARVIS browser tab and toggles hands-free voice mode.
-- Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
-- Desktop app launcher that discovers installed Linux apps from XDG `.desktop` entries (including common Flatpak/Snap exports), so apps such as Plex HTPC can be found even when their executable is not on `PATH`. JARVIS can also open a curated set of web apps such as Plex and Netflix in the default browser. Opening installed apps and those known websites does not require approval; file writes and terminal commands still do. Asking JARVIS to list installed apps returns a locally generated, categorized inventory directly instead of relying on the language model to summarize a large tool result.
-- Built-in tools for time, system status, listing files, reading files, and searching your workspace.
-- File writes and terminal commands pause for your explicit approval in the UI. Proposed file writes show a unified diff; accepted writes back up prior bytes and can be undone in Code Review.
-- Local-only HTTP server by default; model API credentials remain on the server.
-- Python standard library backend with no required pip dependencies; local voice features are an optional extra.
+## What it does
+
+- Text chat with an OpenAI-compatible local model server (Ollama, llama.cpp, LM Studio, or a compatible endpoint).
+- Spoken answers using the local JARVIS voice service when available, with browser speech synthesis as a fallback.
+- Click-to-record voice input, transcribed locally by the optional voice dependencies.
+- Optional local “Hey JARVIS” wake detection; it captures a command, sends it through the chat, speaks the answer, and re-arms the wake detector.
+- Automatic handoff for substantial code changes, repository work, integrations, migrations, and deep research when OpenClaw is configured.
+- Casual chat, quick questions, and simple requests stay with JARVIS. Say “keep this local” to prevent automatic delegation for a request.
+- Text-only chat history in the current browser tab. Starting a new chat clears the visible conversation.
+
+Images and attachments are intentionally not part of this minimal interface. The existing backend's chat and approval safeguards remain available for supported tool actions; approvals appear inline inside the conversation.
 
 ## Quick start
 
 1. Install Python 3.10 or newer.
-2. Start your OpenAI-compatible local model server.
-3. Copy `.env.example` to `.env` and configure the endpoint and model name, or export the variables directly.
-4. Run `python3 jarvis.py`.
-5. Open http://127.0.0.1:8765.
+2. Start your local model server.
+3. Configure the **.env** file from **.env.example** for that model server and model name.
+4. Install the optional voice dependencies if you want local speech recognition and the wake word.
+5. Run JARVIS and open **http://127.0.0.1:8765**.
 
-The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama serve` API. JARVIS discovers models via `/api/tags` and chats via `/api/chat` (no `/v1` required). For llama.cpp or LM Studio, enter the documented OpenAI-compatible endpoint, usually ending in `/v1`.
+For the Qwen voice launcher, use:
 
-JARVIS creates ~/JARVIS-workspace for files it can browse and edit. Persistent application data is saved as ordinary files under ~/.local/share/jarvis/ (or the directory set by JARVIS_DATA_DIR): recipes.json, notes.json, kitchen.json, chat-history.json, activity.json, memory.json, routines.json, projects.json, code-backups.json, settings.json, and system-memory.md. Exact file recovery bytes live under code-backups/. dashboard-index.json tracks one-time migration state. Existing browser-local data from older versions is imported once and then removed from browser storage. Older dashboard-data.json files are read as a migration source and left in place as a backup; ongoing writes go to the separate JSON files. Chat archives retain the latest 25 conversations and up to 40 messages per conversation. File tools are deliberately scoped to the workspace, while JARVIS's internal dashboard tools maintain the app's own data files. Terminal actions and workspace file writes require you to approve the exact action in the dashboard.
+\`\`\`bash
+cd ~/JARVIS
+./run_jarvis_qwen.sh
+\`\`\`
 
-## Optional OpenClaw integration
+For the standard server:
 
-To connect JARVIS to a separate OpenClaw server over private Tailscale, use the guided setup in [OPENCLAW_SETUP.md](OPENCLAW_SETUP.md). The server-side helper is `scripts/setup-openclaw-tailnet.sh`; it asks before making changes and backs up the existing OpenClaw config. OpenClaw credentials are entered in JARVIS's System Console and stored locally, not in this repository. This integration is optional and does not replace the configured JARVIS model or voice.
+\`\`\`bash
+cd ~/JARVIS
+python3 jarvis.py
+\`\`\`
 
-**Routing behavior:** JARVIS answers casual conversation, quick questions, and simple computer requests locally. Clear advanced work—such as substantial code changes, repository refactors, multi-file implementations, integrations, migrations, and deep research—is automatically handed to the configured OpenClaw agent. The chat response is labelled **OpenClaw report** so the handoff is visible. JARVIS includes the current request and a small excerpt of recent user/assistant chat for continuity, but does not forward system prompts, tool output, or image bytes. Image-dependent requests stay with JARVIS because this text-only handoff cannot transmit the images. Say **“keep this local”** or **“don’t send this to OpenClaw”** to keep a request with JARVIS. If OpenClaw is not connected, JARVIS explains how to configure it and confirms that the request was not sent. OpenClaw runs using the tools and permissions configured on its own server, so only connect a server you trust.
+## Voice setup
 
-## Optional local voice setup
+The microphone button records a short message; click it again to finish recording and send it. Browser microphone permission is required.
 
-Voice input and the "Hey JARVIS" wake word use local speech recognition and local audio detection. Install the optional packages in a project virtual environment (on Linux, also ensure the system PortAudio library is installed):
+Local transcription and wake-word support use the optional voice dependencies. On Linux, install the system PortAudio library first, then install the optional project dependencies into the Python environment used to run JARVIS:
 
-```bash
+\`\`\`bash
 cd ~/JARVIS
 python3 -m venv .venv
 .venv/bin/pip install -e ".[voice]"
 .venv/bin/pip install --no-deps "openwakeword>=0.6.0"
 .venv/bin/python jarvis.py
-```
+\`\`\`
 
-The separate `--no-deps` install is intentional: JARVIS uses openWakeWord's ONNX backend, but upstream currently declares `tflite-runtime` unconditionally on Linux, and that package has no compatible wheel for newer Python versions. JARVIS installs the ONNX runtime dependencies explicitly instead. Tap the mic button once to start hands-free conversation. JARVIS listens locally for your speech, detects a pause, transcribes the turn, speaks its reply using lcars-reference/jarvis-high.onnx when Piper is available, and resumes listening. Spoken replies fall back to the browser voice if Piper or the model is unavailable. Tap the mic again to stop. If silence detection is unavailable, a turn is capped at 12 seconds. The default speech-to-text model is `tiny.en` for lower latency, and the first transcription downloads the selected Whisper model. For higher accuracy at the cost of speed, launch with `JARVIS_STT_MODEL=base.en ./run_jarvis_qwen.sh`. The local Piper ONNX voice is bundled through Git LFS; make sure git lfs pull has downloaded its actual model bytes. Install the .[voice] extra in the same virtual environment used to run JARVIS to enable Piper TTS. The wake-word model is downloaded the first time you turn on the visible **Wake on** control. These one-time model downloads need internet access; microphone audio is processed locally and is not saved. Keep this server bound to loopback unless you intentionally configure otherwise.
+The separate **--no-deps** install avoids pulling the upstream Linux **tflite-runtime** dependency, which may not provide a compatible wheel. Wake-word model assets are downloaded on first use and therefore need internet access once. After setup, speech detection and transcription run locally; microphone audio is not stored by JARVIS.
 
-## Qwen JARVIS voice (optional)
+Spoken replies use the bundled Piper JARVIS voice when its model and optional runtime package are available. If local synthesis is not available, JARVIS tries the browser's built-in speech engine.
 
-JARVIS can use Qwen3-TTS voice cloning as its preferred local speech engine, with the bundled Piper JARVIS voice as a fallback. Qwen runs in the separate environment where its PyTorch dependencies are installed.
+## OpenClaw handoff
 
-Requirements:
-- Qwen installed in `~/qwen-tts-test/.venv` (the environment used by the Qwen demo).
-- The reference recording at `~/jarvis-reference.wav`, with transcript: `Good evening. All systems are operational. Shall I proceed, sir?`.
+OpenClaw is optional. The chat-only interface deliberately has no settings page: if an OpenClaw connection is already saved under **~/.local/share/jarvis/**, automatic handoff can use it. The connection is kept out of the visible chatbot UI and must be configured out-of-band on a trusted private network. The handoff sends the current request plus a limited excerpt of recent user/assistant messages, not system instructions or tool output. Image-dependent requests stay with JARVIS because the handoff is text-only.
 
-Stop the standalone Qwen demo first (press Ctrl+C in its terminal) so it releases GPU memory. Then stop the normal JARVIS server and run:
+OpenClaw runs with the tools and permissions set on its own server. Only connect a server you trust.
 
-```bash
-cd ~/JARVIS
-git pull
-git lfs pull
-chmod +x run_jarvis_qwen.sh
-./run_jarvis_qwen.sh
-```
+## Network safety
 
-The launcher starts a loopback-only Qwen service on `127.0.0.1:8766`, waits for the model and reference prompt to load, then starts JARVIS. Ctrl+C stops both. Logs are saved at `~/.local/share/jarvis/qwen-tts.log`. If Qwen fails during an individual synthesis, JARVIS falls back to Piper. To change the reference recording, set `JARVIS_QWEN_REFERENCE_AUDIO` and `JARVIS_QWEN_REFERENCE_TEXT` before launching.
+JARVIS listens on **127.0.0.1** by default. Remote access is opt-in and requires Basic authentication with a strong password. For LAN testing, bind to a trusted private interface and use a firewall; do not port-forward JARVIS to the public internet. Basic authentication does not encrypt plain HTTP.
 
-## Remote testing over Tailscale or a trusted LAN
+## Data and configuration
 
-JARVIS stays on `127.0.0.1` by default. For temporary testing from another device, network binding is opt-in and the server refuses to start on a non-loopback address unless a private password of at least 16 characters is configured. All dashboard pages and API routes use HTTP Basic authentication in network mode, and browser POSTs must include the same origin.
-
-**Recommended: bind only to this computer's Tailscale IP** so JARVIS is not listening on every network interface:
-
-1. On the computer running JARVIS, run `tailscale ip -4` and copy its `100.x.y.z` address.
-2. Generate a password with `python3 -c 'import secrets; print(secrets.token_urlsafe(24))'`.
-3. Edit `~/JARVIS/.env` (create it if needed), setting these values. Replace the sample IP and password with your own; do not share or commit the password.
-
-   ```dotenv
-   JARVIS_HOST=100.x.y.z
-   JARVIS_PORT=8765
-   JARVIS_ACCESS_USER=jarvis
-   JARVIS_ACCESS_PASSWORD=PASTE_YOUR_PRIVATE_PASSWORD_HERE
-   ```
-
-4. Restart JARVIS. From another device on the same tailnet, visit `http://100.x.y.z:8765` using the same Tailscale IP. Your browser should prompt for the configured username and password.
-
-To test over a trusted home LAN instead, set `JARVIS_HOST=0.0.0.0` and open `http://<the-JARVIS-computer-LAN-IP>:8765` from the other device. This binds every IPv4 interface, so use your firewall to limit access to your private network.
-
-**Do not port-forward JARVIS or expose it directly to the public internet.** Basic authentication does not encrypt plain HTTP by itself. Prefer Tailscale for remote testing, keep the password private, and return `JARVIS_HOST` to `127.0.0.1` when you are finished testing.
-
-## Configuration
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `JARVIS_HOST` | `127.0.0.1` | Bind address. Keep local unless you understand the security implications. |
-| `JARVIS_PORT` | `8765` | Dashboard server port. |
-| `JARVIS_ACCESS_USER` | `jarvis` | HTTP Basic authentication username when bound to a network interface. |
-| `JARVIS_ACCESS_PASSWORD` | empty | Required network-mode password (at least 16 characters); never commit it. |
-| `JARVIS_BASE_URL` | `http://127.0.0.1:8080/v1` | OpenAI-compatible API base URL. |
-| `JARVIS_MODEL` | `local-model` | Model identifier accepted by your server. |
-| `JARVIS_API_KEY` | empty | Optional API key for compatible servers. Never put it in frontend code. |
-| `JARVIS_WORKSPACE` | `~/JARVIS-workspace` | The directory exposed to JARVIS file tools. |
-
-## Safety model
-
-The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. Installed desktop apps are discovered from local XDG desktop entries as well as the known launcher catalog, and an app can be launched by its discovered ID or exact name without an approval card. A curated set of known web services can be opened through fixed URLs in the default browser; JARVIS does not accept arbitrary URLs for this shortcut. App launches use desktop launchers or fixed executable arguments with no shell. Writing files and running allowlisted developer commands still require clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
-
-## Tests
-
-Run `python3 -m unittest discover -s tests -v`.
-
-## Current scope
-
-JARVIS is a practical, extensible foundation—not a magical always-on-operating-system replacement. Browser voice recognition depends on browser support and permissions. A compatible model server must be running for AI chat; non-AI status endpoints work independently.
+Model endpoint, model name, and API key are configured outside the chat UI using **.env**. Local application data remains under **~/.local/share/jarvis/** (or **JARVIS_DATA_DIR**). This branch does not expose data-management or system-setting screens in the browser.
