@@ -2795,8 +2795,9 @@ def agent_turn(session_id: str) -> dict[str, Any]:
 
 
 _ADVANCED_ACTION_RE = re.compile(
-    r"\b(?:build|implement|develop|refactor|rewrite|debug|fix|repair|patch|add|remove|upgrade|"
-    r"integrate|migrate|deploy|automate|modify|change|optimize|audit|review|test)\b"
+    r"\b(?:build|make|create|implement|develop|refactor|rewrite|debug|fix|repair|patch|add|remove|"
+    r"upgrade|integrate|migrate|deploy|automate|modify|change|edit|update|improve|expand|write|finish|"
+    r"work on|optimize|audit|review|test)\b"
 )
 _ADVANCED_TARGET_RE = re.compile(
     r"\b(?:repo(?:sitory)?|project|codebase|app(?:lication)?|website|site|module|system|"
@@ -2817,11 +2818,13 @@ _ADVANCED_SCOPE_RE = re.compile(
 _OPENCLAW_HANDOFF_RE = re.compile(
     r"\b(?:send|hand off|delegate|route|pass)\b.{0,80}\b(?:to\s+)?(?:openclaw|open claw|"
     r"the server agent|the remote agent)\b|"
+    r"\bask\s+(?:openclaw|open claw|the server agent|the remote agent)\b|"
     r"\buse\s+(?:openclaw|open claw)\b|"
     r"\b(?:openclaw|open claw)\b.{0,80}\b(?:handle|take over|work on|fix|build|investigate|"
     r"review|implement|continue|do)\b"
 )
 _KEEP_LOCAL_RE = re.compile(
+    r"\b(?:answer locally|handle locally|stay local|answer this locally|keep this local)\b|"
     r"\b(?:don't|do not|never|without|keep this|keep it|answer this|handle this)\b.{0,55}\b"
     r"(?:local|locally|openclaw|open claw|remote agent|server agent)\b"
 )
@@ -2967,16 +2970,18 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
             session["messages"].append({"role": "assistant", "content": reply})
             session["updated_at"] = time.time()
             return {"session_id": session_id, "reply": reply, "pending_action": None, "routed_to": "openclaw_unavailable"}
+        routed_to = "openclaw"
         try:
             delegated = delegate_to_openclaw(_build_openclaw_task(session, content), session_id=session_id)
             reply = "**OpenClaw report**\n\n" + str(delegated.get("answer") or "").strip()
             session["last_routed_to"] = "openclaw"
             _log_dashboard_tool_action("Task delegated to OpenClaw", content[:300])
         except (ValueError, RuntimeError, OSError, TypeError) as exc:
+            routed_to = "openclaw_error"
             reply = f"**OpenClaw handoff failed**\n\n{exc}"
         session["messages"].append({"role": "assistant", "content": reply})
         session["updated_at"] = time.time()
-        return {"session_id": session_id, "reply": reply, "pending_action": None, "routed_to": "openclaw"}
+        return {"session_id": session_id, "reply": reply, "pending_action": None, "routed_to": routed_to}
 
     return agent_turn(session_id)
 
