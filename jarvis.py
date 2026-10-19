@@ -2799,16 +2799,20 @@ _ADVANCED_ACTION_RE = re.compile(
     r"integrate|migrate|deploy|automate|modify|change|optimize|audit|review|test)\b"
 )
 _ADVANCED_TARGET_RE = re.compile(
-    r"\b(?:code|repo(?:sitory)?|project|codebase|app(?:lication)?|website|site|file|files|script|"
-    r"program|feature|function|module|system|api|backend|frontend|server|dashboard|workflow|"
-    r"pipeline|integration|software|tool|jarvis|github|branch|test suite|package)\b"
+    r"\b(?:repo(?:sitory)?|project|codebase|app(?:lication)?|website|site|module|system|"
+    r"architecture|api|backend|frontend|server|dashboard|workflow|pipeline|integration|software|"
+    r"service|jarvis|github|branch|deployment|production)\b"
+)
+_LOCAL_EXPLANATION_RE = re.compile(
+    r"^(?:what is|what are|what does|what do|explain|define|how does|how do|why does|why do|"
+    r"tell me about|describe)\b"
 )
 _ADVANCED_SCOPE_RE = re.compile(
-    r"\b(?:entire repo(?:sitory)?|whole repo(?:sitory)?|whole project|full codebase|across (?:the|my) "
-    r"(?:repo(?:sitory)?|project|codebase|files)|from scratch|end.to.end|multi.step|multiple files|"
-    r"deep research|in.depth research|comprehensive audit|complete overhaul|major overhaul|"
-    r"major changes|system architecture|software architecture|system design|production.ready|"
-    r"migrate|migration|integrate|integration)\b"
+    r"\b(?:entire repo(?:sitory)?|whole repo(?:sitory)?|whole project|whole app|full codebase|"
+    r"across (?:the|my) (?:repo(?:sitory)?|project|codebase|files)|from scratch|end.to.end|"
+    r"multi.step|multiple files|deep research|in.depth research|comprehensive audit|complete overhaul|"
+    r"major overhaul|major changes|system architecture|software architecture|system design|"
+    r"production.ready|full.stack implementation|large.scale refactor)\b"
 )
 _OPENCLAW_HANDOFF_RE = re.compile(
     r"\b(?:send|hand off|delegate|route|pass)\b.{0,80}\b(?:to\s+)?(?:openclaw|open claw|"
@@ -2835,7 +2839,7 @@ def should_auto_delegate_to_openclaw(
         return False
     if _OPENCLAW_HANDOFF_RE.search(normalized):
         return True
-    if _ADVANCED_SCOPE_RE.search(normalized):
+    if _ADVANCED_SCOPE_RE.search(normalized) and not _LOCAL_EXPLANATION_RE.match(normalized):
         return True
     if _ADVANCED_ACTION_RE.search(normalized) and _ADVANCED_TARGET_RE.search(normalized):
         return True
