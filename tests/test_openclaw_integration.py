@@ -33,6 +33,7 @@ class OpenClawConfigurationTests(unittest.TestCase):
             "https://user:password@server.example.ts.net",
             "https://server.example.ts.net/v1?token=secret",
             "https://server.example.ts.net/v2",
+            "https://openclaw.example.com/v1",
         ):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 jarvis.normalize_openclaw_base_url(url)
