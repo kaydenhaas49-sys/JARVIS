@@ -613,6 +613,11 @@ class OpenClawRoutingTests(unittest.TestCase):
             "Tell me a joke",
             "What's the difference between RAM and storage?",
             "Explain what a Git branch is in simple terms",
+            "Implement a tiny function that adds two numbers",
+            "Fix this short code snippet",
+            "Create a text file containing a birthday message",
+            "What is software architecture?",
+            "Explain what an integration is",
             "What time is it?",
         ):
             with self.subTest(request=request):
