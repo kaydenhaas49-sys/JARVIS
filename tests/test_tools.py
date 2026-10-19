@@ -440,6 +440,48 @@ class ApprovalAndCommandTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "allowlist"):
                     jarvis._resolve_desktop_application(invalid)
 
+    def test_standalone_app_open_requests_match_only_named_allowlisted_apps(self) -> None:
+        for request, expected in (
+            ("Open Firefox", "browser_firefox"),
+            ("Please open Firefox.", "browser_firefox"),
+            ("Could you open Firefox for me?", "browser_firefox"),
+            ("Hey JARVIS, please launch Steam now.", "steam"),
+            ("Open the System settings", "settings"),
+            ("Bring up VSCodium", "code_editor"),
+        ):
+            with self.subTest(request=request):
+                self.assertEqual(jarvis._direct_desktop_app_intent(request), expected)
+
+        for request in (
+            "What is Firefox?",
+            "Open Firefox and search for my homework",
+            "Open /usr/bin/firefox",
+            "Start Firefox --private-window",
+            "Run firefox",
+            "Open an app and then delete some files",
+            "Please open Firefox and Steam",
+        ):
+            with self.subTest(request=request):
+                self.assertIsNone(jarvis._direct_desktop_app_intent(request))
+
+    def test_direct_standalone_app_request_launches_without_model_approval(self) -> None:
+        session = {"messages": [], "updated_at": 0.0}
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \\
+             mock.patch.object(jarvis, "launch_desktop_app",
+                               return_value={"ok": True, "application": "Firefox", "message": "Started Firefox."}) as launch, \\
+             mock.patch.object(jarvis, "agent_turn") as agent_turn:
+            result = jarvis.handle_chat({
+                "session_id": "direct-open-firefox-test",
+                "message": "Open Firefox",
+            })
+
+        launch.assert_called_once_with("browser_firefox")
+        agent_turn.assert_not_called()
+        self.assertIsNone(result["pending_action"])
+        self.assertEqual(result["reply"], "Started Firefox.")
+        self.assertEqual(session["messages"][0]["role"], "user")
+        self.assertEqual(session["messages"][1]["role"], "assistant")
+
     def test_desktop_launch_uses_only_resolved_binary_without_a_shell(self) -> None:
         process = mock.Mock(pid=4242)
         with mock.patch.object(jarvis.platform, "system", return_value="Linux"), \
