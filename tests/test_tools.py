@@ -429,9 +429,40 @@ class ApprovalAndCommandTests(unittest.TestCase):
     def test_changes_require_approval(self) -> None:
         self.assertTrue(jarvis.is_approval_required("write_file"))
         self.assertTrue(jarvis.is_approval_required("run_command"))
-        self.assertTrue(jarvis.is_approval_required("launch_app"))
+        self.assertFalse(jarvis.is_approval_required("launch_app"))
         self.assertFalse(jarvis.is_approval_required("read_file"))
         self.assertFalse(jarvis.is_approval_required("system_status"))
+
+    def test_allowlisted_app_launch_tool_executes_without_an_approval_card(self) -> None:
+        session = {"messages": [{"role": "system", "content": "test"}], "updated_at": 0.0}
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "launch-call",
+                        "type": "function",
+                        "function": {
+                            "name": "launch_app",
+                            "arguments": '{"application_id": "steam"}',
+                        },
+                    }]
+                }
+            }]
+        }
+        final_response = {"choices": [{"message": {"content": "Steam launch requested."}}]}
+
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \
+             mock.patch.object(jarvis, "_model_request", side_effect=[tool_response, final_response]), \
+             mock.patch.object(
+                 jarvis, "_resolve_desktop_application",
+                 return_value=(jarvis.DESKTOP_APP_CATALOG["steam"], "/usr/bin/steam"),
+             ), \
+             mock.patch.object(jarvis, "execute_tool", return_value={"ok": True, "application": "Steam"}) as execute:
+            result = jarvis.agent_turn("desktop-launch-test")
+
+        execute.assert_called_once_with("launch_app", {"application_id": "steam"}, session_id="desktop-launch-test")
+        self.assertIsNone(result["pending_action"])
+        self.assertEqual(result["reply"], "Steam launch requested.")
 
     def test_desktop_launcher_only_accepts_known_application_ids(self) -> None:
         self.assertIn("browser_firefox", jarvis.DESKTOP_APP_CATALOG)
