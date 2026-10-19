@@ -13,7 +13,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Persistent memory injected into future chats, with review, edit, save, and delete controls; memory requests made in chat require approval.
 - Searchable local-file chat history with reopen, delete, and JSON export; reopening restores saved user/assistant text context.
 - Consolidated sidebar: System Console includes live CPU/RAM/disk and supported NVIDIA telemetry, model configuration, saved routines, and activity; Memory & archive groups editable AI memory, Quick Notes, and Chat History.
-- Saved routines: built-in Gaming prep, Start coding, and Daily briefing templates plus custom reusable prompts. Routines use the regular approval-gated tools when an action would change files, run a command, or launch an app.
+- Saved routines: built-in Gaming prep, Start coding, and Daily briefing templates plus custom reusable prompts. Routines can launch allowlisted desktop apps without approval; file changes and terminal commands still use the regular approval-gated tools.
 - Combined Kitchen / Recipe Saver panel with groceries, pantry, meal plans, timers, searchable recipes, favorites, and JSON import/export.
 - Assistant data tools for recipes, Quick Notes, groceries, pantry, meal-plan entries, timers, memories, chat archives, activity, and dashboard status, connected to the same saved records shown in the UI.
 - Combined Memory / Quick Notes panel: both AI memory and Quick Notes are saved to local files; Quick Notes stay separate from AI memory.
@@ -27,7 +27,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Local model benchmark for up to three endpoint models, showing wall time and generated-token rate when server metrics are available.
 - Ctrl/Cmd+K command palette for fast navigation. A tiny draggable voice-only sphere stays inside the JARVIS browser tab and toggles hands-free voice mode.
 - Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
-- Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools. A direct, standalone request such as “Open Firefox” launches immediately through the fixed app allowlist; indirect or multi-step app launches still require approval.
+- Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools. Any request to launch an installed app in the fixed allowlist—standalone or as part of a multi-app request—launches without an approval card. JARVIS still uses fixed executable paths with no shell or caller-supplied arguments.
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
 - File writes and terminal commands pause for your explicit approval in the UI. Proposed file writes show a unified diff; accepted writes back up prior bytes and can be undone in Code Review.
 - Local-only HTTP server by default; model API credentials remain on the server.
@@ -96,7 +96,7 @@ The launcher starts a loopback-only Qwen service on `127.0.0.1:8766`, waits for 
 
 ## Safety model
 
-The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. A simple, standalone request to open one named desktop app (for example, “Open Firefox”) runs through the fixed allowlist without an extra confirmation; JARVIS passes no user-supplied arguments and never uses a shell for app launches. App launches suggested by routines, plans, or multi-step/ambiguous requests still require approval. Writing files and running allowlisted developer commands require a clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
+The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. Opening an installed app from the fixed allowlist never requires an approval card, including launches requested as part of routines or multi-app requests. JARVIS passes no user-supplied arguments and never uses a shell for app launches. Writing files and running allowlisted developer commands still require clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
 
 ## Tests
 
