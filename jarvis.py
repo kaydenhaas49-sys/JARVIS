@@ -1084,7 +1084,13 @@ def normalize_openclaw_base_url(raw: str) -> str:
         except ValueError:
             pass
         if not is_safe_http_host:
-            raise ValueError("For HTTP, use a Tailscale IP (100.64.0.0/10). Otherwise use the HTTPS Tailscale Serve URL.")
+            raise ValueError("For HTTP, use a Tailscale IP (100.64.0.0/10) or localhost. Otherwise use a private Tailscale Serve URL.")
+    elif not (
+        host.endswith(".ts.net")
+        or host in {"localhost", "127.0.0.1", "::1"}
+        or host.endswith(".localhost")
+    ):
+        raise ValueError("For HTTPS, use a private Tailscale Serve hostname ending in .ts.net.")
     path = "/v1"
     return parsed._replace(path=path, query="", fragment="").geturl().rstrip("/")
 
