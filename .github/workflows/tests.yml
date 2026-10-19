@@ -28,6 +28,7 @@ jobs:
         run: |
           bash -n scripts/setup-openclaw-tailnet.sh
           node --check static/app.js
+          node --check static/chat.js
           node --check static/jarvis-orb.js
           node --check static/advanced-tools.js
       - name: Run tests
