@@ -1419,12 +1419,12 @@
       '<button type="button" data-system-tab="openclaw" class="' + (active === "openclaw" ? "active" : "") + '" aria-pressed="' + (active === "openclaw") + '">OpenClaw</button></nav>';
   }
 
-  async function refreshOpenClawPanel(notice = "") {
+  async function refreshOpenClawPanel(notice = "", noticeIsSuccess = false) {
     try {
       const response = await fetch("/api/openclaw", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load OpenClaw settings.");
-      if (currentUtilityView === "system" && activeSystemTab === "openclaw") renderOpenClawPanel(data, notice);
+      if (currentUtilityView === "system" && activeSystemTab === "openclaw") renderOpenClawPanel(data, notice, noticeIsSuccess);
     } catch (error) {
       if (currentUtilityView === "system" && activeSystemTab === "openclaw") {
         renderOpenClawPanel({ configured: false, base_url: "", model: "openclaw/default", token_saved: false }, error.message);
@@ -1432,12 +1432,12 @@
     }
   }
 
-  function renderOpenClawPanel(data = {}, notice = "") {
+  function renderOpenClawPanel(data = {}, notice = "", noticeIsSuccess = false) {
     const model = data.model || "openclaw/default";
     let status = '<div class="inline-status status-warn">Not configured yet. Add the private server URL and Gateway token.</div>';
     if (data.configured) status = '<div class="inline-status status-good">Credentials saved locally. Test the connection before delegating tasks.</div>';
     if (data.ok === true) status = '<div class="inline-status status-good">' + escapeHtml(data.message || "OpenClaw connection tested.") + (data.model_available === false ? ' <span class="utility-muted">The configured agent target was not listed; verify its name.</span>' : '') + '</div>';
-    if (notice) status = '<div class="inline-status ' + (data.ok === true ? 'status-good' : 'status-warn') + '">' + escapeHtml(notice) + '</div>';
+    if (notice) status = '<div class="inline-status ' + (noticeIsSuccess ? 'status-good' : 'status-warn') + '">' + escapeHtml(notice) + '</div>';
     const models = Array.isArray(data.models) ? data.models : [];
     elements.utilityContent.innerHTML = renderSystemTabs("openclaw") +
       '<p class="utility-intro">Connect JARVIS to OpenClaw on BIG SUCCULENT SERVER™ through your private Tailscale network. JARVIS keeps its own model and voice; it only sends tasks when you explicitly request delegation and approve the proposed handoff.</p>' +
@@ -1467,7 +1467,7 @@
       const tested = await apiPost("/api/openclaw/test", {});
       logActivity("OpenClaw connection tested", payload.model, "integration");
       showToast(tested.message || "OpenClaw connection is working.", "success");
-      await refreshOpenClawPanel(tested.message || "OpenClaw connection is working.");
+      await refreshOpenClawPanel(tested.message || "OpenClaw connection is working.", true);
     } catch (error) {
       showToast(error.message || "OpenClaw setup failed.", "error");
       await refreshOpenClawPanel(error.message || "OpenClaw setup failed.");
@@ -1896,7 +1896,7 @@
     if (action === "metrics-refresh") { refreshSystemMetrics(); return; }
     if (action === "openclaw-test") {
       apiPost("/api/openclaw/test", {})
-        .then((result) => { showToast(result.message || "OpenClaw is connected.", "success"); refreshOpenClawPanel(result.message || "OpenClaw is connected."); })
+        .then((result) => { showToast(result.message || "OpenClaw is connected.", "success"); refreshOpenClawPanel(result.message || "OpenClaw is connected.", true); })
         .catch((error) => { showToast(error.message, "error"); refreshOpenClawPanel(error.message); });
       return;
     }
