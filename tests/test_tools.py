@@ -607,6 +607,76 @@ class AppInventoryTests(unittest.TestCase):
         self.assertEqual(session["messages"][-1], {"role": "assistant", "content": inventory})
 
 
+class OpenClawRoutingTests(unittest.TestCase):
+    def test_everyday_conversation_stays_with_jarvis(self) -> None:
+        for request in (
+            "Tell me a joke",
+            "What's the difference between RAM and storage?",
+            "Explain what a Git branch is in simple terms",
+            "What time is it?",
+        ):
+            with self.subTest(request=request):
+                self.assertFalse(jarvis.should_auto_delegate_to_openclaw(request))
+
+    def test_advanced_project_work_routes_to_openclaw(self) -> None:
+        for request in (
+            "Please refactor the JARVIS repo, add tests, and run the checks",
+            "Build a small app from scratch and wire it into the existing dashboard",
+            "Do deep research comparing local coding models and recommend an architecture",
+            "Could you migrate the project to the new API across multiple files?",
+            "Ask OpenClaw to investigate this problem",
+        ):
+            with self.subTest(request=request):
+                self.assertTrue(jarvis.should_auto_delegate_to_openclaw(request))
+
+    def test_explicit_local_preference_and_image_requests_are_not_delegated(self) -> None:
+        self.assertFalse(jarvis.should_auto_delegate_to_openclaw(
+            "Don't send this to OpenClaw; explain what a Git branch is"
+        ))
+        self.assertFalse(jarvis.should_auto_delegate_to_openclaw(
+            "Fix the code in this screenshot and update the app", has_images=True
+        ))
+
+    def test_advanced_request_is_sent_directly_to_configured_openclaw(self) -> None:
+        session = {"messages": [], "updated_at": 0.0}
+        delegated = {"ok": True, "answer": "Refactor complete. Tests passed."}
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \
+             mock.patch.object(jarvis, "openclaw_config_status", return_value={"configured": True}), \
+             mock.patch.object(jarvis, "delegate_to_openclaw", return_value=delegated) as delegate, \
+             mock.patch.object(jarvis, "_log_dashboard_tool_action"), \
+             mock.patch.object(jarvis, "agent_turn") as agent_turn:
+            result = jarvis.handle_chat({
+                "session_id": "advanced-routing-test",
+                "message": "Please refactor the JARVIS repo and add tests",
+            })
+
+        delegate.assert_called_once()
+        self.assertEqual(delegate.call_args.kwargs["session_id"], "advanced-routing-test")
+        self.assertIn("Please refactor the JARVIS repo and add tests", delegate.call_args.args[0])
+        agent_turn.assert_not_called()
+        self.assertIsNone(result["pending_action"])
+        self.assertEqual(result["routed_to"], "openclaw")
+        self.assertIn("OpenClaw report", result["reply"])
+        self.assertIn("Tests passed", result["reply"])
+
+    def test_advanced_request_explains_when_openclaw_is_not_configured(self) -> None:
+        session = {"messages": [], "updated_at": 0.0}
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \
+             mock.patch.object(jarvis, "openclaw_config_status", return_value={"configured": False}), \
+             mock.patch.object(jarvis, "delegate_to_openclaw") as delegate, \
+             mock.patch.object(jarvis, "agent_turn") as agent_turn:
+            result = jarvis.handle_chat({
+                "session_id": "openclaw-not-configured-test",
+                "message": "Please refactor the JARVIS repo and add tests",
+            })
+
+        delegate.assert_not_called()
+        agent_turn.assert_not_called()
+        self.assertEqual(result["routed_to"], "openclaw_unavailable")
+        self.assertIn("not configured yet", result["reply"])
+        self.assertIn("I have not sent it anywhere", result["reply"])
+
+
 class ApprovalAndCommandTests(unittest.TestCase):
     def test_changes_require_approval(self) -> None:
         self.assertTrue(jarvis.is_approval_required("write_file"))
