@@ -626,6 +626,8 @@ class OpenClawRoutingTests(unittest.TestCase):
     def test_advanced_project_work_routes_to_openclaw(self) -> None:
         for request in (
             "Please refactor the JARVIS repo, add tests, and run the checks",
+            "Make substantial improvements to the JARVIS dashboard",
+            "Please edit the dashboard to support a new widget",
             "Build a small app from scratch and wire it into the existing dashboard",
             "Do deep research comparing local coding models and recommend an architecture",
             "Could you migrate the project to the new API across multiple files?",
@@ -637,6 +639,9 @@ class OpenClawRoutingTests(unittest.TestCase):
     def test_explicit_local_preference_and_image_requests_are_not_delegated(self) -> None:
         self.assertFalse(jarvis.should_auto_delegate_to_openclaw(
             "Don't send this to OpenClaw; explain what a Git branch is"
+        ))
+        self.assertFalse(jarvis.should_auto_delegate_to_openclaw(
+            "Answer locally: what does a software integration mean?"
         ))
         self.assertFalse(jarvis.should_auto_delegate_to_openclaw(
             "Fix the code in this screenshot and update the app", has_images=True
