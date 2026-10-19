@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import difflib
+import ipaddress
 import json
 import logging
 import re
@@ -67,6 +68,9 @@ USER_DATA_DIR = Path(os.environ.get(
     "JARVIS_DATA_DIR", str(Path.home() / ".local" / "share" / "jarvis")
 )).expanduser().resolve()
 SETTINGS_PATH = USER_DATA_DIR / "settings.json"
+OPENCLAW_CONFIG_PATH = USER_DATA_DIR / "openclaw.json"
+OPENCLAW_SECRET_PATH = USER_DATA_DIR / "openclaw-secret.json"
+OPENCLAW_DEFAULT_MODEL = "openclaw/default"
 MEMORY_PATH = USER_DATA_DIR / "memory.json"
 ROUTINES_PATH = USER_DATA_DIR / "routines.json"
 PROJECTS_PATH = USER_DATA_DIR / "projects.json"
@@ -1054,6 +1058,185 @@ def save_model_config(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "model": MODEL, "base_url": BASE_URL}
 
 
+
+def normalize_openclaw_base_url(raw: str) -> str:
+    """Normalize the OpenClaw OpenAI-compatible base URL and avoid plaintext secrets off-tailnet."""
+    value = str(raw or "").strip().rstrip("/")
+    if not value or len(value) > 500:
+        raise ValueError("Enter the OpenClaw API URL (under 500 characters).")
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("The OpenClaw API URL is invalid.") from exc
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or not host:
+        raise ValueError("Use an HTTP(S) OpenClaw API URL.")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("Do not put credentials, query strings, or fragments in the API URL.")
+    if parsed.path.rstrip("/") not in {"", "/v1"}:
+        raise ValueError("Use the OpenClaw server URL or its /v1 API URL only.")
+    if parsed.scheme == "http":
+        is_safe_http_host = host in {"localhost", "127.0.0.1", "::1"}
+        try:
+            address = ipaddress.ip_address(host)
+            is_safe_http_host = is_safe_http_host or address in ipaddress.ip_network("100.64.0.0/10")
+        except ValueError:
+            pass
+        if not is_safe_http_host:
+            raise ValueError("For HTTP, use a Tailscale IP (100.64.0.0/10). Otherwise use the HTTPS Tailscale Serve URL.")
+    path = "/v1"
+    return parsed._replace(path=path, query="", fragment="").geturl().rstrip("/")
+
+
+def validate_openclaw_model(raw: str) -> str:
+    model_id = str(raw or "").strip()
+    if not model_id or len(model_id) > 250 or any(ord(char) < 32 for char in model_id):
+        raise ValueError("Enter a valid OpenClaw agent target.")
+    if not (model_id in {"openclaw", "openclaw/default"} or
+            model_id.startswith("openclaw/") or model_id.startswith("openclaw:") or
+            model_id.startswith("agent:")):
+        raise ValueError("Use an OpenClaw agent target such as openclaw/default or openclaw/coder.")
+    if any(char.isspace() for char in model_id):
+        raise ValueError("OpenClaw agent target cannot contain spaces.")
+    return model_id
+
+
+def openclaw_config_status() -> dict[str, Any]:
+    saved = _read_json_object(OPENCLAW_CONFIG_PATH)
+    secret = _read_json_object(OPENCLAW_SECRET_PATH)
+    try:
+        base_url = normalize_openclaw_base_url(str(saved.get("base_url", ""))) if saved.get("base_url") else ""
+    except ValueError:
+        base_url = ""
+    try:
+        model = validate_openclaw_model(str(saved.get("model", OPENCLAW_DEFAULT_MODEL)))
+    except ValueError:
+        model = OPENCLAW_DEFAULT_MODEL
+    token = secret.get("token")
+    return {
+        "configured": bool(base_url and isinstance(token, str) and token.strip()),
+        "base_url": base_url,
+        "model": model,
+        "token_saved": bool(isinstance(token, str) and token.strip()),
+    }
+
+
+def save_openclaw_config(payload: dict[str, Any]) -> dict[str, Any]:
+    base_url = normalize_openclaw_base_url(str(payload.get("base_url", "")))
+    model = validate_openclaw_model(str(payload.get("model", OPENCLAW_DEFAULT_MODEL)))
+    raw_token = payload.get("token", "")
+    if not isinstance(raw_token, str):
+        raise ValueError("OpenClaw token must be text.")
+    token = raw_token.strip()
+    existing = _read_json_object(OPENCLAW_SECRET_PATH).get("token", "")
+    if token:
+        if len(token) > 4_096 or any(ord(char) < 32 for char in token):
+            raise ValueError("OpenClaw token is invalid or too long.")
+        _write_json_atomically(OPENCLAW_SECRET_PATH, {"token": token})
+    elif not (isinstance(existing, str) and existing.strip()):
+        raise ValueError("Enter the OpenClaw Gateway token before saving.")
+    _write_json_atomically(OPENCLAW_CONFIG_PATH, {"base_url": base_url, "model": model})
+    return openclaw_config_status()
+
+
+def disconnect_openclaw() -> dict[str, Any]:
+    for path in (OPENCLAW_CONFIG_PATH, OPENCLAW_SECRET_PATH):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    return {"ok": True, "configured": False, "base_url": "", "model": OPENCLAW_DEFAULT_MODEL, "token_saved": False}
+
+
+def _openclaw_request(path: str, method: str = "GET", payload: dict[str, Any] | None = None,
+                      timeout: float = 12.0) -> dict[str, Any]:
+    status = openclaw_config_status()
+    if not status["configured"]:
+        raise ValueError("OpenClaw is not configured. Open System Console → OpenClaw and save the server URL and token first.")
+    secret = _read_json_object(OPENCLAW_SECRET_PATH)
+    token = secret.get("token")
+    if not isinstance(token, str) or not token.strip():
+        raise ValueError("OpenClaw token is missing. Save it again in System Console → OpenClaw.")
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        status["base_url"] + path,
+        data=data,
+        headers={"Accept": "application/json", "Authorization": "Bearer " + token, **({"Content-Type": "application/json"} if data is not None else {})},
+        method=method,
+    )
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+            return None
+    try:
+        with urllib.request.build_opener(_NoRedirect).open(request, timeout=timeout) as response:
+            parsed = json.loads(response.read(2_000_000).decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code in {301, 302, 303, 307, 308}:
+            raise RuntimeError("OpenClaw redirected this request. Enter the final HTTPS Tailscale Serve URL directly.") from exc
+        if exc.code == 401:
+            raise RuntimeError("OpenClaw rejected the saved token (HTTP 401). Check the Gateway token.") from exc
+        if exc.code == 403:
+            raise RuntimeError("OpenClaw denied this request (HTTP 403). Check the selected agent and Gateway policy.") from exc
+        if exc.code == 404:
+            raise RuntimeError("OpenClaw returned HTTP 404. Its OpenAI-compatible Chat Completions endpoint may not be enabled yet.") from exc
+        if exc.code == 429:
+            raise RuntimeError("OpenClaw rate-limited the request (HTTP 429). Wait a moment and try again.") from exc
+        raise RuntimeError(f"OpenClaw returned HTTP {exc.code}. Check its Gateway logs for details.") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Could not reach OpenClaw at the saved Tailscale URL. Check that the server is online and reachable from this device. ({exc.reason})") from exc
+    except (TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RuntimeError(f"OpenClaw returned an invalid or timed-out response: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise RuntimeError("OpenClaw returned an unexpected response.")
+    return parsed
+
+
+def test_openclaw_connection() -> dict[str, Any]:
+    parsed = _openclaw_request("/models", timeout=12.0)
+    rows = parsed.get("data", [])
+    if not isinstance(rows, list):
+        raise RuntimeError("OpenClaw's /v1/models response did not contain an agent list.")
+    models = []
+    for item in rows[:100]:
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip():
+            models.append(item["id"][:250])
+    if not models:
+        raise RuntimeError("OpenClaw answered, but did not return any agent targets from /v1/models.")
+    status = openclaw_config_status()
+    return {"ok": True, "message": "OpenClaw is reachable and its HTTP API is responding.",
+            "base_url": status["base_url"], "model": status["model"],
+            "model_available": status["model"] in models or status["model"] == "openclaw",
+            "models": models[:30]}
+
+
+def delegate_to_openclaw(task: str, session_id: str = "") -> dict[str, Any]:
+    task_text = str(task or "").strip()
+    if not task_text or len(task_text) > 8_000:
+        raise ValueError("Delegated task must contain 1–8,000 characters.")
+    status = openclaw_config_status()
+    if not status["configured"]:
+        raise ValueError("OpenClaw is not configured. Save and test it in System Console → OpenClaw before delegating.")
+    import hashlib
+    stable_user = "jarvis:" + hashlib.sha256((session_id or secrets.token_urlsafe(12)).encode("utf-8")).hexdigest()[:32]
+    result = _openclaw_request("/chat/completions", method="POST", payload={
+        "model": status["model"],
+        "user": stable_user,
+        "messages": [{"role": "user", "content": "Task delegated from JARVIS. Work on the task using the tools and permissions configured for your OpenClaw agent. Return a clear summary of work completed, files changed, checks run, and any remaining issues.\n\nTASK:\n" + task_text}],
+        "stream": False,
+    }, timeout=300.0)
+    choices = result.get("choices", [])
+    message = choices[0].get("message", {}) if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
+    answer = message.get("content", "") if isinstance(message, dict) else ""
+    if isinstance(answer, list):
+        answer = "\n".join(str(part.get("text", "")) for part in answer if isinstance(part, dict))
+    answer = str(answer or "").strip()
+    if not answer:
+        raise RuntimeError("OpenClaw completed without returning a text summary.")
+    return {"ok": True, "agent": status["model"], "answer": answer[:30_000],
+            "truncated": len(answer) > 30_000}
+
+
 MAX_BODY_BYTES = 1_200_000
 MAX_VOICE_BYTES = 750_000
 MAX_FILE_BYTES = 200_000
@@ -1308,9 +1491,16 @@ TOOL_SPECS: list[dict[str, Any]] = [
             "cwd": {"type": "string", "description": "Optional workspace-relative working directory; default '.'."},
         }, "required": ["command"], "additionalProperties": False},
     }},
+    {"type": "function", "function": {
+        "name": "delegate_to_openclaw",
+        "description": "Delegate a substantial task to the separately configured OpenClaw agent on the private server. Only use when the user explicitly asks you to hand off work or asks for the server agent. This sends the task to the remote agent, whose own server-side policy controls its actions; JARVIS always asks the user to approve this delegation first.",
+        "parameters": {"type": "object", "properties": {
+            "task": {"type": "string", "description": "The complete task to hand to OpenClaw, with expected outcome and constraints. Do not include unrelated saved memories or secrets."}
+        }, "required": ["task"], "additionalProperties": False},
+    }},
 ]
 
-APPROVAL_TOOLS = {"write_file", "run_command", "remember_fact", "launch_app"}
+APPROVAL_TOOLS = {"write_file", "run_command", "remember_fact", "launch_app", "delegate_to_openclaw"}
 ALLOWED_COMMANDS = {
     "pwd", "ls", "tree", "find", "rg", "grep", "cat", "head", "tail", "wc",
     "git", "python", "python3", "pytest", "node", "npm", "go", "cargo",
@@ -1721,7 +1911,9 @@ def run_command(command: str, cwd: str = ".") -> dict[str, Any]:
             "command": command}
 
 
-def execute_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def execute_tool(tool_name: str, arguments: dict[str, Any], session_id: str = "") -> dict[str, Any]:
+    if tool_name == "delegate_to_openclaw":
+        return delegate_to_openclaw(str(arguments.get("task", "")), session_id=session_id)
     if tool_name == "launch_app":
         return launch_desktop_app(str(arguments.get("application_id", "")))
     if tool_name == "get_current_time":
@@ -1935,6 +2127,11 @@ def _pending_action_payload(pending_id: str, tool_name: str, arguments: dict[str
             "details": {"path": path, "exists": exists, "bytes": len(content.encode("utf-8"))},
             "preview": diff[:12_000], "preview_truncated": len(diff) > 12_000,
         }
+    if tool_name == "delegate_to_openclaw":
+        task = str(arguments.get("task", ""))[:500]
+        return {"id": pending_id, "tool": tool_name, "title": "Delegate task to OpenClaw",
+                "summary": task, "details": {"agent": openclaw_config_status().get("model", OPENCLAW_DEFAULT_MODEL), "task": task,
+                "warning": "The remote agent may use the tools and permissions configured on the OpenClaw server."}}
     if tool_name == "run_command":
         command = str(arguments.get("command", ""))
         return {"id": pending_id, "tool": tool_name, "title": "Run a developer command",
@@ -1997,7 +2194,7 @@ def agent_turn(session_id: str) -> dict[str, Any]:
                 return {"session_id": session_id,
                         "reply": "I have a proposed action ready for your review. Nothing has changed yet.",
                         "pending_action": _pending_action_payload(pending_id, tool_name, arguments)}
-            result = execute_tool(tool_name, arguments)
+            result = execute_tool(tool_name, arguments, session_id=session_id)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             result = {"ok": False, "error": str(exc)}
         messages.append({"role": "tool", "tool_call_id": str(call.get("id", "")),
@@ -2062,7 +2259,7 @@ def handle_approval(payload: dict[str, Any]) -> dict[str, Any]:
     session = _get_session(session_id)
     if approved:
         try:
-            result = execute_tool(pending["tool_name"], pending["arguments"])
+            result = execute_tool(pending["tool_name"], pending["arguments"], session_id=session_id)
         except (ValueError, OSError, TypeError) as exc:
             result = {"ok": False, "error": str(exc)}
     else:
@@ -2108,6 +2305,8 @@ class JarvisHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         route = urlsplit(self.path).path
+        if route == "/api/openclaw":
+            return self._send_json(200, openclaw_config_status())
         if route == "/api/health":
             return self._send_json(200, {"ok": True, "app": "JARVIS", "model": MODEL,
                 "base_url": BASE_URL, "workspace": str(WORKSPACE), "host": HOST, "port": PORT})
@@ -2228,6 +2427,12 @@ class JarvisHandler(BaseHTTPRequestHandler):
                 return self._send_json(200, handle_approval(payload))
             if route == "/api/model":
                 return self._send_json(200, save_model_config(payload))
+            if route == "/api/openclaw/save":
+                return self._send_json(200, save_openclaw_config(payload))
+            if route == "/api/openclaw/test":
+                return self._send_json(200, test_openclaw_connection())
+            if route == "/api/openclaw/disconnect":
+                return self._send_json(200, disconnect_openclaw())
             if route == "/api/memory":
                 fact = payload.get("fact", "")
                 if not isinstance(fact, str):
