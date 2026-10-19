@@ -27,7 +27,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Local model benchmark for up to three endpoint models, showing wall time and generated-token rate when server metrics are available.
 - Ctrl/Cmd+K command palette for fast navigation. A tiny draggable voice-only sphere stays inside the JARVIS browser tab and toggles hands-free voice mode.
 - Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
-- Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools; app launches are allowlisted and approval-gated.
+- Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools. A direct, standalone request such as “Open Firefox” launches immediately through the fixed app allowlist; indirect or multi-step app launches still require approval.
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
 - File writes and terminal commands pause for your explicit approval in the UI. Proposed file writes show a unified diff; accepted writes back up prior bytes and can be undone in Code Review.
 - Local-only HTTP server by default; model API credentials remain on the server.
@@ -96,7 +96,7 @@ The launcher starts a loopback-only Qwen service on `127.0.0.1:8766`, waits for 
 
 ## Safety model
 
-The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. Writing files, running allowlisted developer commands, and launching allowlisted desktop apps requires a clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
+The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. A simple, standalone request to open one named desktop app (for example, “Open Firefox”) runs through the fixed allowlist without an extra confirmation; JARVIS passes no user-supplied arguments and never uses a shell for app launches. App launches suggested by routines, plans, or multi-step/ambiguous requests still require approval. Writing files and running allowlisted developer commands require a clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
 
 ## Tests
 
