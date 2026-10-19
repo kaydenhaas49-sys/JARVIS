@@ -425,6 +425,58 @@ class DashboardDataTests(unittest.TestCase):
             self.assertIn("must not be used as ongoing persistent storage", prompt)
 
 
+class DesktopAppDiscoveryTests(unittest.TestCase):
+    def test_discovers_and_launches_plex_from_a_desktop_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            applications = Path(temporary) / "applications"
+            applications.mkdir()
+            desktop_file = applications / "com.plexapp.PlexMediaPlayer.desktop"
+            desktop_file.write_text(
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=Plex HTPC\n"
+                "Comment=Plex media player\n"
+                "Exec=flatpak run tv.plex.PlexHTPC %U\n"
+                "Categories=AudioVideo;Player;\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \
+                 mock.patch.object(jarvis.platform, "system", return_value="Linux"):
+                discovered = jarvis.discover_desktop_applications()
+                self.assertEqual(len(discovered), 1)
+                self.assertEqual(discovered[0]["name"], "Plex HTPC")
+                self.assertEqual(
+                    jarvis._direct_desktop_app_intent("Open Plex HTPC"),
+                    "desktop:com.plexapp.PlexMediaPlayer",
+                )
+                with mock.patch.object(
+                    jarvis.shutil, "which",
+                    side_effect=lambda name: "/usr/bin/gio" if name == "gio" else None,
+                ), mock.patch.object(
+                    jarvis.subprocess, "Popen", return_value=SimpleNamespace(pid=7788)
+                ) as popen, mock.patch.object(jarvis, "_log_dashboard_tool_action"):
+                    result = jarvis.launch_desktop_app("desktop:com.plexapp.PlexMediaPlayer")
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["application"], "Plex HTPC")
+            self.assertEqual(
+                popen.call_args.args[0],
+                ["/usr/bin/gio", "launch", str(desktop_file)],
+            )
+            self.assertFalse(popen.call_args.kwargs["shell"])
+
+    def test_plex_and_netflix_can_fall_back_to_fixed_web_app_urls(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            applications = Path(temporary) / "applications"
+            applications.mkdir()
+            with mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \
+                 mock.patch.object(jarvis.platform, "system", return_value="Linux"):
+                self.assertIsNone(jarvis._direct_desktop_app_intent("Open Plex"))
+                self.assertEqual(jarvis._direct_web_app_intent("Open Plex in browser"), "plex")
+                self.assertEqual(jarvis._direct_web_app_intent("Open Netflix"), "netflix")
+        with self.assertRaisesRegex(ValueError, "known web-app list"):
+            jarvis.open_web_app("https://example.com")
+
 class ApprovalAndCommandTests(unittest.TestCase):
     def test_changes_require_approval(self) -> None:
         self.assertTrue(jarvis.is_approval_required("write_file"))
