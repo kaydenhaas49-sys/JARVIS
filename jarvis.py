@@ -1395,7 +1395,7 @@ def desktop_apps_status() -> dict[str, Any]:
 
 
 def launch_desktop_app(application_id: str) -> dict[str, Any]:
-    """Start one approved graphical app with a fixed executable and no shell or caller arguments."""
+    """Start one allowlisted graphical app with a fixed executable and no shell or caller arguments."""
     app, executable = _resolve_desktop_application(application_id)
     try:
         process = subprocess.Popen(
@@ -1447,13 +1447,13 @@ Kitchen data in kitchen.json, chat archives in chat-history.json, and activity i
 the user explicitly asks to change the active model. These are real persisted records, not pretend actions. For a
 requested recipe, include a name, ingredients and clear steps. Only say a change succeeded when the tool confirms it.
 Delete or overwrite data only on an explicit request in the current turn.
-Desktop application launches are limited to the fixed Linux app allowlist. A simple, standalone user request to open one named app (such as “Open Firefox”) is handled directly by a strict intent matcher and the fixed launcher, without a separate approval prompt. This shortcut accepts no app arguments, URLs, paths, shell commands, or multi-step requests. For app launches suggested as part of routines, plans, ambiguous requests, or multi-step tasks, use launch_app; those still require approval. Never compose a shell command to launch software.
+Desktop application launches are limited to the fixed Linux app allowlist. A simple, standalone user request to open one named app (such as “Open Firefox”) is handled directly by a strict intent matcher and the fixed launcher, without a separate approval prompt. This shortcut accepts no app arguments, URLs, paths, shell commands, or multi-step requests. For app launches suggested as part of routines, plans, ambiguous requests, or multi-step tasks, use launch_app; it launches allowlisted apps immediately without approval. Never compose a shell command to launch software.
 Current workspace: """ + str(WORKSPACE)
 
 TOOL_SPECS: list[dict[str, Any]] = [
     {"type": "function", "function": {
         "name": "launch_app",
-        "description": "Request approval to open one known, installed Linux desktop application when the launch is part of an indirect, multi-step, routine, or otherwise ambiguous task. Simple standalone requests such as “Open Firefox” are handled directly before the model runs. Use only an application_id from the fixed allowlist; never pass shell commands, paths, URLs, or arguments.",
+        "description": "Open one known, installed Linux desktop application immediately, including when it is part of a multi-step request. App launches from the fixed allowlist do not require approval. Use only an application_id from the fixed allowlist; never pass shell commands, paths, URLs, or arguments.",
         "parameters": {"type": "object", "properties": {
             "application_id": {"type": "string", "enum": [
                 "browser_firefox", "browser_chromium", "file_manager", "terminal", "code_editor",
@@ -1555,7 +1555,7 @@ TOOL_SPECS: list[dict[str, Any]] = [
     }},
 ]
 
-APPROVAL_TOOLS = {"write_file", "run_command", "remember_fact", "launch_app", "delegate_to_openclaw"}
+APPROVAL_TOOLS = {"write_file", "run_command", "remember_fact", "delegate_to_openclaw"}
 ALLOWED_COMMANDS = {
     "pwd", "ls", "tree", "find", "rg", "grep", "cat", "head", "tail", "wc",
     "git", "python", "python3", "pytest", "node", "npm", "go", "cargo",
