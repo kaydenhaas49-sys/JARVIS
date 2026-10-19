@@ -1,6 +1,7 @@
 """Unit tests for JARVIS path and command safety boundaries."""
 from __future__ import annotations
 
+import base64
 import io
 import json
 import sys
@@ -477,6 +478,82 @@ class DesktopAppDiscoveryTests(unittest.TestCase):
                 self.assertEqual(jarvis._direct_web_app_intent("Open Netflix"), "netflix")
         with self.assertRaisesRegex(ValueError, "known web-app list"):
             jarvis.open_web_app("https://example.com")
+
+class NetworkAccessTests(unittest.TestCase):
+    def test_loopback_bind_addresses_do_not_require_network_auth(self) -> None:
+        for host in ("127.0.0.1", "localhost", "::1", "[::1]"):
+            with self.subTest(host=host):
+                self.assertFalse(jarvis._network_access_requires_auth(host))
+
+    def test_non_loopback_bind_requires_a_strong_password(self) -> None:
+        self.assertTrue(jarvis._network_access_requires_auth("0.0.0.0"))
+        self.assertTrue(jarvis._network_access_requires_auth("100.64.0.12"))
+        jarvis.validate_network_bind_security("127.0.0.1", password="")
+        with self.assertRaisesRegex(ValueError, "at least 16 characters"):
+            jarvis.validate_network_bind_security("0.0.0.0", username="jarvis", password="")
+        with self.assertRaisesRegex(ValueError, "at least 16 characters"):
+            jarvis.validate_network_bind_security("100.64.0.12", username="jarvis", password="too-short")
+        with self.assertRaisesRegex(ValueError, "cannot contain a colon"):
+            jarvis.validate_network_bind_security("0.0.0.0", username="bad:user", password="a-secure-test-password")
+        jarvis.validate_network_bind_security(
+            "100.64.0.12", username="jarvis", password="a-secure-test-password"
+        )
+
+    def test_basic_auth_uses_configured_username_and_password(self) -> None:
+        username = "test-jarvis"
+        password = "a-secure-test-password"
+        valid = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()
+        wrong_password = "Basic " + base64.b64encode(f"{username}:wrong-password".encode()).decode()
+        with mock.patch.object(jarvis, "ACCESS_USER", username), \\
+             mock.patch.object(jarvis, "ACCESS_PASSWORD", password):
+            self.assertTrue(jarvis._basic_auth_matches(valid))
+            self.assertFalse(jarvis._basic_auth_matches(wrong_password))
+            self.assertFalse(jarvis._basic_auth_matches("Bearer " + valid.split(" ", 1)[1]))
+            self.assertFalse(jarvis._basic_auth_matches("Basic not-base64!!"))
+
+    def test_remote_request_challenges_when_credentials_are_missing(self) -> None:
+        handler = SimpleNamespace(
+            headers={"Authorization": ""},
+            command="GET",
+            send_response=mock.Mock(),
+            send_header=mock.Mock(),
+            end_headers=mock.Mock(),
+            _send_json=mock.Mock(),
+        )
+        with mock.patch.object(jarvis, "HOST", "100.64.0.12"), \\
+             mock.patch.object(jarvis, "ACCESS_USER", "jarvis"), \\
+             mock.patch.object(jarvis, "ACCESS_PASSWORD", "a-secure-test-password"):
+            allowed = jarvis.JarvisHandler._require_request_access(handler)
+
+        self.assertFalse(allowed)
+        handler.send_response.assert_called_once_with(401)
+        handler.send_header.assert_any_call(
+            "WWW-Authenticate", 'Basic realm="JARVIS network testing", charset="UTF-8"'
+        )
+        handler.end_headers.assert_called_once()
+
+    def test_remote_post_rejects_cross_origin_requests(self) -> None:
+        username = "jarvis"
+        password = "a-secure-test-password"
+        token = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()
+        handler = SimpleNamespace(
+            headers={"Authorization": token, "Origin": "http://evil.example", "Host": "100.64.0.12:8765"},
+            command="POST",
+            _send_json=mock.Mock(),
+            send_response=mock.Mock(),
+            send_header=mock.Mock(),
+            end_headers=mock.Mock(),
+        )
+        with mock.patch.object(jarvis, "HOST", "100.64.0.12"), \\
+             mock.patch.object(jarvis, "ACCESS_USER", username), \\
+             mock.patch.object(jarvis, "ACCESS_PASSWORD", password):
+            allowed = jarvis.JarvisHandler._require_request_access(handler)
+
+        self.assertFalse(allowed)
+        handler._send_json.assert_called_once_with(
+            403, {"error": "Cross-origin or origin-less POST requests are blocked in network mode."}
+        )
+
 
 class AppInventoryTests(unittest.TestCase):
     def test_recognizes_natural_installed_app_inventory_requests(self) -> None:
