@@ -6,7 +6,7 @@
   async function get(url){const r=await fetch(url,{cache:"no-store"});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Request failed.");return d;}
   async function post(url,data){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Request failed.");return d;}
   const bytes=n=>n<1024?n+" B":n<1048576?(n/1024).toFixed(1)+" KB":(n/1048576).toFixed(1)+" MB";
-  let queued=[],panel=null,panelKey="",palette=null,paletteRows=[],paletteIndex=0,sphere=null,dragged=false,profiles=[],editProject="";
+  let queued=[],panel=null,panelKey="",palette=null,paletteRows=[],paletteIndex=0,profiles=[],editProject="";
 
   // Attachments stay in browser memory until sent; file text is added to the prompt and images go to the selected model endpoint.
   function setupAttachments(){
@@ -159,7 +159,6 @@
     ["Desktop apps","Desktop","",()=>window.JARVISApp?.openUtility?.("apps")],
     ["Kitchen","Personal","",()=>window.JARVISApp?.openUtility?.("kitchen")],
     ["Start/stop voice mode","Voice","",()=>$("#micBtn")?.click()],
-    ["Show voice sphere","Voice","",()=>sphere?.classList.toggle("voice-companion-visible")]
   ];
   function ensurePalette(){
     if(palette)return palette;
@@ -186,19 +185,6 @@
   },true);
   window.addEventListener("jarvis:palette-toggle",openPalette);
 
-  // #11 Browser-tab sphere. It has no chat/text controls; click only toggles existing voice mode.
-  function createSphere(){
-    sphere=document.createElement("button");sphere.type="button";sphere.className="voice-companion";sphere.title="Voice-only JARVIS sphere — click to toggle hands-free voice; drag to reposition";sphere.setAttribute("aria-label","Toggle voice-only JARVIS companion");
-    sphere.innerHTML='<span class="voice-companion-aura"></span><span class="voice-companion-core"></span><span class="voice-companion-ring"></span>';document.body.append(sphere);
-    const mic=$("#micBtn"),sync=()=>{const active=Boolean(mic?.classList.contains("listening"));sphere.classList.toggle("is-listening",active);sphere.setAttribute("aria-pressed",String(active));};
-    if(mic)new MutationObserver(sync).observe(mic,{attributes:true,attributeFilter:["class"]});
-    sphere.addEventListener("click",()=>{if(dragged){dragged=false;return;}mic?.click();setTimeout(sync,80);});
-    let pointer=null;
-    sphere.addEventListener("pointerdown",e=>{if(e.button!==0)return;pointer={x:e.clientX,y:e.clientY,left:sphere.getBoundingClientRect().left,top:sphere.getBoundingClientRect().top,moved:false};sphere.setPointerCapture?.(e.pointerId);});
-    sphere.addEventListener("pointermove",e=>{if(!pointer)return;const dx=e.clientX-pointer.x,dy=e.clientY-pointer.y;if(Math.abs(dx)+Math.abs(dy)>6)pointer.moved=true;if(!pointer.moved)return;dragged=true;sphere.style.left=Math.max(4,Math.min(innerWidth-sphere.offsetWidth-4,pointer.left+dx))+"px";sphere.style.top=Math.max(4,Math.min(innerHeight-sphere.offsetHeight-4,pointer.top+dy))+"px";sphere.style.right="auto";sphere.style.bottom="auto";});
-    const finish=()=>{if(pointer?.moved)setTimeout(()=>{dragged=false;},0);pointer=null;};sphere.addEventListener("pointerup",finish);sphere.addEventListener("pointercancel",finish);
-    window.addEventListener("resize",()=>{const r=sphere.getBoundingClientRect();if(r.right>innerWidth)sphere.style.left=Math.max(4,innerWidth-r.width-4)+"px";if(r.bottom>innerHeight)sphere.style.top=Math.max(4,innerHeight-r.height-4)+"px";});sync();
-  }
   window.JARVISAdvancedTools=window.JARVISAdvancedTools||{};window.JARVISAdvancedTools.open=openAdvanced;
-  setupAttachments();createSphere();
+  setupAttachments();
 })();
