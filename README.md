@@ -83,12 +83,37 @@ chmod +x run_jarvis_qwen.sh
 
 The launcher starts a loopback-only Qwen service on `127.0.0.1:8766`, waits for the model and reference prompt to load, then starts JARVIS. Ctrl+C stops both. Logs are saved at `~/.local/share/jarvis/qwen-tts.log`. If Qwen fails during an individual synthesis, JARVIS falls back to Piper. To change the reference recording, set `JARVIS_QWEN_REFERENCE_AUDIO` and `JARVIS_QWEN_REFERENCE_TEXT` before launching.
 
+## Remote testing over Tailscale or a trusted LAN
+
+JARVIS stays on `127.0.0.1` by default. For temporary testing from another device, network binding is opt-in and the server refuses to start on a non-loopback address unless a private password of at least 16 characters is configured. All dashboard pages and API routes use HTTP Basic authentication in network mode, and browser POSTs must include the same origin.
+
+**Recommended: bind only to this computer's Tailscale IP** so JARVIS is not listening on every network interface:
+
+1. On the computer running JARVIS, run `tailscale ip -4` and copy its `100.x.y.z` address.
+2. Generate a password with `python3 -c 'import secrets; print(secrets.token_urlsafe(24))'`.
+3. Edit `~/JARVIS/.env` (create it if needed), setting these values. Replace the sample IP and password with your own; do not share or commit the password.
+
+   ```dotenv
+   JARVIS_HOST=100.x.y.z
+   JARVIS_PORT=8765
+   JARVIS_ACCESS_USER=jarvis
+   JARVIS_ACCESS_PASSWORD=PASTE_YOUR_PRIVATE_PASSWORD_HERE
+   ```
+
+4. Restart JARVIS. From another device on the same tailnet, visit `http://100.x.y.z:8765` using the same Tailscale IP. Your browser should prompt for the configured username and password.
+
+To test over a trusted home LAN instead, set `JARVIS_HOST=0.0.0.0` and open `http://<the-JARVIS-computer-LAN-IP>:8765` from the other device. This binds every IPv4 interface, so use your firewall to limit access to your private network.
+
+**Do not port-forward JARVIS or expose it directly to the public internet.** Basic authentication does not encrypt plain HTTP by itself. Prefer Tailscale for remote testing, keep the password private, and return `JARVIS_HOST` to `127.0.0.1` when you are finished testing.
+
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `JARVIS_HOST` | `127.0.0.1` | Bind address. Keep local unless you understand the security implications. |
 | `JARVIS_PORT` | `8765` | Dashboard server port. |
+| `JARVIS_ACCESS_USER` | `jarvis` | HTTP Basic authentication username when bound to a network interface. |
+| `JARVIS_ACCESS_PASSWORD` | empty | Required network-mode password (at least 16 characters); never commit it. |
 | `JARVIS_BASE_URL` | `http://127.0.0.1:8080/v1` | OpenAI-compatible API base URL. |
 | `JARVIS_MODEL` | `local-model` | Model identifier accepted by your server. |
 | `JARVIS_API_KEY` | empty | Optional API key for compatible servers. Never put it in frontend code. |
