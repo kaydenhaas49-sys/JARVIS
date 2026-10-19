@@ -445,6 +445,7 @@ class DesktopAppDiscoveryTests(unittest.TestCase):
                 discovered = jarvis.discover_desktop_applications()
                 self.assertEqual(len(discovered), 1)
                 self.assertEqual(discovered[0]["name"], "Plex HTPC")
+                self.assertIn("AudioVideo", discovered[0]["categories"])
                 self.assertEqual(
                     jarvis._direct_desktop_app_intent("Open Plex HTPC"),
                     "desktop:com.plexapp.PlexMediaPlayer",
@@ -476,6 +477,58 @@ class DesktopAppDiscoveryTests(unittest.TestCase):
                 self.assertEqual(jarvis._direct_web_app_intent("Open Netflix"), "netflix")
         with self.assertRaisesRegex(ValueError, "known web-app list"):
             jarvis.open_web_app("https://example.com")
+
+class AppInventoryTests(unittest.TestCase):
+    def test_recognizes_natural_installed_app_inventory_requests(self) -> None:
+        for request in (
+            "JARVIS list all my installed apps and group them into categories",
+            "List installed apps",
+            "Show all available applications",
+        ):
+            with self.subTest(request=request):
+                self.assertTrue(jarvis._is_app_inventory_request(request))
+
+        for request in (
+            "Open Steam",
+            "List installed apps and delete the old ones",
+            "What is the best app for drawing?",
+        ):
+            with self.subTest(request=request):
+                self.assertFalse(jarvis._is_app_inventory_request(request))
+
+    def test_inventory_is_grouped_using_desktop_categories(self) -> None:
+        rows = [
+            {"id": "steam", "name": "Steam", "description": "Game library", "categories": ["Game"], "available": True},
+            {"id": "browser_firefox", "name": "Firefox", "description": "Web browser", "categories": ["Network", "WebBrowser"], "available": True},
+            {"id": "desktop:org.kde.kate", "name": "Kate", "description": "Text editor", "categories": ["Utility", "TextEditor"], "available": True},
+        ]
+        with mock.patch.object(jarvis, "list_desktop_apps", return_value={"ok": True, "count": len(rows), "apps": rows}):
+            reply = jarvis.format_installed_app_inventory()
+
+        self.assertIn("I found 3 available desktop apps", reply)
+        self.assertIn("### Games (1)", reply)
+        self.assertIn("### Browsers (1)", reply)
+        self.assertIn("### Utilities & File Management (1)", reply)
+        self.assertIn("Steam", reply)
+        self.assertIn("Firefox", reply)
+        self.assertIn("Kate", reply)
+
+    def test_inventory_request_returns_directly_without_model_call(self) -> None:
+        session = {"messages": [], "updated_at": 0.0}
+        inventory = "Categorized installed app inventory."
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \\
+             mock.patch.object(jarvis, "format_installed_app_inventory", return_value=inventory), \\
+             mock.patch.object(jarvis, "agent_turn") as agent_turn:
+            result = jarvis.handle_chat({
+                "session_id": "app-inventory-test",
+                "message": "JARVIS list all my installed apps and group them into categories",
+            })
+
+        agent_turn.assert_not_called()
+        self.assertIsNone(result["pending_action"])
+        self.assertEqual(result["reply"], inventory)
+        self.assertEqual(session["messages"][-1], {"role": "assistant", "content": inventory})
+
 
 class ApprovalAndCommandTests(unittest.TestCase):
     def test_changes_require_approval(self) -> None:
