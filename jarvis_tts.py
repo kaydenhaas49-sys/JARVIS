@@ -126,8 +126,14 @@ def _validate_wav(audio_bytes: bytes) -> bytes:
             frame_count = wav_file.getnframes()
             if channels < 1 or sample_width not in {1, 2, 3, 4} or sample_rate < 8_000 or frame_count < 1:
                 raise RuntimeError("Piper returned an empty or invalid WAV stream.")
-            if not wav_file.readframes(1):
-                raise RuntimeError("Piper returned a WAV file with no audio frames.")
+            remaining_frames = frame_count
+            frame_bytes = channels * sample_width
+            while remaining_frames:
+                frames_to_read = min(65_536, remaining_frames)
+                frame_data = wav_file.readframes(frames_to_read)
+                if len(frame_data) != frames_to_read * frame_bytes:
+                    raise RuntimeError("Piper returned a truncated WAV file.")
+                remaining_frames -= frames_to_read
     except (wave.Error, EOFError, OSError) as exc:
         raise RuntimeError("Piper returned an invalid WAV file that browsers cannot decode.") from exc
     return audio_bytes

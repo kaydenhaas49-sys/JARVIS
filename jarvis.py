@@ -1275,14 +1275,22 @@ def configure_wakeword(enabled: bool) -> dict[str, Any]:
 
 
 def _voice_audio_suffix(mime_type: Any) -> str:
-    mime = str(mime_type or "").lower()
-    if "ogg" in mime:
-        return ".ogg"
-    if "wav" in mime:
-        return ".wav"
-    if "mp4" in mime or "m4a" in mime:
-        return ".m4a"
-    return ".webm"
+    mime = str(mime_type or "").split(";", 1)[0].strip().lower()
+    if not mime:
+        return ".webm"
+    suffixes = {
+        "audio/webm": ".webm",
+        "audio/ogg": ".ogg",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+        "audio/mp4": ".mp4",
+        "audio/m4a": ".m4a",
+        "audio/x-m4a": ".m4a",
+    }
+    try:
+        return suffixes[mime]
+    except KeyError as exc:
+        raise ValueError("Use a supported audio type: WebM, Ogg, WAV, MP4, or M4A.") from exc
 
 
 

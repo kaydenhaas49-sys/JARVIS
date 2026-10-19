@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+import threading
 import types
 import urllib.error
 import tempfile
@@ -18,6 +19,70 @@ import voice
 
 
 class VoiceSupportTests(unittest.TestCase):
+    def test_voice_audio_mime_types_map_to_supported_containers(self) -> None:
+        for mime_type, suffix in (
+            ("audio/webm;codecs=opus", ".webm"),
+            ("audio/ogg;codecs=opus", ".ogg"),
+            ("audio/wav", ".wav"),
+            ("audio/x-wav", ".wav"),
+            ("audio/mp4;codecs=mp4a.40.2", ".mp4"),
+            ("audio/m4a", ".m4a"),
+            ("", ".webm"),
+        ):
+            with self.subTest(mime_type=mime_type):
+                self.assertEqual(jarvis._voice_audio_suffix(mime_type), suffix)
+
+        for mime_type in ("text/plain", "video/webm", "audio/mpeg"):
+            with self.subTest(mime_type=mime_type), self.assertRaisesRegex(ValueError, "supported audio"):
+                jarvis._voice_audio_suffix(mime_type)
+
+    def test_reenabling_a_live_wake_worker_clears_a_pending_stop(self) -> None:
+        class ExistingWorker:
+            def is_alive(self):
+                return True
+
+            def join(self, timeout=None):
+                self.join_timeout = timeout
+
+        manager = voice.WakeWordManager(transcribe_pcm=lambda _pcm: "ignored")
+        worker = ExistingWorker()
+        manager._thread = worker
+        manager._stop.set()
+        with mock.patch.object(voice, "missing_voice_packages", return_value=[]):
+            state = manager.enable()
+
+        self.assertTrue(state["enabled"])
+        self.assertTrue(state["armed"])
+        self.assertFalse(manager._stop.is_set())
+        self.assertIs(manager._thread, worker)
+
+    def test_stopped_wake_worker_clears_its_reference_before_exit(self) -> None:
+        openwakeword = types.ModuleType("openwakeword")
+        openwakeword.__path__ = []
+        utils = types.ModuleType("openwakeword.utils")
+        utils.download_models = lambda **_kwargs: None
+        model_module = types.ModuleType("openwakeword.model")
+        model_module.Model = lambda **_kwargs: object()
+        modules = {
+            "numpy": types.ModuleType("numpy"),
+            "openwakeword": openwakeword,
+            "openwakeword.utils": utils,
+            "openwakeword.model": model_module,
+            "sounddevice": types.ModuleType("sounddevice"),
+        }
+        manager = voice.WakeWordManager(transcribe_pcm=lambda _pcm: "ignored")
+        manager._thread = threading.current_thread()
+        manager._stop.set()
+
+        with mock.patch.dict(sys.modules, modules):
+            manager._run()
+
+        self.assertIsNone(manager._thread)
+        with mock.patch.object(voice, "missing_voice_packages", return_value=[]), \
+             mock.patch.object(manager, "_start_worker_locked") as start_worker:
+            manager.enable()
+        start_worker.assert_called_once_with()
+
     def test_empty_or_oversized_recordings_are_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "No voice audio"):
             voice.transcribe_audio_bytes(b"")
@@ -44,6 +109,24 @@ class VoiceSupportTests(unittest.TestCase):
         self.assertEqual(result, "Hello from local speech")
         self.assertFalse(fake_model.source_path.exists())
         self.assertTrue(fake_model.asserted_options["vad_filter"])
+
+    def test_malformed_local_audio_returns_an_error_and_removes_the_temporary_file(self) -> None:
+        class FakeWhisper:
+            source_path = None
+
+            def transcribe(self, path, **_kwargs):
+                self.source_path = Path(path)
+                raise ValueError("container decode failed")
+
+        fake_model = FakeWhisper()
+        fake_module = types.ModuleType("faster_whisper")
+        fake_module.WhisperModel = lambda *args, **kwargs: fake_model
+        with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+             mock.patch.object(voice, "_STT_MODEL", fake_model):
+            with self.assertRaisesRegex(RuntimeError, "Local speech recognition failed"):
+                voice.transcribe_audio_bytes(b"malformed audio", "audio/webm")
+        self.assertIsNotNone(fake_model.source_path)
+        self.assertFalse(fake_model.source_path.exists())
 
     def test_wakeword_pcm_is_wrapped_as_mono_16khz_wav(self) -> None:
         pcm = b"\x00\x00" * 1600

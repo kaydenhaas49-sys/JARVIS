@@ -20,33 +20,55 @@
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
   <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="hud-brand" aria-label="JARVIS by Stark Systems">
-        <span class="hud-brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="hud-brand-copy"><strong>J.A.R.V.I.S.</strong><small>STARK SYSTEMS / LOCAL AI</small></span>
+    <aside class="sidebar" id="sidebar" aria-label="JARVIS navigation">
+      <div class="sidebar-header">
+        <div class="hud-brand" aria-label="JARVIS by Stark Systems">
+          <span class="hud-brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="hud-brand-copy"><strong>J.A.R.V.I.S.</strong><small>STARK SYSTEMS / LOCAL AI</small></span>
+        </div>
+        <button class="sidebar-close" id="sidebarCloseBtn" type="button" aria-label="Close navigation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
       </div>
       <button class="new-chat-btn" id="newChatBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        <span>New conversation</span><kbd>⌘ ⇧ K</kbd>
+        <span>New chat</span>
       </button>
 
-      <div class="sidebar-section">
-        <div class="section-label">SYSTEM</div>
-        <div class="nav-item selected"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 2.34-5.66M4 4v4h4M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Assistant</span><span class="nav-dot"></span></div>
-        <button class="nav-item nav-button" id="systemBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 21h8m-4-4v4M7 9h3m-3 3h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>System Console</span></button>
-        <button class="nav-item nav-button" id="appsBtn" type="button" aria-label="Open desktop app launcher"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/></svg></span><span>Desktop apps</span><span class="nav-dot"></span></button>
-        <button class="nav-item nav-button" id="kitchenBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10h16l-1.5 10h-13L4 10ZM7 10V5h10v5M9 5V3m6 2V3M8 14h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Kitchen</span></button>
-        <button class="nav-item nav-button" id="memoryBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H20v17H7.5A2.5 2.5 0 0 1 5 17.5v-12ZM5 5.5v12M9 7h7M9 11h7M9 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Memory &amp; archive</span></button>
-        <button class="nav-item nav-button" id="codingBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-2-11-4 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Coding agent</span></button>
-      </div>
+      <nav class="sidebar-nav" aria-label="Primary navigation">
+        <section class="sidebar-section" aria-labelledby="nav-assistant-heading">
+          <h2 class="section-label" id="nav-assistant-heading">Assistant</h2>
+          <button class="nav-item nav-button selected" id="assistantBtn" type="button" aria-current="page">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.34-5.66M4 4v4h4M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Assistant</span><span class="nav-dot" aria-hidden="true"></span>
+          </button>
+        </section>
+        <section class="sidebar-section" aria-labelledby="nav-workspace-heading">
+          <h2 class="section-label" id="nav-workspace-heading">Workspace</h2>
+          <button class="nav-item nav-button" id="kitchenBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10h16l-1.5 10h-13L4 10ZM7 10V5h10v5M9 5V3m6 2V3M8 14h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Kitchen</span></button>
+          <button class="nav-item nav-button" id="memoryBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H20v17H7.5A2.5 2.5 0 0 1 5 17.5v-12ZM5 5.5v12M9 7h7M9 11h7M9 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Memory &amp; archive</span></button>
+          <button class="nav-item nav-button" id="codingBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-2-11-4 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Coding agent</span></button>
+        </section>
+        <section class="sidebar-section" aria-labelledby="nav-system-heading">
+          <h2 class="section-label" id="nav-system-heading">System</h2>
+          <button class="nav-item nav-button" id="systemBtn" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 21h8m-4-4v4M7 9h3m-3 3h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span>System Console</span></button>
+          <button class="nav-item nav-button" id="appsBtn" type="button" aria-label="Open desktop app launcher"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.6"/></svg></span><span>Desktop apps</span></button>
+        </section>
+      </nav>
 
-      <div class="sidebar-spacer"></div>
+      <div class="sidebar-context">
+        <div class="sidebar-context-heading"><span class="context-led" aria-hidden="true"></span>Workspace path</div>
+        <div class="workspace-path" id="workspacePath" title="">Loading workspace…</div>
+      </div>
+      <footer class="sidebar-footer" aria-label="Action safety">
+        <span class="sidebar-footer-led" aria-hidden="true"></span>
+        <span class="sidebar-footer-copy"><strong>Action review</strong><small>File, terminal, and app actions require your approval.</small></span>
+      </footer>
     </aside>
 
     <main class="main-area">
       <header class="topbar">
         <div class="topbar-left">
-          <button class="icon-btn mobile-menu" id="menuBtn" type="button" aria-label="Toggle menu"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+          <button class="icon-btn mobile-menu" id="menuBtn" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
           <div class="breadcrumb"><span>JARVIS</span><span class="crumb-slash">/</span><strong>Assistant</strong></div>
         </div>
         <div class="topbar-actions">
@@ -153,6 +175,6 @@
   </section>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
-  <div class="mobile-scrim" id="mobileScrim"></div>
+  <div class="mobile-scrim" id="mobileScrim" aria-hidden="true"></div>
 </body>
 </html>

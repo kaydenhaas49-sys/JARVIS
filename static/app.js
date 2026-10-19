@@ -8,7 +8,8 @@
     connectionPill: $("#connectionPill"), connectionLabel: $("#connectionLabel"),
     workspacePath: $("#workspacePath"), testModel: $("#testModelBtn"),
     voiceOutput: $("#voiceOutputBtn"), toastRegion: $("#toastRegion"),
-    sidebar: $("#sidebar"), mobileScrim: $("#mobileScrim"),
+    sidebar: $("#sidebar"), sidebarClose: $("#sidebarCloseBtn"),
+    menuBtn: $("#menuBtn"), mobileScrim: $("#mobileScrim"),
     utilityPanel: $("#utilityPanel"), utilityContent: $("#utilityContent"),
     utilityTitle: $("#utilityTitle"), utilityEyebrow: $("#utilityEyebrow"),
   };
@@ -25,6 +26,7 @@
   let historySearchText = "";
   let sessionRestorePromise = null;
   let busy = false;
+  let messagePreparing = false;
   let listening = false;
   let startingVoiceCapture = false;
   let voiceReplies = true;
@@ -50,6 +52,7 @@
   let recordingStartedAt = 0;
   let recordingStopTimer = null;
   let wakeWordEnabled = false;
+  let pendingWakeCommand = null;
   let wakeWordStatus = null;
   let wakeEventCursor = 0;
   let wakeEventsReady = false;
@@ -57,6 +60,8 @@
   let wakeEventPollTimer = null;
   let wakeStatusPollTimer = null;
   let currentUtilityView = null;
+  let sidebarReturnFocus = null;
+  let utilityReturnFocus = null;
   let activeSystemTab = "status";
   let openQuickNotesPanel = null;
   let openRecipeSaverPanel = null;
@@ -309,25 +314,64 @@
     return data;
   }
 
+  function queueWakeCommand(text) {
+    const command = String(text || "").trim();
+    if (!command || pendingWakeCommand) return;
+    pendingWakeCommand = command;
+    showToast("I heard you. I’ll respond after the current turn finishes.");
+  }
+
+  function drainPendingWakeCommand() {
+    if (!pendingWakeCommand || busy || messagePreparing || sessionRestorePromise) return false;
+    const command = pendingWakeCommand;
+    pendingWakeCommand = null;
+    void sendMessage(command, { fromWakeWord: true });
+    return true;
+  }
+
+  async function rearmWakeWord() {
+    if (!wakeWordEnabled) return;
+    try {
+      await apiPost("/api/voice/rearm", {});
+      await refreshWakeWordStatus(false);
+    } catch (error) {
+      showToast("Wake word could not re-arm: " + error.message, "error");
+    }
+  }
+
   async function sendMessage(textOverride, options = {}) {
-    if (busy) return;
+    if (busy || messagePreparing) {
+      if (options.fromWakeWord) queueWakeCommand(textOverride);
+      else if (messagePreparing) showToast("JARVIS is preparing the current message. Please wait.");
+      return;
+    }
     if (sessionRestorePromise) {
-      showToast("Still restoring the saved conversation. Try sending again in a moment.");
+      if (options.fromWakeWord) queueWakeCommand(textOverride);
+      else showToast("Still restoring the saved conversation. Try sending again in a moment.");
       return;
     }
     const text = String(textOverride ?? elements.input.value).trim();
     let bundle = { message: text, images: [], names: [] };
+    messagePreparing = true;
     try {
       if (options.attachments) bundle = options.attachments;
       else if (window.JARVISAdvancedTools?.consumeAttachments) bundle = await window.JARVISAdvancedTools.consumeAttachments(text);
     } catch (error) {
+      messagePreparing = false;
       showToast(error.message || "Could not prepare attachments.", "error");
+      const startedQueuedWakeCommand = drainPendingWakeCommand();
+      if (options.fromWakeWord && wakeWordEnabled && !startedQueuedWakeCommand) await rearmWakeWord();
       return;
     }
+    messagePreparing = false;
     const submittedMessage = String(bundle.message ?? text).trim();
     const images = Array.isArray(bundle.images) ? bundle.images : [];
     const names = Array.isArray(bundle.names) ? bundle.names : [];
-    if (!submittedMessage && !images.length) return;
+    if (!submittedMessage && !images.length) {
+      const startedQueuedWakeCommand = drainPendingWakeCommand();
+      if (options.fromWakeWord && wakeWordEnabled && !startedQueuedWakeCommand) await rearmWakeWord();
+      return;
+    }
     const displayText = (text || (names.length ? "Please analyze the attached files." : submittedMessage)) +
       (names.length ? "\n\nAttached: " + names.join(", ") : "");
     renderMessage("user", displayText);
@@ -358,13 +402,9 @@
       showToast(error.message, "error");
     } finally {
       setBusy(false);
-      if (options.fromWakeWord && wakeWordEnabled) {
-        try {
-          await apiPost("/api/voice/rearm", {});
-          await refreshWakeWordStatus(false);
-        } catch (error) {
-          showToast("Wake word could not re-arm: " + error.message, "error");
-        }
+      const startedQueuedWakeCommand = drainPendingWakeCommand();
+      if (options.fromWakeWord && wakeWordEnabled && !startedQueuedWakeCommand) {
+        await rearmWakeWord();
       }
     }
   }
@@ -616,7 +656,10 @@
     });
     sessionRestorePromise = task;
     task.then(() => {
-      if (sessionRestorePromise === task) sessionRestorePromise = null;
+      if (sessionRestorePromise === task) {
+        sessionRestorePromise = null;
+        drainPendingWakeCommand();
+      }
     });
   }
 
@@ -633,8 +676,8 @@
     elements.welcome.classList.remove("hidden");
     elements.input.value = "";
     resizeInput();
+    closeSidebar({ restoreFocus: false });
     elements.input.focus();
-    closeSidebar();
   }
 
   async function refreshLocalTtsStatus() {
@@ -1176,15 +1219,21 @@
   function renderWakeWordButton() {
     if (!elements.wakeWord || !wakeWordStatus) return;
     wakeWordEnabled = Boolean(wakeWordStatus.enabled);
-    const label = !wakeWordEnabled ? "Wake off" : wakeWordStatus.armed ? "Wake on" :
-      wakeWordStatus.capturing_command ? "Hearing…" : "Wake paused";
+    const available = wakeWordStatus.available !== false;
+    const label = wakeWordStatus.error ? "Wake error" : !available ? "Wake unavailable" :
+      !wakeWordEnabled ? "Wake off" : !wakeWordStatus.running ? "Wake starting…" :
+        wakeWordStatus.armed ? "Wake on" : wakeWordStatus.capturing_command ? "Hearing…" : "Wake paused";
     const span = elements.wakeWord.querySelector("span");
     if (span) span.textContent = label;
     elements.wakeWord.classList.toggle("active", wakeWordEnabled);
     elements.wakeWord.setAttribute("aria-pressed", String(wakeWordEnabled));
-    elements.wakeWord.title = wakeWordStatus.error || (wakeWordEnabled
-      ? (wakeWordStatus.armed ? 'Listening locally for "Hey JARVIS"' : "Wake word enabled; waiting to re-arm")
-      : 'Enable local "Hey JARVIS" wake word');
+    const missing = Array.isArray(wakeWordStatus.missing_packages) ? wakeWordStatus.missing_packages : [];
+    elements.wakeWord.title = wakeWordStatus.error || (!available
+      ? "Wake word needs optional voice packages" + (missing.length ? ": " + missing.join(", ") : ".")
+      : wakeWordEnabled
+        ? (!wakeWordStatus.running ? 'Preparing local "Hey JARVIS" detection'
+          : wakeWordStatus.armed ? 'Listening locally for "Hey JARVIS"' : "Wake word enabled; waiting to re-arm")
+        : 'Enable local "Hey JARVIS" wake word');
   }
 
   async function refreshWakeWordStatus(initial = false) {
@@ -1203,6 +1252,11 @@
       renderWakeWordButton();
       if (initial) syncWakeWordPolling();
     } catch (error) {
+      wakeWordStatus = {
+        enabled: false, armed: false, running: false, available: false,
+        missing_packages: [], error: "Voice service unavailable: " + error.message,
+      };
+      renderWakeWordButton();
       if (initial) showToast("Voice service unavailable: " + error.message, "error");
     }
   }
@@ -1298,13 +1352,28 @@
   }
 
   function openSidebar() {
+    sidebarReturnFocus = elements.menuBtn;
     elements.sidebar.classList.add("sidebar-open");
     elements.mobileScrim.classList.add("visible");
+    elements.mobileScrim.setAttribute("aria-hidden", "false");
+    elements.menuBtn.setAttribute("aria-expanded", "true");
+    elements.menuBtn.setAttribute("aria-label", "Close navigation");
+    window.requestAnimationFrame(() => elements.sidebarClose?.focus({ preventScroll: true }));
   }
 
-  function closeSidebar() {
+  function closeSidebar({ restoreFocus = true } = {}) {
+    const wasOpen = elements.sidebar.classList.contains("sidebar-open");
     elements.sidebar.classList.remove("sidebar-open");
     elements.mobileScrim.classList.remove("visible");
+    elements.mobileScrim.setAttribute("aria-hidden", "true");
+    elements.menuBtn.setAttribute("aria-expanded", "false");
+    elements.menuBtn.setAttribute("aria-label", "Open navigation");
+    if (restoreFocus && wasOpen) {
+      const target = sidebarReturnFocus?.isConnected && sidebarReturnFocus.getClientRects().length
+        ? sidebarReturnFocus : elements.input;
+      target?.focus({ preventScroll: true });
+    }
+    sidebarReturnFocus = null;
   }
 
   function copyCode(button) {
@@ -1349,10 +1418,13 @@
   }
 
   function openUtility(view) {
+    const activeElement = document.activeElement;
+    utilityReturnFocus = activeElement?.closest?.("#sidebar") && window.matchMedia("(max-width: 700px)").matches
+      ? elements.menuBtn : activeElement;
     if (view === "system" && currentUtilityView !== "system") activeSystemTab = "status";
     currentUtilityView = view;
     elements.utilityPanel.classList.remove("hidden");
-    closeSidebar();
+    closeSidebar({ restoreFocus: false });
     renderUtility();
     logActivity("Panel opened", ({kitchen:"Kitchen",system:"System Console",models:"Model manager",memory:"Memory & archive",activity:"Activity feed",coding:"Coding agent",apps:"Desktop app launcher",history:"Memory & archive"})[view] || view, "panel");
     if (view === "models") refreshModelList(false);
@@ -1364,8 +1436,15 @@
   }
 
   function closeUtility() {
+    const wasOpen = !elements.utilityPanel.classList.contains("hidden");
     elements.utilityPanel.classList.add("hidden");
     currentUtilityView = null;
+    if (wasOpen) {
+      const target = utilityReturnFocus?.isConnected && utilityReturnFocus.getClientRects().length
+        ? utilityReturnFocus : elements.input;
+      target?.focus({ preventScroll: true });
+    }
+    utilityReturnFocus = null;
   }
 
   function renderUtility() {
@@ -2061,8 +2140,17 @@
     if (event.target === elements.utilityPanel) closeUtility();
   });
 
-  $("#menuBtn").addEventListener("click", openSidebar);
+  elements.menuBtn.addEventListener("click", () => {
+    if (elements.sidebar.classList.contains("sidebar-open")) closeSidebar();
+    else openSidebar();
+  });
+  elements.sidebarClose.addEventListener("click", () => closeSidebar());
   $("#mobileScrim").addEventListener("click", closeSidebar);
+  $("#assistantBtn").addEventListener("click", () => {
+    closeUtility();
+    closeSidebar({ restoreFocus: false });
+    elements.input.focus({ preventScroll: true });
+  });
   document.querySelectorAll("[data-prompt]").forEach((button) => {
     button.addEventListener("click", () => sendMessage(button.dataset.prompt));
   });

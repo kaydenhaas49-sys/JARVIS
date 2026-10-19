@@ -42,9 +42,31 @@ class LocalTtsTests(unittest.TestCase):
         with mock.patch.object(jarvis_tts.urllib.request, "urlopen", side_effect=OSError("offline")):
             self.assertIsNone(jarvis_tts._qwen_service_status())
 
+    def test_qwen_synthesis_failure_falls_back_to_piper(self):
+        with mock.patch.object(jarvis_tts, "_qwen_service_status", return_value={"available": True}), \
+             mock.patch.object(jarvis_tts, "_synthesize_with_qwen", side_effect=RuntimeError("offline")), \
+             mock.patch.object(jarvis_tts, "_synthesize_with_piper", return_value=b"piper-wav") as piper, \
+             mock.patch.object(jarvis_tts.logging, "warning"):
+            self.assertEqual(jarvis_tts.synthesize_wav("Hello, JARVIS."), b"piper-wav")
+        piper.assert_called_once_with("Hello, Jar-vis.")
+
     def test_malformed_wav_is_rejected_before_browser_playback(self):
         with self.assertRaisesRegex(RuntimeError, "invalid WAV"):
             jarvis_tts._validate_wav(b"not a wav file")
+
+    def test_truncated_wav_frames_are_rejected_before_browser_playback(self):
+        import io
+        import wave
+
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(22050)
+            wav_file.writeframes(bytes([0, 0]) * 100)
+
+        with self.assertRaisesRegex(RuntimeError, "truncated"):
+            jarvis_tts._validate_wav(output.getvalue()[:-1])
 
     def test_valid_wav_is_preserved(self):
         import io

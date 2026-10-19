@@ -879,3 +879,190 @@ kbd { background: rgba(10, 43, 65, .55) !important; border-color: rgba(70, 202, 
   .desktop-app-card p { min-height: 0; }
   .desktop-app-toolbar span { font-size: 6px; }
 }
+
+/* Navigation rail: a clear destination hierarchy with the existing LCARS palette. */
+#sidebar {
+  position: relative !important;
+  z-index: 12 !important;
+  width: 258px !important;
+  flex: 0 0 258px !important;
+  min-height: 0 !important;
+  gap: 0 !important;
+  padding: 19px 15px 16px 18px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  background: linear-gradient(180deg, rgba(15, 13, 28, .98), rgba(5, 8, 19, .98)) !important;
+  border-right: 1px solid color-mix(in srgb, var(--lcars-lilac) 28%, transparent) !important;
+  box-shadow: 12px 0 34px rgba(0, 0, 0, .2), inset -1px 0 rgba(255, 255, 255, .035) !important;
+  scrollbar-color: color-mix(in srgb, var(--lcars-lilac) 32%, transparent) transparent;
+  scrollbar-width: thin;
+}
+#sidebar::before {
+  width: 4px !important;
+  background: linear-gradient(180deg, transparent, var(--lcars-orange) 8%, var(--lcars-coral) 25%, var(--lcars-lilac) 45%, var(--lcars-blue) 66%, var(--lcars-cyan) 84%, transparent) !important;
+  opacity: .88 !important;
+}
+#sidebar > * { position: relative; z-index: 1; }
+.sidebar-header { display: flex; align-items: center; gap: 8px; }
+.hud-brand {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 58px;
+  gap: 11px;
+  margin: 0;
+  padding: 0 4px 13px 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--lcars-lilac) 24%, transparent) !important;
+}
+.hud-brand::after {
+  left: 3px !important;
+  width: 92px !important;
+  background: linear-gradient(90deg, var(--lcars-orange), var(--lcars-coral) 43%, var(--lcars-lilac) 76%, transparent) !important;
+}
+.hud-brand-mark { flex-basis: 34px; width: 34px; height: 34px; }
+.hud-brand-copy strong { color: var(--lcars-ivory) !important; font-family: "Orbitron", "Chakra Petch", sans-serif !important; font-size: 13px !important; letter-spacing: .13em !important; }
+.hud-brand-copy small { color: var(--lcars-muted) !important; font-size: 8px !important; letter-spacing: .1em !important; }
+.sidebar-close {
+  display: none;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--lcars-lilac) 28%, transparent);
+  border-radius: 3px 10px 3px 10px;
+  color: var(--lcars-ivory);
+  background: color-mix(in srgb, var(--lcars-lilac) 7%, transparent);
+  cursor: pointer;
+}
+.sidebar-close svg { width: 17px; height: 17px; }
+.sidebar-close:hover { border-color: var(--lcars-coral); color: var(--lcars-coral); }
+.sidebar-close:focus-visible { outline: 2px solid var(--lcars-cyan); outline-offset: 3px; }
+.new-chat-btn {
+  width: 100% !important;
+  min-height: 45px !important;
+  height: 45px !important;
+  justify-content: flex-start;
+  gap: 11px !important;
+  margin: 17px 0 25px !important;
+  padding: 0 13px !important;
+  border: 1px solid color-mix(in srgb, var(--lcars-orange) 42%, transparent) !important;
+  border-radius: 3px 12px 3px 12px !important;
+  background: linear-gradient(105deg, color-mix(in srgb, var(--lcars-orange) 15%, transparent), color-mix(in srgb, var(--lcars-lilac) 7%, transparent) 66%, rgba(4, 22, 39, .36)) !important;
+  color: var(--lcars-ivory) !important;
+  box-shadow: inset 0 0 16px color-mix(in srgb, var(--lcars-orange) 4%, transparent) !important;
+  font: 600 13px/1.2 "Chakra Petch", sans-serif !important;
+  letter-spacing: .025em !important;
+  text-transform: none !important;
+}
+.new-chat-btn:hover {
+  border-color: var(--lcars-orange) !important;
+  background: linear-gradient(105deg, color-mix(in srgb, var(--lcars-orange) 21%, transparent), color-mix(in srgb, var(--lcars-lilac) 9%, transparent) 70%, rgba(4, 22, 39, .36)) !important;
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--lcars-orange) 9%, transparent) !important;
+}
+.new-chat-btn svg { width: 18px; height: 18px; flex: 0 0 18px; color: var(--lcars-orange) !important; }
+.new-chat-btn span { font: inherit !important; letter-spacing: inherit !important; text-transform: none !important; }
+.new-chat-btn::after { width: 3px !important; background: var(--lcars-coral) !important; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 18px; }
+.sidebar-nav .sidebar-section { display: flex; flex-direction: column; gap: 4px !important; }
+.sidebar-nav .section-label {
+  margin: 0 0 3px;
+  padding: 0 10px 6px !important;
+  color: var(--lcars-muted) !important;
+  font: 700 9px/1.2 "Chakra Petch", sans-serif !important;
+  letter-spacing: .16em !important;
+}
+.sidebar-nav .section-label::after { content: none !important; }
+.sidebar-nav .nav-item {
+  width: 100% !important;
+  min-height: 43px !important;
+  height: auto !important;
+  gap: 12px !important;
+  padding: 9px 11px !important;
+  border: 1px solid transparent !important;
+  border-left: 2px solid transparent !important;
+  border-radius: 3px 10px 3px 10px !important;
+  background: transparent !important;
+  color: var(--text-soft) !important;
+  font: 500 13px/1.25 "Chakra Petch", sans-serif !important;
+  letter-spacing: .015em !important;
+  text-align: left;
+  text-transform: none !important;
+  transition: color .16s, background .16s, border-color .16s, transform .16s !important;
+}
+#sidebar .nav-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--lcars-blue) 24%, transparent) !important;
+  background: color-mix(in srgb, var(--lcars-blue) 7%, transparent) !important;
+  color: var(--lcars-ivory) !important;
+}
+#sidebar .nav-button:active:not(:disabled) { transform: translateY(1px); }
+#sidebar .nav-item[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--lcars-orange) 34%, transparent) !important;
+  border-left-color: var(--lcars-orange) !important;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--lcars-orange) 13%, transparent), color-mix(in srgb, var(--lcars-coral) 6%, transparent) 54%, transparent) !important;
+  color: var(--lcars-ivory) !important;
+  box-shadow: inset 0 0 17px color-mix(in srgb, var(--lcars-orange) 4%, transparent) !important;
+  font-weight: 650 !important;
+}
+.sidebar-nav .nav-icon,
+.sidebar-nav .selected .nav-icon { width: 18px; height: 18px; flex: 0 0 18px; color: var(--lcars-muted) !important; }
+#sidebar .nav-item[aria-current="page"] .nav-icon { color: var(--lcars-orange) !important; }
+.sidebar-nav .nav-dot { width: 6px; height: 6px; margin-left: auto; flex: 0 0 6px; background: var(--lcars-orange) !important; box-shadow: 0 0 8px color-mix(in srgb, var(--lcars-orange) 55%, transparent) !important; }
+#sidebar button:focus-visible { outline: 2px solid var(--lcars-cyan) !important; outline-offset: 3px !important; }
+#sidebar button:disabled { cursor: not-allowed; opacity: .56; }
+.sidebar-context {
+  margin: 21px 1px 11px;
+  padding: 12px 11px 11px;
+  border: 1px solid color-mix(in srgb, var(--lcars-blue) 23%, transparent);
+  border-left: 2px solid var(--lcars-blue);
+  border-radius: 3px 11px 3px 11px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--lcars-blue) 8%, transparent), rgba(3, 12, 24, .46));
+}
+.sidebar-context-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--lcars-blue); font: 700 9px/1.2 "Chakra Petch", sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.context-led { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--lcars-green); box-shadow: 0 0 8px color-mix(in srgb, var(--lcars-green) 54%, transparent); }
+.sidebar-context .workspace-path { color: var(--lcars-ivory); font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.sidebar-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 1px;
+  padding: 11px 10px;
+  border: 1px solid color-mix(in srgb, var(--lcars-green) 21%, transparent);
+  border-radius: 3px 11px 3px 11px;
+  background: color-mix(in srgb, var(--lcars-green) 5%, transparent);
+}
+.sidebar-footer-led { width: 7px; height: 7px; flex: 0 0 7px; margin-top: 4px; border-radius: 50%; background: var(--lcars-green); box-shadow: 0 0 8px color-mix(in srgb, var(--lcars-green) 50%, transparent); }
+.sidebar-footer-copy { display: grid; min-width: 0; gap: 4px; }
+.sidebar-footer-copy strong { color: var(--lcars-ivory); font: 650 11px/1.2 "Chakra Petch", sans-serif; }
+.sidebar-footer-copy small { color: var(--lcars-muted); font: 10px/1.45 "Chakra Petch", sans-serif; }
+
+@media (max-width: 900px) and (min-width: 701px) {
+  #sidebar { width: 242px !important; flex-basis: 242px !important; padding-right: 12px !important; padding-left: 16px !important; }
+}
+@media (max-width: 700px) {
+  /* Let the fixed drawer layer above the scrim instead of being trapped by
+     the app shell's desktop stacking context. */
+  .app-shell { z-index: auto !important; }
+  #sidebar {
+    position: fixed !important;
+    z-index: 12 !important;
+    inset: 0 auto 0 0 !important;
+    width: min(286px, calc(100vw - 36px)) !important;
+    flex: 0 0 min(286px, calc(100vw - 36px)) !important;
+    max-height: 100dvh !important;
+    padding: max(18px, env(safe-area-inset-top)) 15px max(16px, env(safe-area-inset-bottom)) 18px !important;
+    border-right: 1px solid color-mix(in srgb, var(--lcars-lilac) 34%, transparent) !important;
+    border-radius: 0 16px 5px 0 !important;
+    transform: translateX(calc(-100% - 14px)) !important;
+    transition: transform .22s ease !important;
+    box-shadow: 18px 0 55px rgba(0, 0, 0, .34) !important;
+  }
+  #sidebar.sidebar-open { transform: translateX(0) !important; }
+  .sidebar-close { display: grid; }
+  .mobile-scrim.visible {
+    display: block;
+    position: fixed;
+    z-index: 11;
+    inset: 0;
+    background: rgba(1, 5, 11, .64);
+    backdrop-filter: blur(3px);
+  }
+}

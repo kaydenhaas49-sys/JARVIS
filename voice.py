@@ -147,6 +147,13 @@ class WakeWordManager:
             self._events.append(event)
             return event
 
+    def _start_worker_locked(self) -> None:
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._run, daemon=True, name="jarvis-wakeword"
+        )
+        self._thread.start()
+
     def events_since(self, after: int = 0) -> dict[str, Any]:
         try:
             cursor = max(0, int(after))
@@ -193,17 +200,19 @@ class WakeWordManager:
             self.armed = True
             self.last_error = None
             if self._thread is None or not self._thread.is_alive():
+                self._start_worker_locked()
+            else:
+                # Disabling can time out while the model is downloading or the
+                # audio device is opening. Re-enable the same worker instead of
+                # leaving an enabled state attached to a set stop event.
                 self._stop.clear()
-                self._thread = threading.Thread(
-                    target=self._run, daemon=True, name="jarvis-wakeword"
-                )
-                self._thread.start()
         return self.status()
 
     def disable(self) -> dict[str, Any]:
         with self._lock:
             self.enabled = False
             self.armed = False
+            self.last_error = None
             self._stop.set()
             thread = self._thread
         if thread and thread.is_alive() and thread is not threading.current_thread():
@@ -315,6 +324,15 @@ class WakeWordManager:
                 self.capturing_command = False
                 if not self.enabled:
                     self.armed = False
+                if self.enabled and not self._stop.is_set():
+                    # If enable raced with this worker's final shutdown, start
+                    # a replacement after its audio stream has already closed.
+                    self._start_worker_locked()
+                elif self._thread is threading.current_thread():
+                    # Drop the reference before returning so a concurrent enable
+                    # can start a fresh worker even during this thread's final
+                    # shutdown window.
+                    self._thread = None
 
     @staticmethod
     def _resample(samples: Any, input_rate: int, np: Any) -> Any:
