@@ -1,3 +1,6 @@
+@font-face { font-family: Orbitron; src: url("/fonts/Orbitron-Variable.ttf") format("truetype"); font-display: swap; font-weight: 400 900; }
+@font-face { font-family: "Chakra Petch"; src: url("/fonts/ChakraPetch-Regular.ttf") format("truetype"); font-display: swap; font-weight: 400; }
+@font-face { font-family: "Chakra Petch"; src: url("/fonts/ChakraPetch-Bold.ttf") format("truetype"); font-display: swap; font-weight: 700; }
 :root {
   color-scheme: dark;
   --bg: #060a10;
@@ -43,7 +46,7 @@ body::before {
 .connection-dot, .welcome-status > span, .welcome-kicker > span { width:6px; height:6px; border-radius:50%; display:inline-block; background:var(--amber); box-shadow:0 0 11px currentColor; }
 .connection[data-state="connected"] .connection-dot { background:var(--cyan); color:var(--cyan); }
 .connection[data-state="disconnected"] .connection-dot { background:var(--red); color:var(--red); }
-.control-btn { display:flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:0 13px; border:1px solid var(--line); border-radius:7px; background:rgba(13,23,35,.8); color:var(--soft); font:700 10px inherit; letter-spacing:.12em; white-space:nowrap; cursor:pointer; transition:color .16s,border-color .16s,background .16s,transform .16s; }
+.control-btn { display:flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:0 13px; border:1px solid var(--line); border-radius:7px; background:rgba(13,23,35,.8); color:var(--soft); font:700 10px "Chakra Petch",system-ui,sans-serif; letter-spacing:.12em; white-space:nowrap; cursor:pointer; transition:color .16s,border-color .16s,background .16s,transform .16s; }
 .control-btn:hover { border-color:var(--line-hot); color:var(--text); transform:translateY(-1px); }
 .control-btn.active { color:var(--cyan); border-color:rgba(115,226,241,.35); background:rgba(24,70,82,.22); }
 .control-btn:disabled { opacity:.55; cursor:wait; transform:none; }
@@ -109,7 +112,7 @@ body::before {
 .composer-zone { flex:0 0 auto; width:100%; padding:10px clamp(16px,4vw,48px) 18px; max-width:1000px; margin:0 auto; }
 .composer-shell { width:100%; display:flex; align-items:flex-end; gap:9px; border:1px solid rgba(132,181,206,.22); border-radius:10px; padding:10px; background:rgba(9,16,25,.94); box-shadow:0 18px 60px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.025); transition:border-color .15s,box-shadow .15s; }
 .composer-shell:focus-within { border-color:var(--line-hot); box-shadow:0 0 0 3px rgba(115,226,241,.035),0 18px 60px rgba(0,0,0,.24); }
-#messageInput { display:block; width:100%; max-height:190px; min-height:44px; resize:none; border:0; outline:0; background:transparent; color:var(--text); padding:11px 12px; font:400 14px/1.55 inherit; }
+#messageInput { display:block; width:100%; max-height:190px; min-height:44px; resize:none; border:0; outline:0; background:transparent; color:var(--text); padding:11px 12px; font:400 14px/1.55 "Chakra Petch",system-ui,sans-serif; }
 #messageInput::placeholder { color:#667c8f; }
 .mic-btn,.send-btn { flex:0 0 42px; width:42px; height:42px; display:grid; place-items:center; border-radius:7px; cursor:pointer; transition:transform .15s,background .15s,border-color .15s,color .15s; }
 .mic-btn { color:var(--soft); border:1px solid var(--line); background:rgba(255,255,255,.02); }
@@ -122,7 +125,7 @@ body::before {
 .send-btn svg { width:21px; height:21px; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
 .composer-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:11px; color:#526678; font-size:8px; letter-spacing:.13em; }
 .composer-footer i { color:var(--cyan); font-style:normal; padding:0 4px; }
-.new-chat-btn { color:#71889a; background:none; border:0; cursor:pointer; padding:4px 7px; font:700 8px inherit; letter-spacing:.12em; white-space:nowrap; }
+.new-chat-btn { color:#71889a; background:none; border:0; cursor:pointer; padding:4px 7px; font:700 8px "Chakra Petch",system-ui,sans-serif; letter-spacing:.12em; white-space:nowrap; }
 .new-chat-btn:hover { color:var(--cyan); }
 .toast-region { position:fixed; z-index:20; left:50%; bottom:104px; width:min(calc(100% - 32px),500px); transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; pointer-events:none; }
 .toast { border:1px solid var(--line-hot); border-radius:6px; padding:10px 14px; background:rgba(7,15,24,.96); box-shadow:0 12px 35px rgba(0,0,0,.3); color:var(--text); font-size:12px; line-height:1.5; animation:arrive .18s ease-out; }
