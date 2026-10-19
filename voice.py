@@ -20,9 +20,12 @@ from typing import Any, Callable
 
 
 MAX_AUDIO_BYTES = 750_000
-STT_MODEL_NAME = os.environ.get("JARVIS_STT_MODEL", "base.en")
+STT_MODEL_NAME = os.environ.get("JARVIS_STT_MODEL", "tiny.en").strip() or "tiny.en"
 _WAKE_MODEL_NAME = "hey_jarvis"
 _WAKE_THRESHOLD = 0.55
+_WAKE_CONFIRM_FRAMES = 3  # Require a sustained ~240 ms detection, not one noisy audio block.
+_WAKE_ENABLE_SETTLE_SECONDS = 1.5
+_WAKE_REARM_COOLDOWN_SECONDS = 3.5
 _SAMPLE_RATE = 16_000
 _BLOCK_SAMPLES = 1_280  # 80 ms
 _STT_MODEL: Any = None
@@ -78,7 +81,7 @@ def transcribe_audio_bytes(audio_bytes: bytes, suffix: str = ".webm") -> str:
                 str(temporary_path),
                 language="en",
                 condition_on_previous_text=False,
-                beam_size=3,
+                beam_size=1,
                 best_of=1,
                 temperature=0.0,
                 vad_filter=True,
@@ -116,6 +119,17 @@ def _strip_wake_phrase(text: str) -> str:
     return text.strip()
 
 
+def _wake_score_confirmed(score: float, recent_scores: deque[float]) -> bool:
+    """Require consecutive above-threshold frames to suppress transient false positives."""
+    if score < _WAKE_THRESHOLD:
+        recent_scores.clear()
+        return False
+    recent_scores.append(score)
+    return len(recent_scores) >= _WAKE_CONFIRM_FRAMES and all(
+        previous >= _WAKE_THRESHOLD for previous in recent_scores
+    )
+
+
 class WakeWordManager:
     """Local one-shot 'Hey JARVIS' detector, armed only with explicit user opt-in."""
 
@@ -134,6 +148,7 @@ class WakeWordManager:
         self.last_error: str | None = None
         self.triggered = 0
         self.last_detection = 0.0
+        self._ignore_wake_until = 0.0
 
     def _publish(self, event_type: str, **data: Any) -> dict[str, Any]:
         with self._lock:
@@ -198,6 +213,7 @@ class WakeWordManager:
         with self._lock:
             self.enabled = True
             self.armed = True
+            self._ignore_wake_until = time.monotonic() + _WAKE_ENABLE_SETTLE_SECONDS
             self.last_error = None
             if self._thread is None or not self._thread.is_alive():
                 self._start_worker_locked()
@@ -212,6 +228,7 @@ class WakeWordManager:
         with self._lock:
             self.enabled = False
             self.armed = False
+            self._ignore_wake_until = 0.0
             self.last_error = None
             self._stop.set()
             thread = self._thread
@@ -223,6 +240,9 @@ class WakeWordManager:
         with self._lock:
             if self.enabled and self.running and not self.capturing_command:
                 self.last_error = None
+                # Ignore audio briefly after a reply so speaker echo and room reverberation
+                # cannot immediately trigger another turn. Fresh frames must confirm the wake.
+                self._ignore_wake_until = time.monotonic() + _WAKE_REARM_COOLDOWN_SECONDS
                 self.armed = True
         return self.status()
 
@@ -265,6 +285,7 @@ class WakeWordManager:
                 # Re-open the microphone only while armed. When a wake is detected,
                 # the short command is captured and transcribed, then this context
                 # closes; the mic remains released until the UI re-arms after reply.
+                score_history: deque[float] = deque(maxlen=_WAKE_CONFIRM_FRAMES)
                 with sd.InputStream(
                     samplerate=input_rate,
                     channels=1,
@@ -285,14 +306,23 @@ class WakeWordManager:
                             continue
                         rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
                         if rms < 60:
+                            score_history.clear()
                             continue
                         scores = model.predict(samples)
                         score = float(scores.get(_WAKE_MODEL_NAME, max(scores.values(), default=0.0)))
                         self.last_score = score
                         now = time.monotonic()
-                        if score < _WAKE_THRESHOLD or now - self.last_detection < 2.5:
+                        with self._lock:
+                            ignore_until = self._ignore_wake_until
+                        if now < ignore_until:
+                            score_history.clear()
                             continue
-
+                        if not _wake_score_confirmed(score, score_history):
+                            continue
+                        if now - self.last_detection < _WAKE_REARM_COOLDOWN_SECONDS:
+                            score_history.clear()
+                            continue
+                        score_history.clear()
                         self.last_detection = now
                         with self._lock:
                             self.armed = False
