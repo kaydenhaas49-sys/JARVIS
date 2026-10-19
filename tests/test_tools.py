@@ -466,9 +466,9 @@ class ApprovalAndCommandTests(unittest.TestCase):
 
     def test_direct_standalone_app_request_launches_without_model_approval(self) -> None:
         session = {"messages": [], "updated_at": 0.0}
-        with mock.patch.object(jarvis, "_get_session", return_value=session), \\
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \
              mock.patch.object(jarvis, "launch_desktop_app",
-                               return_value={"ok": True, "application": "Firefox", "message": "Started Firefox."}) as launch, \\
+                               return_value={"ok": True, "application": "Firefox", "message": "Started Firefox."}) as launch, \
              mock.patch.object(jarvis, "agent_turn") as agent_turn:
             result = jarvis.handle_chat({
                 "session_id": "direct-open-firefox-test",
