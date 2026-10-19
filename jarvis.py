@@ -1565,7 +1565,7 @@ def _direct_desktop_app_intent(message: str) -> str | None:
     if not match:
         return None
     target = re.sub(r"[.!?]+$", "", match.group(1).strip()).casefold()
-    target = re.sub(r"\\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website)$", "", target).strip()
+    target = re.sub(r"\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website)$", "", target).strip()
     known_id = _DIRECT_APP_ALIASES.get(target)
     if known_id:
         return known_id
@@ -1581,7 +1581,7 @@ def _direct_web_app_intent(message: str) -> str | None:
     if not match:
         return None
     target = re.sub(r"[.!?]+$", "", match.group(1).strip()).casefold()
-    target = re.sub(r"\\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website)$", "", target).strip()
+    target = re.sub(r"\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website)$", "", target).strip()
     return _WEB_APP_ALIASES.get(target)
 
 
