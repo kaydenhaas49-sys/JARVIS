@@ -1224,7 +1224,7 @@ def delegate_to_openclaw(task: str, session_id: str = "") -> dict[str, Any]:
         "user": stable_user,
         "messages": [{"role": "user", "content": "Task delegated from JARVIS. Work on the task using the tools and permissions configured for your OpenClaw agent. Return a clear summary of work completed, files changed, checks run, and any remaining issues.\n\nTASK:\n" + task_text}],
         "stream": False,
-    }, timeout=300.0)
+    }, timeout=7200.0)
     choices = result.get("choices", [])
     message = choices[0].get("message", {}) if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
     answer = message.get("content", "") if isinstance(message, dict) else ""
