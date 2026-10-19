@@ -33,6 +33,29 @@ if ! tailscale status >/dev/null 2>&1; then
   exit 1
 fi
 
+# The HTTP API accepts a bearer token/password. It is not wired to the
+# trusted-proxy-only identity flow, and Serve must not be used with auth=none.
+auth_mode="$(openclaw config get gateway.auth.mode 2>/dev/null | tr -d '"[:space:]' || true)"
+[[ "$auth_mode" == "null" ]] && auth_mode=""
+case "$auth_mode" in
+  none)
+    echo 'OpenClaw currently has gateway.auth.mode=none. No changes made; enable token or password auth first.' >&2
+    exit 1
+    ;;
+  trusted-proxy)
+    echo 'OpenClaw currently uses trusted-proxy auth. This helper expects standard token/password auth; no changes made.' >&2
+    exit 1
+    ;;
+  token|password|"")
+    # Empty means this setting is not explicitly authored in the config;
+    # OpenClaw validates the effective setup during the patch dry-run.
+    ;;
+  *)
+    echo "Unrecognized Gateway auth mode. No changes made; inspect 'openclaw config get gateway.auth.mode'." >&2
+    exit 1
+    ;;
+esac
+
 if [[ ! -t 0 ]]; then
   echo "Run this helper in an interactive terminal so you can review and approve the changes." >&2
   exit 1
