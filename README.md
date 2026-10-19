@@ -2,7 +2,7 @@
 
 JARVIS is a focused, local-first chatbot with a voice interface. This branch intentionally has **no System Console, app launcher, kitchen, memory/archive pages, workspace dashboard, or settings screens**. The interface is just the conversation, microphone input, spoken replies, and optional local “Hey JARVIS” wake word.
 
-The chatbot can keep everyday conversation with its configured local model and automatically hand clear, advanced engineering or multi-step project tasks to a separately configured OpenClaw agent.
+The chatbot handles everyday conversation with its configured model and can hand clear, advanced engineering or multi-step project tasks to a separately configured OpenClaw agent.
 
 ## What it does
 
@@ -14,7 +14,7 @@ The chatbot can keep everyday conversation with its configured local model and a
 - Casual chat, quick questions, and simple requests stay with JARVIS. Say “keep this local” to prevent automatic delegation for a request.
 - Text-only chat history in the current browser tab. Starting a new chat clears the visible conversation.
 
-Images and attachments are intentionally not part of this minimal interface. The existing backend's chat and approval safeguards remain available for supported tool actions; approvals appear inline inside the conversation.
+Images and attachments are intentionally not part of this minimal interface. Existing chat approval safeguards remain available for supported tool actions; approvals appear inline in the conversation.
 
 ## Quick start
 
@@ -24,19 +24,15 @@ Images and attachments are intentionally not part of this minimal interface. The
 4. Install the optional voice dependencies if you want local speech recognition and the wake word.
 5. Run JARVIS and open **http://127.0.0.1:8765**.
 
-For the Qwen voice launcher, use:
+For the Qwen voice launcher, run:
 
-\`\`\`bash
-cd ~/JARVIS
-./run_jarvis_qwen.sh
-\`\`\`
+    cd ~/JARVIS
+    ./run_jarvis_qwen.sh
 
-For the standard server:
+For the standard server, run:
 
-\`\`\`bash
-cd ~/JARVIS
-python3 jarvis.py
-\`\`\`
+    cd ~/JARVIS
+    python3 jarvis.py
 
 ## Voice setup
 
@@ -44,21 +40,19 @@ The microphone button records a short message; click it again to finish recordin
 
 Local transcription and wake-word support use the optional voice dependencies. On Linux, install the system PortAudio library first, then install the optional project dependencies into the Python environment used to run JARVIS:
 
-\`\`\`bash
-cd ~/JARVIS
-python3 -m venv .venv
-.venv/bin/pip install -e ".[voice]"
-.venv/bin/pip install --no-deps "openwakeword>=0.6.0"
-.venv/bin/python jarvis.py
-\`\`\`
+    cd ~/JARVIS
+    python3 -m venv .venv
+    .venv/bin/pip install -e ".[voice]"
+    .venv/bin/pip install --no-deps "openwakeword>=0.6.0"
+    .venv/bin/python jarvis.py
 
-The separate **--no-deps** install avoids pulling the upstream Linux **tflite-runtime** dependency, which may not provide a compatible wheel. Wake-word model assets are downloaded on first use and therefore need internet access once. After setup, speech detection and transcription run locally; microphone audio is not stored by JARVIS.
+The separate **--no-deps** install avoids pulling the upstream Linux **tflite-runtime** dependency, which may not provide a compatible wheel. Wake-word model assets are downloaded on first use and therefore need internet access once. After setup, wake detection and transcription run locally; JARVIS does not save microphone audio.
 
-Spoken replies use the bundled Piper JARVIS voice when its model and optional runtime package are available. If local synthesis is not available, JARVIS tries the browser's built-in speech engine.
+Spoken replies use the bundled Piper JARVIS voice when its model and optional runtime package are available. If local synthesis is unavailable, JARVIS tries the browser's built-in speech engine.
 
 ## OpenClaw handoff
 
-OpenClaw is optional. The chat-only interface deliberately has no settings page: if an OpenClaw connection is already saved under **~/.local/share/jarvis/**, automatic handoff can use it. The connection is kept out of the visible chatbot UI and must be configured out-of-band on a trusted private network. The handoff sends the current request plus a limited excerpt of recent user/assistant messages, not system instructions or tool output. Image-dependent requests stay with JARVIS because the handoff is text-only.
+OpenClaw is optional. The chat-only interface deliberately has no settings page: if an OpenClaw connection is already saved under **~/.local/share/jarvis/**, automatic handoff can use it. The connection must be configured out-of-band on a trusted private network. The handoff sends the current request plus a limited excerpt of recent user/assistant messages, not system instructions or tool output. Image-dependent requests stay with JARVIS because the handoff is text-only.
 
 OpenClaw runs with the tools and permissions set on its own server. Only connect a server you trust.
 
@@ -68,4 +62,4 @@ JARVIS listens on **127.0.0.1** by default. Remote access is opt-in and requires
 
 ## Data and configuration
 
-Model endpoint, model name, and API key are configured outside the chat UI using **.env**. Local application data remains under **~/.local/share/jarvis/** (or **JARVIS_DATA_DIR**). This branch does not expose data-management or system-setting screens in the browser.
+The model endpoint, model name, and API key are configured outside the chat UI using **.env**. Local application data stays under **~/.local/share/jarvis/** (or **JARVIS_DATA_DIR**). This branch does not expose data-management or system-setting screens in the browser.
