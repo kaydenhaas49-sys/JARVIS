@@ -277,24 +277,26 @@
           activeAudioUrl = URL.createObjectURL(blob);
           const audio = new Audio(activeAudioUrl);
           activeAudio = audio;
-          await new Promise((resolve) => {
+          const played = await new Promise((resolve) => {
             let finished = false;
-            const finish = () => {
+            const finish = (success) => {
               if (finished) return; finished = true;
-              audio.onended = null; audio.onerror = null;
+              audio.onended = null; audio.onerror = null; audio.onplay = null;
               if (activeAudio === audio) activeAudio = null;
               if (activeAudioUrl) { URL.revokeObjectURL(activeAudioUrl); activeAudioUrl = null; }
               if (speechResolver === finish) speechResolver = null;
-              resolve();
+              resolve(Boolean(success));
             };
-            speechResolver = finish;
+            speechResolver = () => finish(false);
             audio.onplay = () => setActivity("speaking", "SPEAKING");
-            audio.onended = finish; audio.onerror = finish;
-            window.setTimeout(finish, 90000);
-            audio.play().catch(() => finish());
+            audio.onended = () => finish(true); audio.onerror = () => finish(false);
+            window.setTimeout(() => finish(false), 90000);
+            audio.play().catch(() => finish(false));
           });
-          if (wakeEnabled) setActivity("idle", "WAKE WORD STANDING BY");
-          return;
+          if (played) {
+            setActivity("idle", wakeEnabled ? "WAKE WORD STANDING BY" : "READY WHEN YOU ARE");
+            return;
+          }
         }
       }
     } catch (_) {}
