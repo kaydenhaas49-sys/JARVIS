@@ -1864,10 +1864,9 @@
       const cards = apps.map((app, index) => {
         const available = app.available === true;
         const status = available ? "READY" : (catalog.supported ? "NOT INSTALLED" : "LINUX ONLY");
-        const prompt = "Open the " + app.name + " desktop application now. Use launch_app with application_id \"" +
-          app.id + "\". This request came from the Desktop app launcher; still ask for my normal approval before starting it.";
+        const prompt = "Open " + app.name + ".";
         const button = available
-          ? '<button class="desktop-app-launch" type="button" data-prompt="' + escapeHtml(prompt) + '">Request launch <span aria-hidden="true">↗</span></button>'
+          ? '<button class="desktop-app-launch" type="button" data-prompt="' + escapeHtml(prompt) + '">Open now <span aria-hidden="true">↗</span></button>'
           : '<button class="desktop-app-launch" type="button" disabled>Unavailable</button>';
         return '<article class="desktop-app-card' + (available ? ' is-available' : ' is-unavailable') + '">' +
           '<div class="desktop-app-card-top"><span class="utility-index">' + String(index + 1).padStart(2, "0") +
@@ -1876,12 +1875,12 @@
           '<p>' + escapeHtml(app.description || "Desktop application") + '</p>' + button + '</article>';
       }).join("");
       elements.utilityContent.innerHTML =
-        '<p class="utility-intro">Request to open an installed desktop app without giving the AI a free-form terminal. JARVIS uses a fixed application allowlist and asks you to approve each launch.</p>' +
+        '<p class="utility-intro">Open an installed desktop app directly using JARVIS’s fixed allowlist. This never runs a terminal command or passes custom arguments to an application. Indirect or multi-step launch requests still use the normal approval flow.</p>' +
         '<div class="desktop-app-toolbar"><span>PLATFORM / ' + escapeHtml(catalog.platform || "UNKNOWN") +
-        '</span><span>LOCAL DESKTOP ONLY</span><span>APPROVAL REQUIRED</span></div>' +
+        '</span><span>LOCAL DESKTOP ONLY</span><span>FIXED ALLOWLIST / DIRECT OPEN</span></div>' +
         (!catalog.supported ? '<div class="utility-card"><p class="inline-status status-warn">The desktop launcher currently supports Linux sessions only.</p></div>' : '') +
         (apps.length ? '<div class="desktop-app-grid">' + cards + '</div>' : '<div class="empty-state">No apps were found in the launcher catalog.</div>') +
-        '<p class="desktop-app-footnote">You can also type a request in chat, such as <strong>“Open Firefox”</strong>. Apps marked unavailable are not on this computer\'s PATH.</p>';
+        '<p class="desktop-app-footnote">You can also type a direct request in chat, such as <strong>“Open Firefox”</strong>. Apps marked unavailable are not on this computer\'s PATH.</p>';
     } catch (error) {
       if (currentUtilityView === "apps") {
         elements.utilityContent.innerHTML = '<div class="utility-card"><p class="inline-status status-warn">' +
