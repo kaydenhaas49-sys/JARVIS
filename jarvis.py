@@ -1615,6 +1615,10 @@ def _resolve_desktop_application(application_id: str) -> tuple[dict[str, Any], s
     if platform.system() != "Linux":
         raise ValueError("Desktop app launching is currently supported on Linux desktops only.")
     key = application_id.strip()
+    if any(char in key for char in ("/", "\\", ";", "|", "&", ">", "<", "$", "`", "\n", "\r")):
+        raise ValueError("Application names cannot contain paths or shell syntax; use an installed app name or ID.")
+    if any(ord(char) < 32 for char in key):
+        raise ValueError("Application names cannot contain control characters.")
     app = DESKTOP_APP_CATALOG.get(key)
     if app is not None:
         for candidate in app["commands"]:
