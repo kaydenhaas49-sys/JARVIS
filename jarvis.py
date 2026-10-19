@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import configparser
 import difflib
+import hmac
 import ipaddress
 import json
 import logging
@@ -52,6 +53,65 @@ def _load_env_file(path: Path) -> None:
 
 _load_env_file(Path(__file__).resolve().parent / ".env")
 
+
+def _is_loopback_bind_host(host: str) -> bool:
+    """Return whether a configured bind hostname is explicitly loopback-only."""
+    value = str(host or "").strip().lower()
+    if value == "localhost":
+        return True
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1]
+    try:
+        return ipaddress.ip_address(value).is_loopback
+    except ValueError:
+        # Unknown hostnames fail closed and require network authentication.
+        return False
+
+
+def _network_access_requires_auth(host: str | None = None) -> bool:
+    """Any bind other than an explicit loopback address is considered network-facing."""
+    return not _is_loopback_bind_host(HOST if host is None else host)
+
+
+def _basic_auth_matches(header: str, username: str | None = None, password: str | None = None) -> bool:
+    """Constant-time comparison for the HTTP Basic credentials used in network-test mode."""
+    expected_user = ACCESS_USER if username is None else username
+    expected_password = ACCESS_PASSWORD if password is None else password
+    if not expected_user or not expected_password:
+        return False
+    scheme, separator, encoded = str(header or "").partition(" ")
+    if not separator or scheme.casefold() != "basic" or not encoded.strip():
+        return False
+    try:
+        decoded = base64.b64decode(encoded.strip(), validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError, base64.binascii.Error):
+        return False
+    supplied_user, separator, supplied_password = decoded.partition(":")
+    if not separator:
+        return False
+    user_ok = hmac.compare_digest(supplied_user.encode("utf-8"), expected_user.encode("utf-8"))
+    password_ok = hmac.compare_digest(supplied_password.encode("utf-8"), expected_password.encode("utf-8"))
+    return user_ok and password_ok
+
+
+def validate_network_bind_security(
+    host: str | None = None, username: str | None = None, password: str | None = None
+) -> None:
+    """Refuse a network-facing bind unless a strong, non-default password is configured."""
+    bind_host = HOST if host is None else host
+    if not _network_access_requires_auth(bind_host):
+        return
+    user = ACCESS_USER if username is None else str(username)
+    secret = ACCESS_PASSWORD if password is None else str(password)
+    if not user.strip() or ":" in user:
+        raise ValueError("JARVIS_ACCESS_USER must be non-empty and cannot contain a colon.")
+    if len(secret) < 16:
+        raise ValueError(
+            "JARVIS is configured to listen on the network, but JARVIS_ACCESS_PASSWORD is missing or too short. "
+            "Set a unique password of at least 16 characters, or return JARVIS_HOST to 127.0.0.1."
+        )
+
+
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 HOST = os.environ.get("JARVIS_HOST", "127.0.0.1")
@@ -59,6 +119,8 @@ PORT = int(os.environ.get("JARVIS_PORT", "8765"))
 BASE_URL = os.environ.get("JARVIS_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 MODEL = os.environ.get("JARVIS_MODEL", "local-model")
 API_KEY = os.environ.get("JARVIS_API_KEY", "")
+ACCESS_USER = os.environ.get("JARVIS_ACCESS_USER", "jarvis").strip() or "jarvis"
+ACCESS_PASSWORD = os.environ.get("JARVIS_ACCESS_PASSWORD", "")
 WORKSPACE = Path(
     os.environ.get("JARVIS_WORKSPACE", str(Path.home() / "JARVIS-workspace"))
 ).expanduser().resolve()
@@ -2845,6 +2907,41 @@ class JarvisHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _require_request_access(self) -> bool:
+        """Gate all dashboard/API access when JARVIS is bound to a network interface."""
+        if not _network_access_requires_auth(HOST):
+            return True
+        if len(ACCESS_PASSWORD) < 16:
+            self._send_json(503, {"error": "Network access is disabled until a strong JARVIS_ACCESS_PASSWORD is configured."})
+            return False
+        if not _basic_auth_matches(self.headers.get("Authorization", "")):
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="JARVIS network testing", charset="UTF-8"')
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return False
+        if self.command == "POST":
+            # Browser requests must originate from this exact origin. This reduces
+            # cross-site request forgery risks when credentials are cached by a browser.
+            origin = self.headers.get("Origin", "")
+            host_header = self.headers.get("Host", "").strip()
+            parsed_origin = urlsplit(origin)
+            same_origin = (
+                bool(origin)
+                and parsed_origin.scheme in {"http", "https"}
+                and parsed_origin.netloc.casefold() == host_header.casefold()
+                and parsed_origin.path in {"", "/"}
+                and not parsed_origin.username
+                and not parsed_origin.password
+                and not parsed_origin.query
+                and not parsed_origin.fragment
+            )
+            if not same_origin:
+                self._send_json(403, {"error": "Cross-origin or origin-less POST requests are blocked in network mode."})
+                return False
+        return True
+
     def _read_json(self) -> dict[str, Any]:
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -2863,6 +2960,8 @@ class JarvisHandler(BaseHTTPRequestHandler):
         return value
 
     def do_GET(self) -> None:
+        if not self._require_request_access():
+            return
         route = urlsplit(self.path).path
         if route == "/api/openclaw":
             return self._send_json(200, openclaw_config_status())
@@ -2936,6 +3035,8 @@ class JarvisHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
+        if not self._require_request_access():
+            return
         route = urlsplit(self.path).path
         try:
             payload = self._read_json()
@@ -3045,6 +3146,10 @@ class JarvisHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+    try:
+        validate_network_bind_security()
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     if not STATIC_DIR.is_dir():
         raise SystemExit("The static/ folder is missing. Please run JARVIS from its project directory.")
     server = ThreadingHTTPServer((HOST, PORT), JarvisHandler)
@@ -3060,6 +3165,9 @@ def main() -> None:
     print(f"  Model:      {MODEL}")
     print(f"  Workspace:  {WORKSPACE}")
     print("  Stop with Ctrl+C. The server binds to loopback by default.")
+    if _network_access_requires_auth(HOST):
+        print(f"  Network auth: enabled for user '{ACCESS_USER}'")
+        print("  Security: use a trusted LAN or Tailscale; do not port-forward this service.")
     print()
     try:
         server.serve_forever(poll_interval=0.25)
