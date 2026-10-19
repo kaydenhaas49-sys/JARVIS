@@ -1415,7 +1415,63 @@
       '<button type="button" data-system-tab="status" class="' + (active === "status" ? "active" : "") + '" aria-pressed="' + (active === "status") + '">Status</button>' +
       '<button type="button" data-system-tab="models" class="' + (active === "models" ? "active" : "") + '" aria-pressed="' + (active === "models") + '">Models</button>' +
       '<button type="button" data-system-tab="routines" class="' + (active === "routines" ? "active" : "") + '" aria-pressed="' + (active === "routines") + '">Routines</button>' +
-      '<button type="button" data-system-tab="activity" class="' + (active === "activity" ? "active" : "") + '" aria-pressed="' + (active === "activity") + '">Activity feed</button></nav>';
+      '<button type="button" data-system-tab="activity" class="' + (active === "activity" ? "active" : "") + '" aria-pressed="' + (active === "activity") + '">Activity feed</button>' +
+      '<button type="button" data-system-tab="openclaw" class="' + (active === "openclaw" ? "active" : "") + '" aria-pressed="' + (active === "openclaw") + '">OpenClaw</button></nav>';
+  }
+
+  async function refreshOpenClawPanel(notice = "") {
+    try {
+      const response = await fetch("/api/openclaw", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not load OpenClaw settings.");
+      if (currentUtilityView === "system" && activeSystemTab === "openclaw") renderOpenClawPanel(data, notice);
+    } catch (error) {
+      if (currentUtilityView === "system" && activeSystemTab === "openclaw") {
+        renderOpenClawPanel({ configured: false, base_url: "", model: "openclaw/default", token_saved: false }, error.message);
+      }
+    }
+  }
+
+  function renderOpenClawPanel(data = {}, notice = "") {
+    const model = data.model || "openclaw/default";
+    let status = '<div class="inline-status status-warn">Not configured yet. Add the private server URL and Gateway token.</div>';
+    if (data.configured) status = '<div class="inline-status status-good">Credentials saved locally. Test the connection before delegating tasks.</div>';
+    if (data.ok === true) status = '<div class="inline-status status-good">' + escapeHtml(data.message || "OpenClaw connection tested.") + (data.model_available === false ? ' <span class="utility-muted">The configured agent target was not listed; verify its name.</span>' : '') + '</div>';
+    if (notice) status = '<div class="inline-status ' + (data.ok === true ? 'status-good' : 'status-warn') + '">' + escapeHtml(notice) + '</div>';
+    const models = Array.isArray(data.models) ? data.models : [];
+    elements.utilityContent.innerHTML = renderSystemTabs("openclaw") +
+      '<p class="utility-intro">Connect JARVIS to OpenClaw on BIG SUCCULENT SERVER™ through your private Tailscale network. JARVIS keeps its own model and voice; it only sends tasks when you explicitly request delegation and approve the proposed handoff.</p>' +
+      '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">PRIVATE REMOTE AGENT</span><div><h3>OpenClaw connection</h3><p>Use the server’s HTTPS Tailscale Serve URL, or its 100.x Tailscale IP. The OpenClaw Chat Completions HTTP endpoint must be enabled on the server.</p></div></div>' +
+      '<form class="utility-form" data-form="openclaw-save" autocomplete="off">' +
+      '<label>Private OpenClaw API URL<input id="openclawBaseUrl" name="base_url" type="url" maxlength="500" required value="' + escapeHtml(data.base_url || "") + '" placeholder="https://server-name.tailnet-name.ts.net/v1"></label>' +
+      '<label>OpenClaw agent target<input id="openclawModel" name="model" maxlength="250" required value="' + escapeHtml(model) + '" placeholder="openclaw/default"></label>' +
+      '<label>Gateway token / password<input id="openclawToken" name="token" type="password" maxlength="4096" autocomplete="new-password" placeholder="' + (data.token_saved ? "Saved already — leave blank to keep it" : "Paste the OpenClaw Gateway token") + '"></label>' +
+      status +
+      '<div class="utility-button-row"><button class="utility-primary" type="submit">Save &amp; test connection</button><button class="utility-secondary" type="button" data-utility-action="openclaw-test"' + (data.configured ? '' : ' disabled') + '>Test saved connection</button><button class="utility-secondary" type="button" data-utility-action="openclaw-disconnect"' + (data.configured ? '' : ' disabled') + '>Disconnect</button></div></form></section>' +
+      '<section class="utility-card"><div class="utility-card-heading"><span class="utility-index">SECURITY</span><div><h3>What this token permits</h3><p>A Gateway token is an operator-level credential, not a limited JARVIS-only key. Keep OpenClaw private to your Tailnet, and keep server-side agent permissions restricted to what you are comfortable delegating.</p></div></div>' +
+      '<div class="utility-note">The token is stored only on this computer in <code>~/.local/share/jarvis/openclaw-secret.json</code> with owner-only file permissions. It is never returned by the JARVIS API or saved in browser storage or GitHub. Leave the password field blank to keep the saved token.</div>' +
+      (models.length ? '<div class="utility-note"><strong>Agents reported by OpenClaw:</strong> ' + escapeHtml(models.join(", ")) + '</div>' : '') + '</section>';
+  }
+
+  async function saveOpenClawForm(form) {
+    const data = new FormData(form);
+    const payload = {
+      base_url: String(data.get("base_url") || "").trim(),
+      model: String(data.get("model") || "openclaw/default").trim(),
+      token: String(data.get("token") || "")
+    };
+    try {
+      await apiPost("/api/openclaw/save", payload);
+      const tokenField = document.getElementById("openclawToken");
+      if (tokenField) tokenField.value = "";
+      const tested = await apiPost("/api/openclaw/test", {});
+      logActivity("OpenClaw connection tested", payload.model, "integration");
+      showToast(tested.message || "OpenClaw connection is working.", "success");
+      await refreshOpenClawPanel(tested.message || "OpenClaw connection is working.");
+    } catch (error) {
+      showToast(error.message || "OpenClaw setup failed.", "error");
+      await refreshOpenClawPanel(error.message || "OpenClaw setup failed.");
+    }
   }
 
   function renderSystemConsole() {
@@ -1426,6 +1482,11 @@
     }
     if (activeSystemTab === "activity") {
       renderActivityPanel();
+      return;
+    }
+    if (activeSystemTab === "openclaw") {
+      elements.utilityContent.innerHTML = renderSystemTabs("openclaw") + '<div class="utility-loading">Loading OpenClaw settings…</div>';
+      refreshOpenClawPanel();
       return;
     }
     if (activeSystemTab === "routines") {
@@ -1791,6 +1852,7 @@
         .catch((error) => showToast(error.message, "error"));
     }
     if (form.dataset.form === "model-manager") applyModelForm(form);
+    if (form.dataset.form === "openclaw-save") saveOpenClawForm(form);
     if (form.dataset.form === "routine-save") {
       const id = String(data.get("id") || "");
       const name = String(data.get("name") || "").trim();
@@ -1832,6 +1894,19 @@
     const action = button.dataset.utilityAction;
     const id = button.dataset.id;
     if (action === "metrics-refresh") { refreshSystemMetrics(); return; }
+    if (action === "openclaw-test") {
+      apiPost("/api/openclaw/test", {})
+        .then((result) => { showToast(result.message || "OpenClaw is connected.", "success"); refreshOpenClawPanel(result.message || "OpenClaw is connected."); })
+        .catch((error) => { showToast(error.message, "error"); refreshOpenClawPanel(error.message); });
+      return;
+    }
+    if (action === "openclaw-disconnect") {
+      if (!window.confirm("Disconnect JARVIS from OpenClaw and delete the saved local token?")) return;
+      apiPost("/api/openclaw/disconnect", {})
+        .then(() => { logActivity("OpenClaw disconnected", "Saved server credentials removed", "integration"); showToast("OpenClaw disconnected.", "success"); refreshOpenClawPanel(); })
+        .catch((error) => showToast(error.message, "error"));
+      return;
+    }
     if (action === "routine-reset") {
       const form = elements.utilityContent.querySelector('form[data-form="routine-save"]');
       if (form) form.reset();
