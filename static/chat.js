@@ -36,6 +36,7 @@
   let activeAudio = null;
   let activeAudioUrl = null;
   let speechResolver = null;
+  let speechGeneration = 0;
 
   function setActivity(state, label) {
     ui.activity.dataset.state = state;
@@ -227,6 +228,7 @@
   }
 
   function stopSpeech() {
+    speechGeneration += 1;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     const audio = activeAudio;
     activeAudio = null;
@@ -239,7 +241,8 @@
     return String(text || "").replace(/```[\s\S]*?```/g, " code block omitted ").replace(/[*_#>]/g, "").replace(/\s+/g, " ").trim().slice(0, 3500);
   }
 
-  function speakBrowser(text) {
+  function speakBrowser(text, generation) {
+    if (generation !== speechGeneration || !voiceReplies) return Promise.resolve();
     if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
       showToast("Spoken replies are unavailable in this browser.", "error");
       return Promise.resolve();
@@ -265,8 +268,10 @@
     const clean = speechText(text);
     if (!clean) return;
     stopSpeech();
+    const generation = speechGeneration;
     try {
       const status = await getJSON("/api/tts/status");
+      if (generation !== speechGeneration || !voiceReplies) return;
       if (status.available) {
         const response = await fetch("/api/tts/synthesize", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -274,6 +279,7 @@
         });
         if (response.ok) {
           const blob = await response.blob();
+          if (generation !== speechGeneration || !voiceReplies) return;
           activeAudioUrl = URL.createObjectURL(blob);
           const audio = new Audio(activeAudioUrl);
           activeAudio = audio;
@@ -293,6 +299,7 @@
             window.setTimeout(() => finish(false), 90000);
             audio.play().catch(() => finish(false));
           });
+          if (generation !== speechGeneration || !voiceReplies) return;
           if (played) {
             setActivity("idle", wakeEnabled ? "WAKE WORD STANDING BY" : "READY WHEN YOU ARE");
             return;
@@ -300,7 +307,8 @@
         }
       }
     } catch (_) {}
-    await speakBrowser(clean);
+    if (generation !== speechGeneration || !voiceReplies) return;
+    await speakBrowser(clean, generation);
   }
 
   async function handleResult(result) {
