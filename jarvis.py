@@ -2926,9 +2926,13 @@ class JarvisHandler(BaseHTTPRequestHandler):
             # cross-site request forgery risks when credentials are cached by a browser.
             origin = self.headers.get("Origin", "")
             host_header = self.headers.get("Host", "").strip()
-            parsed_origin = urlsplit(origin)
+            try:
+                parsed_origin = urlsplit(origin)
+            except ValueError:
+                parsed_origin = None
             same_origin = (
-                bool(origin)
+                parsed_origin is not None
+                and bool(origin)
                 and parsed_origin.scheme in {"http", "https"}
                 and parsed_origin.netloc.casefold() == host_header.casefold()
                 and parsed_origin.path in {"", "/"}
