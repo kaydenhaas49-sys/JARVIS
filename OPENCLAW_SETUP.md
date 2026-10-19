@@ -57,7 +57,7 @@ OpenClaw documents its Chat Completions endpoint as an operator-level surface: a
 
 ## Current limitations
 
-- Delegated work is a single non-streaming request. The JARVIS chat waits for OpenClaw's final response; live progress and cancellation controls are not implemented yet.
+- Delegated work is a single non-streaming request with a two-hour network read timeout to accommodate long coding jobs. The JARVIS chat waits for OpenClaw's final response; live progress and an in-app cancellation button are not implemented yet. The JARVIS backend keeps the upstream request open even if you close the browser tab, so wait for the final result or restart JARVIS to break its connection.
 - The connection test checks reachability, authentication, and available agent targets. It does not guarantee that the selected agent's model provider or every remote tool is healthy.
 - JARVIS sends the explicit task text (and a generated session identifier) to OpenClaw. It does not forward the full JARVIS transcript, attached images, or saved JARVIS memories.
 - If the Gateway token is rotated, enter the new token in the JARVIS panel and save again.
