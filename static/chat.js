@@ -1,4 +1,4 @@
-(() => {
+    text = text.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
   "use strict";
 
   const $ = (selector) => document.querySelector(selector);
