@@ -60,7 +60,7 @@
   function formatInline(raw) {
     let text = escapeHtml(raw);
     text = text.replace(/`([^`\n]+)`/g, "<code>$1</code>");
-    text = text.replace(/**([^*\n]+)**/g, "<strong>$1</strong>");
+        text = text.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
     text = text.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, (whole, gap, href) => {
       const trimmed = href.replace(/[),.;!?]+$/g, "");
       let safe = "";
