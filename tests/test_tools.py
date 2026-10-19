@@ -504,7 +504,7 @@ class NetworkAccessTests(unittest.TestCase):
         password = "a-secure-test-password"
         valid = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()
         wrong_password = "Basic " + base64.b64encode(f"{username}:wrong-password".encode()).decode()
-        with mock.patch.object(jarvis, "ACCESS_USER", username), \\
+        with mock.patch.object(jarvis, "ACCESS_USER", username), \
              mock.patch.object(jarvis, "ACCESS_PASSWORD", password):
             self.assertTrue(jarvis._basic_auth_matches(valid))
             self.assertFalse(jarvis._basic_auth_matches(wrong_password))
@@ -520,8 +520,8 @@ class NetworkAccessTests(unittest.TestCase):
             end_headers=mock.Mock(),
             _send_json=mock.Mock(),
         )
-        with mock.patch.object(jarvis, "HOST", "100.64.0.12"), \\
-             mock.patch.object(jarvis, "ACCESS_USER", "jarvis"), \\
+        with mock.patch.object(jarvis, "HOST", "100.64.0.12"), \
+             mock.patch.object(jarvis, "ACCESS_USER", "jarvis"), \
              mock.patch.object(jarvis, "ACCESS_PASSWORD", "a-secure-test-password"):
             allowed = jarvis.JarvisHandler._require_request_access(handler)
 
@@ -544,8 +544,8 @@ class NetworkAccessTests(unittest.TestCase):
             send_header=mock.Mock(),
             end_headers=mock.Mock(),
         )
-        with mock.patch.object(jarvis, "HOST", "100.64.0.12"), \\
-             mock.patch.object(jarvis, "ACCESS_USER", username), \\
+        with mock.patch.object(jarvis, "HOST", "100.64.0.12"), \
+             mock.patch.object(jarvis, "ACCESS_USER", username), \
              mock.patch.object(jarvis, "ACCESS_PASSWORD", password):
             allowed = jarvis.JarvisHandler._require_request_access(handler)
 
