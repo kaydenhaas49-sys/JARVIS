@@ -45,6 +45,10 @@ The default endpoint is `http://127.0.0.1:11434`, using Ollama's native `ollama 
 
 JARVIS creates ~/JARVIS-workspace for files it can browse and edit. Persistent application data is saved as ordinary files under ~/.local/share/jarvis/ (or the directory set by JARVIS_DATA_DIR): recipes.json, notes.json, kitchen.json, chat-history.json, activity.json, memory.json, routines.json, projects.json, code-backups.json, settings.json, and system-memory.md. Exact file recovery bytes live under code-backups/. dashboard-index.json tracks one-time migration state. Existing browser-local data from older versions is imported once and then removed from browser storage. Older dashboard-data.json files are read as a migration source and left in place as a backup; ongoing writes go to the separate JSON files. Chat archives retain the latest 25 conversations and up to 40 messages per conversation. File tools are deliberately scoped to the workspace, while JARVIS's internal dashboard tools maintain the app's own data files. Terminal actions and workspace file writes require you to approve the exact action in the dashboard.
 
+## Optional OpenClaw integration
+
+To connect JARVIS to a separate OpenClaw server over private Tailscale, use the guided setup in [OPENCLAW_SETUP.md](OPENCLAW_SETUP.md). The server-side helper is `scripts/setup-openclaw-tailnet.sh`; it asks before making changes and backs up the existing OpenClaw config. OpenClaw credentials are entered in JARVIS's System Console and stored locally, not in this repository. This integration is optional and does not replace the configured JARVIS model or voice.
+
 ## Optional local voice setup
 
 Voice input and the "Hey JARVIS" wake word use local speech recognition and local audio detection. Install the optional packages in a project virtual environment (on Linux, also ensure the system PortAudio library is installed):
