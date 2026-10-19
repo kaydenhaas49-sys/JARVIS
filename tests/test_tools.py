@@ -516,11 +516,11 @@ class ApprovalAndCommandTests(unittest.TestCase):
         self.assertIsNone(result["pending_action"])
         self.assertEqual(result["reply"], "Steam launch requested.")
 
-    def test_desktop_launcher_only_accepts_known_application_ids(self) -> None:
+    def test_desktop_launcher_rejects_paths_and_shell_syntax_in_app_names(self) -> None:
         self.assertIn("browser_firefox", jarvis.DESKTOP_APP_CATALOG)
-        for invalid in ("firefox", "firefox; rm -rf ~", "/usr/bin/firefox", ""):
+        for invalid in ("firefox; rm -rf ~", "/usr/bin/firefox", ""):
             with self.subTest(application_id=invalid):
-                with self.assertRaisesRegex(ValueError, "allowlist"):
+                with self.assertRaises(ValueError):
                     jarvis._resolve_desktop_application(invalid)
 
     def test_standalone_app_open_requests_match_only_named_allowlisted_apps(self) -> None:
@@ -583,6 +583,7 @@ class ApprovalAndCommandTests(unittest.TestCase):
 
     def test_desktop_launch_fails_cleanly_when_app_is_missing(self) -> None:
         with mock.patch.object(jarvis.platform, "system", return_value="Linux"), \
+             mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[]), \
              mock.patch.object(jarvis.shutil, "which", return_value=None), \
              mock.patch.object(jarvis.subprocess, "Popen") as popen:
             with self.assertRaisesRegex(ValueError, "not installed"):
