@@ -1341,10 +1341,10 @@ _DIRECT_APP_ALIASES: dict[str, str] = {
     "kdenlive": "kdenlive",
 }
 _DIRECT_APP_REQUEST_RE = re.compile(
-    r"^(?:(?:hey\\s+)?jarvis[,!:]?\\s*)?"
-    r"(?:(?:can|could|would) you(?: please)?\\s+)?(?:please\\s+)?"
-    r"(?:open(?:\\s+up)?|launch|start|bring\\s+up)\\s+(?:the\\s+)?"
-    r"(.+?)(?:\\s+(?:for me(?: please)?|please|now))?[.!?]*$",
+    r"^(?:(?:hey\s+)?jarvis[,!:]?\s*)?"
+    r"(?:(?:can|could|would) you(?: please)?\s+)?(?:please\s+)?"
+    r"(?:open(?:\s+up)?|launch|start|bring\s+up)\s+(?:the\s+)?"
+    r"(.+?)(?:\s+(?:for me(?: please)?|please|now))?[.!?]*$",
     re.IGNORECASE,
 )
 
