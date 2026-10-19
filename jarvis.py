@@ -1458,6 +1458,10 @@ def discover_desktop_applications() -> list[dict[str, Any]]:
                     word.strip() for word in (entry.get("Keywords") or "").split(";")
                     if word.strip()
                 ]
+                categories = [
+                    word.strip() for word in (entry.get("Categories") or "").split(";")
+                    if word.strip()
+                ]
                 apps.append({
                     "application_id": "desktop:" + desktop_id,
                     "desktop_id": desktop_id,
@@ -1467,6 +1471,7 @@ def discover_desktop_applications() -> list[dict[str, Any]]:
                     "generic_name": (entry.get("GenericName") or "").strip()[:160],
                     "description": (entry.get("Comment") or entry.get("GenericName") or "").strip()[:300],
                     "keywords": keywords[:40],
+                    "categories": categories[:40],
                     "icon": (entry.get("Icon") or "").strip()[:200],
                 })
             except (OSError, configparser.Error, ValueError):
@@ -1666,6 +1671,9 @@ def desktop_apps_status() -> dict[str, Any]:
             "name": app["name"],
             "description": app["description"],
             "available": bool(executable or entry),
+            "desktop_id": entry.get("desktop_id", "") if entry else "",
+            "categories": entry.get("categories", []) if entry else [],
+            "keywords": entry.get("keywords", []) if entry else [],
         })
     for entry in discovered:
         if entry["application_id"] in matched_desktop_apps:
@@ -1695,7 +1703,135 @@ def list_desktop_apps(query: str = "") -> dict[str, Any]:
             ]))
         ]
     apps.sort(key=lambda row: str(row.get("name", "")).casefold())
-    return {"ok": True, "count": len(apps), "apps": apps[:120]}
+    return {"ok": True, "count": len(apps), "apps": apps[:250]}
+
+
+_DESKTOP_CATEGORY_NAMES: dict[str, str] = {
+    "WebBrowser": "Browsers",
+    "Game": "Games",
+    "AudioVideo": "Media & Entertainment",
+    "Audio": "Media & Entertainment",
+    "Video": "Media & Entertainment",
+    "Development": "Development",
+    "IDE": "Development",
+    "Debugger": "Development",
+    "Building": "Development",
+    "RevisionControl": "Development",
+    "Office": "Office & Productivity",
+    "WordProcessor": "Office & Productivity",
+    "Spreadsheet": "Office & Productivity",
+    "Presentation": "Office & Productivity",
+    "Graphics": "Graphics & Design",
+    "2DGraphics": "Graphics & Design",
+    "3DGraphics": "Graphics & Design",
+    "RasterGraphics": "Graphics & Design",
+    "VectorGraphics": "Graphics & Design",
+    "Photography": "Graphics & Design",
+    "Network": "Internet & Communication",
+    "Email": "Internet & Communication",
+    "Chat": "Internet & Communication",
+    "InstantMessaging": "Internet & Communication",
+    "Telephony": "Internet & Communication",
+    "FileTransfer": "Internet & Communication",
+    "Education": "Education & Science",
+    "Science": "Education & Science",
+    "Math": "Education & Science",
+    "Physics": "Education & Science",
+    "Chemistry": "Education & Science",
+    "Biology": "Education & Science",
+    "System": "System & Settings",
+    "Settings": "System & Settings",
+    "Monitor": "System & Settings",
+    "Utility": "Utilities & File Management",
+    "TextEditor": "Utilities & File Management",
+    "FileManager": "Utilities & File Management",
+    "TerminalEmulator": "Utilities & File Management",
+    "Archiving": "Utilities & File Management",
+}
+_DESKTOP_CATEGORY_PRIORITY = [
+    "WebBrowser", "Game", "AudioVideo", "Audio", "Video", "Development", "IDE",
+    "Debugger", "Building", "RevisionControl", "Office", "WordProcessor", "Spreadsheet",
+    "Presentation", "Graphics", "2DGraphics", "3DGraphics", "RasterGraphics",
+    "VectorGraphics", "Photography", "Network", "Email", "Chat", "InstantMessaging",
+    "Telephony", "FileTransfer", "Education", "Science", "Math", "Physics", "Chemistry",
+    "Biology", "System", "Settings", "Monitor", "Utility", "TextEditor", "FileManager",
+    "TerminalEmulator", "Archiving",
+]
+
+
+def _desktop_app_category(app: dict[str, Any]) -> str:
+    """Choose one readable category from desktop metadata, then fall back to name heuristics."""
+    categories = {str(value) for value in app.get("categories", [])}
+    for category in _DESKTOP_CATEGORY_PRIORITY:
+        if category in categories:
+            return _DESKTOP_CATEGORY_NAMES[category]
+    haystack = _normalize_desktop_text(" ".join((
+        str(app.get("name", "")), str(app.get("description", "")), str(app.get("id", "")),
+    )))
+    words = set(haystack.split())
+    if words & {"steam", "game", "gaming", "lutris", "heroic", "prismlauncher", "minecraft"}:
+        return "Games"
+    if words & {"browser", "firefox", "chromium", "chrome", "plex", "netflix", "youtube", "spotify", "media", "vlc"}:
+        return "Media & Browsers"
+    if words & {"code", "codium", "editor", "blender", "gimp", "krita", "audacity", "kdenlive", "obs"}:
+        return "Development & Creative Tools"
+    if words & {"settings", "monitor", "system", "taskmanager"}:
+        return "System & Settings"
+    return "Other"
+
+
+def format_installed_app_inventory() -> str:
+    """Build a deterministic, categorized app inventory without asking the LLM to summarize it."""
+    result = list_desktop_apps()
+    apps = result.get("apps", [])
+    if not apps:
+        return "I couldn't find any installed desktop applications in the Linux application-menu entries or known launchers."
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for app in apps:
+        grouped.setdefault(_desktop_app_category(app), []).append(app)
+    lines = [f"I found {len(apps)} available desktop apps. Grouped by their desktop-menu categories:"]
+    category_order = [
+        "Games", "Media & Entertainment", "Media & Browsers", "Browsers",
+        "Internet & Communication", "Office & Productivity", "Development",
+        "Development & Creative Tools", "Graphics & Design", "Education & Science",
+        "System & Settings", "Utilities & File Management", "Other",
+    ]
+    ordered_categories = [key for key in category_order if key in grouped]
+    ordered_categories.extend(sorted(set(grouped) - set(ordered_categories)))
+    for category in ordered_categories:
+        rows = sorted(grouped[category], key=lambda row: str(row.get("name", "")).casefold())
+        lines.append(f"\\n### {category} ({len(rows)})")
+        for app in rows:
+            name = str(app.get("name", "Unknown app")).strip()
+            app_id = str(app.get("id", app.get("application_id", ""))).strip()
+            description = str(app.get("description", "")).strip()
+            suffix = " — " + description if description and description.casefold() != name.casefold() else ""
+            lines.append("- **" + name + "** (" + chr(96) + app_id + chr(96) + ")" + suffix)
+    return "\\n".join(lines)
+
+
+_APP_INVENTORY_START_RE = re.compile(
+    r"^(?:(?:hey\\s+)?jarvis[,!:]?\\s*)?(?:please\\s+)?"
+    r"(?:list|show|display|enumerate|catalogue|catalog)\\b",
+    re.IGNORECASE,
+)
+
+
+def _is_app_inventory_request(message: str) -> bool:
+    """Recognize read-only requests to list installed apps, including a request to group them."""
+    if not isinstance(message, str) or not message.strip() or len(message) > 240:
+        return False
+    normalized = " ".join(message.strip().split()).casefold()
+    if not _APP_INVENTORY_START_RE.match(normalized):
+        return False
+    if not re.search(r"\\b(?:apps?|applications?|programs?)\\b", normalized):
+        return False
+    if not re.search(r"\\b(?:installed|available|all|my|desktop|on this computer|on my system)\\b", normalized):
+        return False
+    # Refuse to reinterpret compound requests that include unrelated actions.
+    if re.search(r"\\b(?:open|launch|close|kill|delete|remove|install|uninstall|run|write|change|modify)\\b", normalized):
+        return False
+    return True
 
 
 def launch_desktop_app(application_id: str) -> dict[str, Any]:
