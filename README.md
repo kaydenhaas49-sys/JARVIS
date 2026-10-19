@@ -27,7 +27,7 @@ JARVIS is a local-first personal AI assistant with a futuristic web dashboard, o
 - Local model benchmark for up to three endpoint models, showing wall time and generated-token rate when server metrics are available.
 - Ctrl/Cmd+K command palette for fast navigation. A tiny draggable voice-only sphere stays inside the JARVIS browser tab and toggles hands-free voice mode.
 - Coding workspace tools for listing, reading, searching, editing files, and approval-gated developer commands.
-- Desktop app launcher for installed Linux apps, including Firefox, terminals, Steam, Discord, Blender and creative tools. Any request to launch an installed app in the fixed allowlist—standalone or as part of a multi-app request—launches without an approval card. JARVIS still uses fixed executable paths with no shell or caller-supplied arguments.
+- Desktop app launcher that discovers installed Linux apps from XDG `.desktop` entries (including common Flatpak/Snap exports), so apps such as Plex HTPC can be found even when their executable is not on `PATH`. JARVIS can also open a curated set of web apps such as Plex and Netflix in the default browser. Opening installed apps and those known websites does not require approval; file writes and terminal commands still do.
 - Built-in tools for time, system status, listing files, reading files, and searching your workspace.
 - File writes and terminal commands pause for your explicit approval in the UI. Proposed file writes show a unified diff; accepted writes back up prior bytes and can be undone in Code Review.
 - Local-only HTTP server by default; model API credentials remain on the server.
@@ -96,7 +96,7 @@ The launcher starts a loopback-only Qwen service on `127.0.0.1:8766`, waits for 
 
 ## Safety model
 
-The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. Opening an installed app from the fixed allowlist never requires an approval card, including launches requested as part of routines or multi-app requests. JARVIS passes no user-supplied arguments and never uses a shell for app launches. Writing files and running allowlisted developer commands still require clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
+The dashboard server binds to loopback by default and does not expose an endpoint for arbitrary shell commands without review. The assistant can use read-only workspace tools automatically. Installed desktop apps are discovered from local XDG desktop entries as well as the known launcher catalog, and an app can be launched by its discovered ID or exact name without an approval card. A curated set of known web services can be opened through fixed URLs in the default browser; JARVIS does not accept arbitrary URLs for this shortcut. App launches use desktop launchers or fixed executable arguments with no shell. Writing files and running allowlisted developer commands still require clear, per-action approval. File paths are resolved and restricted to the workspace. Do not expose this server to the public internet.
 
 ## Tests
 
