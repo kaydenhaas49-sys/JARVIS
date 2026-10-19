@@ -46,6 +46,42 @@ class OpenClawConfigurationTests(unittest.TestCase):
             with self.subTest(model=model), self.assertRaises(ValueError):
                 jarvis.validate_openclaw_model(model)
 
+    def test_delegation_sends_only_the_explicit_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(jarvis, "OPENCLAW_CONFIG_PATH", root / "openclaw.json"), mock.patch.object(
+                jarvis, "OPENCLAW_SECRET_PATH", root / "openclaw-secret.json"
+            ):
+                jarvis.save_openclaw_config({
+                    "base_url": "https://server.example.ts.net",
+                    "model": "openclaw/default",
+                    "token": "private-test-token",
+                })
+                with mock.patch.object(
+                    jarvis, "_openclaw_request",
+                    return_value={"choices": [{"message": {"content": "Task completed successfully."}}]},
+                ) as request:
+                    result = jarvis.delegate_to_openclaw("Inspect only the project README.", session_id="test-session")
+
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["answer"], "Task completed successfully.")
+                self.assertEqual(result["agent"], "openclaw/default")
+                args, kwargs = request.call_args
+                self.assertEqual(args[0], "/chat/completions")
+                self.assertEqual(kwargs["method"], "POST")
+                payload = kwargs["payload"]
+                self.assertEqual(payload["model"], "openclaw/default")
+                self.assertEqual(len(payload["messages"]), 1)
+                self.assertIn("Inspect only the project README.", payload["messages"][0]["content"])
+                self.assertNotIn("private-test-token", json.dumps(payload))
+
+    def test_delegation_requires_a_jarvis_approval(self):
+        self.assertTrue(jarvis.is_approval_required("delegate_to_openclaw"))
+        self.assertTrue(any(
+            item.get("function", {}).get("name") == "delegate_to_openclaw"
+            for item in jarvis.TOOL_SPECS
+        ))
+
     def test_token_is_saved_separately_and_never_returned(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
