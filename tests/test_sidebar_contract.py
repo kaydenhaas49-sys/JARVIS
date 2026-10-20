@@ -42,8 +42,8 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
                 self.assertNotIn(forbidden.casefold(), self.html.casefold())
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
-        self.assertIn('href="/chat.css?v=4"', self.html)
-        self.assertIn('src="/chat.js?v=4"', self.html)
+        self.assertIn('href="/chat.css?v=5"', self.html)
+        self.assertIn('src="/chat.js?v=5"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
@@ -58,6 +58,17 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertIn('createRadialGradient', self.js)
         self.assertIn('function createDotSphere()', self.js)
         self.assertNotIn('textContent = "J"', self.js)
+
+    def test_stark_hud_visual_system_is_wired_to_existing_chat(self) -> None:
+        for required in ('hudBackdrop', 'composerForm', 'messageInput', 'micBtn', 'sendBtn',
+                         'wakeWordBtn', 'voiceOutputBtn', 'dotSphere', 'activityLabel'):
+            with self.subTest(required=required):
+                self.assertIn(required, self.html)
+        self.assertIn('function initHudParticles()', self.js)
+        self.assertIn('document.body.dataset.activity = state', self.js)
+        self.assertIn('.orb-ring', self.css)
+        self.assertIn('.composer-shell:focus-within', self.css)
+        self.assertIn('@media (prefers-reduced-motion: reduce)', self.css)
 
     def test_voice_only_interface_keeps_accessible_labels(self) -> None:
         self.assertIn('aria-label="Start voice input"', self.html)
