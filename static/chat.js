@@ -7,7 +7,7 @@
     mic: $("#micBtn"), wake: $("#wakeWordBtn"), wakeLabel: $("#wakeWordLabel"),
     voice: $("#voiceOutputBtn"), voiceLabel: $("#voiceOutputLabel"),
     connection: $("#connectionPill"), connectionLabel: $("#connectionLabel"),
-    welcome: $("#welcomePanel"), chat: $("#chatLog"), typing: $("#typingRow"),
+    welcome: $("#welcomePanel"), conversation: $(".conversation"), chat: $("#chatLog"), typing: $("#typingRow"),
     activity: $("#activityStatus"), activityLabel: $("#activityLabel"),
     core: $("#coreOrb"), wakeHint: $("#wakeHint"), toast: $("#toastRegion"),
     newChat: $("#newChatBtn"), composerStatus: $("#composerStatus"),
@@ -304,7 +304,7 @@
     let html = "";
     for (let i = 0; i < chunks.length; i++) {
       if (i % 3 === 1) continue;
-      if (i % 3 === 2) html += "<pre><code>" + escapeHtml(chunks[i]) + "</code></pre>";
+      if (i % 3 === 2) html += '<pre class="code-panel"><button class="code-copy" type="button" data-copy-code aria-label="Copy code block">COPY</button><code>' + escapeHtml(chunks[i]) + "</code></pre>";
       else html += formatInline(chunks[i]).replace(/\n/g, "<br>");
     }
     return html;
@@ -342,6 +342,7 @@
     row.append(avatar, body);
     ui.chat.appendChild(row);
     ui.welcome.classList.add("hidden");
+    ui.conversation.classList.add("chat-active");
     ui.chat.scrollTop = ui.chat.scrollHeight;
     transcript.push({ role, content: String(content || ""), route: route || "" });
     saveTranscript();
@@ -374,7 +375,10 @@
         const bubble = document.createElement("div"); bubble.className = "message-bubble"; bubble.innerHTML = formatMessage(item.content);
         body.append(meta, bubble); row.append(avatar, body); ui.chat.appendChild(row);
       }
-      if (transcript.length) ui.welcome.classList.add("hidden");
+      if (transcript.length) {
+        ui.welcome.classList.add("hidden");
+        ui.conversation.classList.add("chat-active");
+      }
       ui.chat.scrollTop = ui.chat.scrollHeight;
     } catch (_) {}
   }
@@ -769,9 +773,28 @@
     sessionStorage.removeItem("jarvis-chat-transcript-v1");
     ui.chat.replaceChildren();
     ui.welcome.classList.remove("hidden");
+    ui.conversation.classList.remove("chat-active");
     ui.input.value = ""; resizeInput(); ui.input.focus();
     setActivity("idle", wakeEnabled ? "WAKE WORD STANDING BY" : "READY WHEN YOU ARE");
   }
+
+  ui.chat.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-copy-code]");
+    if (!button) return;
+    const code = button.parentElement && button.parentElement.querySelector("code");
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code.textContent || "");
+      button.textContent = "COPIED";
+      button.classList.add("copied");
+      window.setTimeout(() => {
+        button.textContent = "COPY";
+        button.classList.remove("copied");
+      }, 1300);
+    } catch (_) {
+      showToast("Could not copy this code block in this browser.", "error");
+    }
+  });
 
   ui.form.addEventListener("submit", (event) => { event.preventDefault(); void sendMessage(); });
   ui.input.addEventListener("input", resizeInput);
