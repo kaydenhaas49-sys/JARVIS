@@ -42,28 +42,36 @@
     const container = document.getElementById("dotSphere");
     if (!container) return;
     if (container._sphereFrame) window.cancelAnimationFrame(container._sphereFrame);
+    container._sphereResizeObserver?.disconnect();
     container.replaceChildren();
 
     const canvas = document.createElement("canvas");
     canvas.className = "sphere-canvas";
     canvas.setAttribute("aria-hidden", "true");
     container.appendChild(canvas);
-    const context = canvas.getContext("2d", { alpha: true });
+    const context = canvas.getContext("2d", { alpha: true, desynchronized: true });
     if (!context) return;
 
-    const count = 820;
+    const compact = window.matchMedia?.("(max-width: 740px)")?.matches || false;
+    const shellCount = compact ? 1320 : 1880;
+    const innerCount = compact ? 300 : 520;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const points = [];
-    for (let i = 0; i < count; i += 1) {
-      const y = 1 - 2 * ((i + 0.5) / count);
+    for (let i = 0; i < shellCount + innerCount; i += 1) {
+      const shell = i < shellCount;
+      const index = shell ? i : i - shellCount;
+      const count = shell ? shellCount : innerCount;
+      const y = 1 - 2 * ((index + 0.5) / count);
       const ring = Math.sqrt(Math.max(0, 1 - y * y));
-      const angle = goldenAngle * i;
+      const angle = goldenAngle * index + (shell ? 0 : 0.31);
+      const pointRadius = shell ? 0.91 + (((index * 17) % 23) / 100) : 0.24 + (((index * 29) % 71) / 100) * 0.58;
       points.push({
-        x: Math.cos(angle) * ring,
-        y,
-        z: Math.sin(angle) * ring,
-        phase: i * 2.399963229728653,
-        sparkle: ((i * 37) % 101) / 100,
+        x: Math.cos(angle) * ring * pointRadius,
+        y: y * pointRadius,
+        z: Math.sin(angle) * ring * pointRadius,
+        phase: index * 2.399963229728653 + (shell ? 0 : 1.7),
+        sparkle: ((index * 37) % 101) / 100,
+        shell,
       });
     }
 
@@ -72,55 +80,67 @@
     let pixelRatio = 1;
     let rotation = 0;
     let lastFrame = 0;
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
+    let energy = 0;
+    let visible = !document.hidden;
+    const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    let reducedMotion = Boolean(motionQuery?.matches);
 
     function resizeCanvas() {
       const bounds = container.getBoundingClientRect();
       width = Math.max(1, bounds.width);
       height = Math.max(1, bounds.height);
-      pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      pixelRatio = Math.min(window.devicePixelRatio || 1, compact ? 1.5 : 2);
       canvas.width = Math.round(width * pixelRatio);
       canvas.height = Math.round(height * pixelRatio);
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      if (reducedMotion) draw(performance.now(), true);
     }
 
-    function draw(now) {
-      container._sphereFrame = window.requestAnimationFrame(draw);
-      if (document.hidden) return;
+    function draw(now, staticFrame = false) {
+      if (!visible || document.hidden) return;
+      if (!reducedMotion && !staticFrame) {
+        container._sphereFrame = window.requestAnimationFrame(draw);
+      }
       const delta = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0.016;
       lastFrame = now;
       const state = ui.core?.dataset.state || "idle";
-      const speed = reducedMotion ? 0 : state === "listening" ? 1.05 : state === "thinking" ? 0.86 : state === "speaking" ? 0.42 : 0.22;
-      rotation += delta * speed;
+      const targetEnergy = state === "listening" ? 1 : state === "thinking" ? 0.68 : state === "speaking" ? 0.82 : state === "error" ? 0.36 : 0;
+      energy += (targetEnergy - energy) * (1 - Math.exp(-delta * 2.6));
       const time = now / 1000;
       const cx = width / 2;
       const cy = height / 2;
-      const radius = Math.min(width, height) * 0.385;
-      const breath = reducedMotion ? 1 : 1 + (state === "speaking" ? Math.sin(time * 3.4) * 0.035 : state === "listening" ? Math.sin(time * 6.5) * 0.014 : Math.sin(time * 1.3) * 0.008);
+      const radius = Math.min(width, height) * 0.395;
+      const motion = reducedMotion ? 0 : 1;
+      const spinRate = state === "thinking" ? 0.52 : state === "listening" ? 0.3 : state === "speaking" ? 0.2 : 0.105;
+      rotation += delta * spinRate * motion;
+      const breath = 1 + motion * (0.008 * Math.sin(time * 1.05) + energy * 0.012 * Math.sin(time * (state === "speaking" ? 5.2 : 2.7)));
       context.clearRect(0, 0, width, height);
 
-      const aura = context.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * 1.22);
-      aura.addColorStop(0, state === "listening" ? "rgba(87,226,255,.15)" : "rgba(59,176,225,.105)");
-      aura.addColorStop(0.56, "rgba(39,128,203,.045)");
-      aura.addColorStop(1, "rgba(26,90,154,0)");
-      context.fillStyle = aura;
+      const glow = context.createRadialGradient(cx, cy, radius * 0.1, cx, cy, radius * 1.48);
+      glow.addColorStop(0, "rgba(73,210,242," + (0.11 + energy * 0.1) + ")");
+      glow.addColorStop(0.43, "rgba(35,153,209,.075)");
+      glow.addColorStop(0.72, "rgba(28,107,169,.035)");
+      glow.addColorStop(1, "rgba(17,68,117,0)");
+      context.fillStyle = glow;
       context.beginPath();
-      context.arc(cx, cy, radius * 1.22, 0, Math.PI * 2);
+      context.arc(cx, cy, radius * 1.48, 0, Math.PI * 2);
       context.fill();
 
-      // Fine orbital lines sit behind the particle shell, like a faint magnetic field.
       context.save();
       context.translate(cx, cy);
-      for (let i = 0; i < 3; i += 1) {
+      context.globalCompositeOperation = "screen";
+      for (let i = 0; i < 4; i += 1) {
         context.save();
-        context.rotate(rotation * (i % 2 ? -0.38 : 0.27) + i * 1.04);
-        context.scale(1, 0.23 + i * 0.075);
+        context.rotate(rotation * (i % 2 ? -0.19 : 0.14) + i * 0.83);
+        context.scale(1, 0.2 + (i % 3) * 0.075);
         context.beginPath();
-        context.arc(0, 0, radius * (1.04 + i * 0.035), 0, Math.PI * 2);
-        context.strokeStyle = i === 0 ? "rgba(123,225,247,.15)" : "rgba(105,159,231,.075)";
-        context.lineWidth = i === 0 ? 0.85 : 0.65;
+        context.ellipse(0, 0, radius * (1.01 + i * 0.025), 0, 0, 0, Math.PI * 2);
+        context.strokeStyle = i === 0
+          ? "rgba(171,245,255," + (0.14 + energy * 0.12) + ")"
+          : "rgba(83,194,232," + (0.045 + energy * 0.035) + ")";
+        context.lineWidth = i === 0 ? 0.9 : 0.65;
         context.stroke();
         context.restore();
       }
@@ -128,13 +148,16 @@
 
       const cosY = Math.cos(rotation);
       const sinY = Math.sin(rotation);
-      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06;
+      const tilt = 0.2 + Math.sin(time * 0.31) * 0.055 * motion;
       const cosX = Math.cos(tilt);
       const sinX = Math.sin(tilt);
       const projected = [];
       for (const point of points) {
-        const rippleStrength = state === "listening" ? 0.036 : state === "thinking" ? 0.027 : state === "speaking" ? 0.022 : 0.009;
-        const ripple = reducedMotion ? 0 : Math.sin(time * (state === "listening" ? 5.6 : 2.1) + point.phase) * rippleStrength;
+        const waveRate = state === "listening" ? 4.1 : state === "thinking" ? 2.5 : state === "speaking" ? 5.3 : 1.3;
+        const wave = Math.sin(time * waveRate - point.phase * 0.22);
+        const ripple = motion * (point.shell
+          ? (0.006 + energy * 0.016) * wave
+          : (0.012 + energy * 0.023) * Math.sin(time * 1.6 + point.phase));
         const scale = (1 + ripple) * breath;
         const px = point.x * scale;
         const py = point.y * scale;
@@ -143,53 +166,94 @@
         const rz = -px * sinY + pz * cosY;
         const ry = py * cosX - rz * sinX;
         const depthZ = py * sinX + rz * cosX;
-        const perspective = 1 / (1.12 - depthZ * 0.19);
+        const perspective = 1 / (1.1 - depthZ * 0.22);
         projected.push({
           x: cx + rx * radius * perspective,
           y: cy + ry * radius * perspective,
           depth: (depthZ + 1) * 0.5,
           phase: point.phase,
           sparkle: point.sparkle,
+          shell: point.shell,
         });
       }
       projected.sort((a, b) => a.depth - b.depth);
 
+      context.globalCompositeOperation = "screen";
       for (const point of projected) {
         const depth = point.depth;
-        const twinkle = reducedMotion ? 0.9 : 0.78 + 0.22 * Math.sin(time * (state === "speaking" ? 5.1 : 2.2) + point.phase);
-        const size = (0.55 + depth * 1.75 + point.sparkle * 0.35) * twinkle;
-        const opacity = Math.min(1, (0.14 + depth * 0.78) * twinkle);
+        const front = Math.max(0, (depth - 0.12) / 0.88);
+        const interior = point.shell ? 1 : 0.58;
+        const pulse = reducedMotion ? 0 : Math.sin(time * (state === "speaking" ? 7 : state === "listening" ? 4.2 : 1.8) + point.phase) * energy;
+        const twinkle = 0.76 + point.sparkle * 0.18 + pulse * 0.07;
+        const size = (point.shell ? 0.48 + front * 1.35 : 0.35 + front * 0.72) * (1 + energy * 0.17) * twinkle;
+        const opacity = Math.min(0.9, (point.shell ? 0.09 + front * 0.68 : 0.045 + front * 0.34) * interior * (1 + energy * 0.28));
         context.globalAlpha = opacity;
-        if (depth > 0.77 && point.sparkle > 0.42) {
-          context.fillStyle = "#e9fdff";
-          context.shadowColor = state === "listening" ? "rgba(112,240,255,.95)" : "rgba(91,216,245,.72)";
-          context.shadowBlur = depth > 0.9 ? 9 : 5;
-        } else {
-          context.fillStyle = depth > 0.52 ? "#83eaf7" : depth > 0.22 ? "#568fc5" : "#496fa9";
-          context.shadowBlur = 0;
-        }
+        context.fillStyle = point.sparkle > 0.93 && front > 0.65
+          ? "#efffff"
+          : front > 0.72 ? "#9ceeff" : front > 0.36 ? "#59c9ec" : "#347ca9";
         context.beginPath();
         context.arc(point.x, point.y, size, 0, Math.PI * 2);
         context.fill();
+        if (point.sparkle > 0.985 && front > 0.77) {
+          context.globalAlpha = opacity * 0.34;
+          context.beginPath();
+          context.arc(point.x, point.y, size * 3.2, 0, Math.PI * 2);
+          context.fill();
+        }
       }
       context.globalAlpha = 1;
-      context.shadowBlur = 0;
+      context.globalCompositeOperation = "source-over";
 
-      // A soft highlight on the upper edge gives the sphere a glassy, dimensional finish.
-      const highlight = context.createRadialGradient(cx - radius * 0.35, cy - radius * 0.46, 0, cx - radius * 0.18, cy - radius * 0.12, radius * 1.05);
-      highlight.addColorStop(0, "rgba(204,251,255,.07)");
-      highlight.addColorStop(0.36, "rgba(106,213,245,.025)");
-      highlight.addColorStop(1, "rgba(106,213,245,0)");
+      const highlight = context.createRadialGradient(cx - radius * 0.34, cy - radius * 0.42, radius * 0.02, cx - radius * 0.13, cy - radius * 0.08, radius * 1.05);
+      highlight.addColorStop(0, "rgba(226,254,255,.105)");
+      highlight.addColorStop(0.28, "rgba(141,232,250,.055)");
+      highlight.addColorStop(0.7, "rgba(65,177,219,.018)");
+      highlight.addColorStop(1, "rgba(14,45,75,0)");
       context.fillStyle = highlight;
+      context.beginPath();
+      context.arc(cx, cy, radius, 0, Math.PI * 2);
+      context.fill();
+
+      const limb = context.createRadialGradient(cx + radius * 0.22, cy + radius * 0.3, radius * 0.36, cx, cy, radius * 1.08);
+      limb.addColorStop(0, "rgba(0,0,0,0)");
+      limb.addColorStop(0.68, "rgba(1,10,22,.045)");
+      limb.addColorStop(1, "rgba(2,13,27,.34)");
+      context.fillStyle = limb;
       context.beginPath();
       context.arc(cx, cy, radius, 0, Math.PI * 2);
       context.fill();
     }
 
+    function onVisibilityChange() {
+      visible = !document.hidden;
+      if (visible && !reducedMotion) {
+        lastFrame = 0;
+        container._sphereFrame = window.requestAnimationFrame(draw);
+      } else if (!visible && container._sphereFrame) {
+        window.cancelAnimationFrame(container._sphereFrame);
+      } else if (visible) {
+        draw(performance.now(), true);
+      }
+    }
+
+    function onMotionPreferenceChange(event) {
+      reducedMotion = event.matches;
+      if (container._sphereFrame) window.cancelAnimationFrame(container._sphereFrame);
+      if (reducedMotion) draw(performance.now(), true);
+      else if (visible) {
+        lastFrame = 0;
+        container._sphereFrame = window.requestAnimationFrame(draw);
+      }
+    }
+
     resizeCanvas();
-    draw(performance.now());
+    if (reducedMotion) draw(performance.now(), true);
+    else container._sphereFrame = window.requestAnimationFrame(draw);
+    container._sphereVisibilityHandler = onVisibilityChange;
+    container._sphereMotionHandler = onMotionPreferenceChange;
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    motionQuery?.addEventListener?.("change", onMotionPreferenceChange);
     if (typeof ResizeObserver !== "undefined") {
-      container._sphereResizeObserver?.disconnect();
       container._sphereResizeObserver = new ResizeObserver(resizeCanvas);
       container._sphereResizeObserver.observe(container);
     }
