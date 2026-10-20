@@ -41,36 +41,158 @@
   function createDotSphere() {
     const container = document.getElementById("dotSphere");
     if (!container) return;
+    if (container._sphereFrame) window.cancelAnimationFrame(container._sphereFrame);
     container.replaceChildren();
-    const bounds = container.getBoundingClientRect();
-    const radius = Math.max(76, Math.min(bounds.width, bounds.height) * 0.405);
-    const count = 520;
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "sphere-canvas";
+    canvas.setAttribute("aria-hidden", "true");
+    container.appendChild(canvas);
+    const context = canvas.getContext("2d", { alpha: true });
+    if (!context) return;
+
+    const count = 820;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-    const cloud = document.createElement("div");
-    cloud.className = "sphere-point-cloud";
+    const points = [];
     for (let i = 0; i < count; i += 1) {
-      const y = 1 - (i / (count - 1)) * 2;
+      const y = 1 - 2 * ((i + 0.5) / count);
       const ring = Math.sqrt(Math.max(0, 1 - y * y));
       const angle = goldenAngle * i;
-      const nx = Math.cos(angle) * ring;
-      const nz = Math.sin(angle) * ring;
-      const depth = nz;
-      const dot = document.createElement("i");
-      dot.className = "sphere-dot";
-      dot.setAttribute("aria-hidden", "true");
-      dot.style.left = "calc(50% + " + (nx * radius).toFixed(2) + "px)";
-      dot.style.top = "calc(50% + " + (y * radius).toFixed(2) + "px)";
-      dot.style.transform = "translate(-50%, -50%) translateZ(" + (nz * radius).toFixed(2) + "px)";
-      const size = 1.45 + ((depth + 1) / 2) * 1.65;
-      dot.style.width = size.toFixed(2) + "px";
-      dot.style.height = size.toFixed(2) + "px";
-      dot.style.opacity = (0.2 + ((depth + 1) / 2) * 0.78).toFixed(2);
-      dot.style.background = depth > 0.48 ? "#d9fbff" : depth > -0.15 ? "#73e2f1" : "#6688c6";
-      dot.style.boxShadow = depth > 0.18 ? "0 0 7px rgba(115,226,241,.58)" : "0 0 3px rgba(102,136,198,.28)";
-      dot.style.zIndex = String(Math.round((depth + 1) * 100));
-      cloud.appendChild(dot);
+      points.push({
+        x: Math.cos(angle) * ring,
+        y,
+        z: Math.sin(angle) * ring,
+        phase: i * 2.399963229728653,
+        sparkle: ((i * 37) % 101) / 100,
+      });
     }
-    container.appendChild(cloud);
+
+    let width = 0;
+    let height = 0;
+    let pixelRatio = 1;
+    let rotation = 0;
+    let lastFrame = 0;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
+
+    function resizeCanvas() {
+      const bounds = container.getBoundingClientRect();
+      width = Math.max(1, bounds.width);
+      height = Math.max(1, bounds.height);
+      pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * pixelRatio);
+      canvas.height = Math.round(height * pixelRatio);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    }
+
+    function draw(now) {
+      container._sphereFrame = window.requestAnimationFrame(draw);
+      if (document.hidden) return;
+      const delta = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0.016;
+      lastFrame = now;
+      const state = ui.core?.dataset.state || "idle";
+      const speed = reducedMotion ? 0 : state === "listening" ? 1.05 : state === "thinking" ? 0.86 : state === "speaking" ? 0.42 : 0.22;
+      rotation += delta * speed;
+      const time = now / 1000;
+      const cx = width / 2;
+      const cy = height / 2;
+      const radius = Math.min(width, height) * 0.385;
+      const breath = reducedMotion ? 1 : 1 + (state === "speaking" ? Math.sin(time * 3.4) * 0.035 : state === "listening" ? Math.sin(time * 6.5) * 0.014 : Math.sin(time * 1.3) * 0.008);
+      context.clearRect(0, 0, width, height);
+
+      const aura = context.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * 1.22);
+      aura.addColorStop(0, state === "listening" ? "rgba(87,226,255,.15)" : "rgba(59,176,225,.105)");
+      aura.addColorStop(0.56, "rgba(39,128,203,.045)");
+      aura.addColorStop(1, "rgba(26,90,154,0)");
+      context.fillStyle = aura;
+      context.beginPath();
+      context.arc(cx, cy, radius * 1.22, 0, Math.PI * 2);
+      context.fill();
+
+      // Fine orbital lines sit behind the particle shell, like a faint magnetic field.
+      context.save();
+      context.translate(cx, cy);
+      for (let i = 0; i < 3; i += 1) {
+        context.save();
+        context.rotate(rotation * (i % 2 ? -0.38 : 0.27) + i * 1.04);
+        context.scale(1, 0.23 + i * 0.075);
+        context.beginPath();
+        context.arc(0, 0, radius * (1.04 + i * 0.035), 0, Math.PI * 2);
+        context.strokeStyle = i === 0 ? "rgba(123,225,247,.15)" : "rgba(105,159,231,.075)";
+        context.lineWidth = i === 0 ? 0.85 : 0.65;
+        context.stroke();
+        context.restore();
+      }
+      context.restore();
+
+      const cosY = Math.cos(rotation);
+      const sinY = Math.sin(rotation);
+      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06;
+      const cosX = Math.cos(tilt);
+      const sinX = Math.sin(tilt);
+      const projected = [];
+      for (const point of points) {
+        const rippleStrength = state === "listening" ? 0.036 : state === "thinking" ? 0.027 : state === "speaking" ? 0.022 : 0.009;
+        const ripple = reducedMotion ? 0 : Math.sin(time * (state === "listening" ? 5.6 : 2.1) + point.phase) * rippleStrength;
+        const scale = (1 + ripple) * breath;
+        const px = point.x * scale;
+        const py = point.y * scale;
+        const pz = point.z * scale;
+        const rx = px * cosY + pz * sinY;
+        const rz = -px * sinY + pz * cosY;
+        const ry = py * cosX - rz * sinX;
+        const depthZ = py * sinX + rz * cosX;
+        const perspective = 1 / (1.12 - depthZ * 0.19);
+        projected.push({
+          x: cx + rx * radius * perspective,
+          y: cy + ry * radius * perspective,
+          depth: (depthZ + 1) * 0.5,
+          phase: point.phase,
+          sparkle: point.sparkle,
+        });
+      }
+      projected.sort((a, b) => a.depth - b.depth);
+
+      for (const point of projected) {
+        const depth = point.depth;
+        const twinkle = reducedMotion ? 0.9 : 0.78 + 0.22 * Math.sin(time * (state === "speaking" ? 5.1 : 2.2) + point.phase);
+        const size = (0.55 + depth * 1.75 + point.sparkle * 0.35) * twinkle;
+        const opacity = Math.min(1, (0.14 + depth * 0.78) * twinkle);
+        context.globalAlpha = opacity;
+        if (depth > 0.77 && point.sparkle > 0.42) {
+          context.fillStyle = "#e9fdff";
+          context.shadowColor = state === "listening" ? "rgba(112,240,255,.95)" : "rgba(91,216,245,.72)";
+          context.shadowBlur = depth > 0.9 ? 9 : 5;
+        } else {
+          context.fillStyle = depth > 0.52 ? "#83eaf7" : depth > 0.22 ? "#568fc5" : "#496fa9";
+          context.shadowBlur = 0;
+        }
+        context.beginPath();
+        context.arc(point.x, point.y, size, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.globalAlpha = 1;
+      context.shadowBlur = 0;
+
+      // A soft highlight on the upper edge gives the sphere a glassy, dimensional finish.
+      const highlight = context.createRadialGradient(cx - radius * 0.35, cy - radius * 0.46, 0, cx - radius * 0.18, cy - radius * 0.12, radius * 1.05);
+      highlight.addColorStop(0, "rgba(204,251,255,.07)");
+      highlight.addColorStop(0.36, "rgba(106,213,245,.025)");
+      highlight.addColorStop(1, "rgba(106,213,245,0)");
+      context.fillStyle = highlight;
+      context.beginPath();
+      context.arc(cx, cy, radius, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    resizeCanvas();
+    draw(performance.now());
+    if (typeof ResizeObserver !== "undefined") {
+      container._sphereResizeObserver?.disconnect();
+      container._sphereResizeObserver = new ResizeObserver(resizeCanvas);
+      container._sphereResizeObserver.observe(container);
+    }
   }
 
   function setActivity(state, label) {
