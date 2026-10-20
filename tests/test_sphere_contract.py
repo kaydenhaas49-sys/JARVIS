@@ -23,9 +23,10 @@ class DotSphereContractTests(unittest.TestCase):
         self.assertIn('context.globalCompositeOperation = "screen"', self.script)
 
     def test_each_assistant_state_has_its_own_motion_profile(self):
-        for state in ("idle", "listening", "thinking", "speaking"):
+        for state in ("listening", "thinking", "speaking"):
             self.assertIn('state === "' + state + '"', self.script)
         self.assertIn("targetEnergy", self.script)
+        self.assertIn('state === "idle" ? 0.105', self.script)
         self.assertIn("spinRate", self.script)
 
     def test_reduced_motion_and_hidden_tabs_limit_render_work(self):

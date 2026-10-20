@@ -106,14 +106,14 @@
       const delta = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0.016;
       lastFrame = now;
       const state = ui.core?.dataset.state || "idle";
-      const targetEnergy = state === "listening" ? 1 : state === "thinking" ? 0.68 : state === "speaking" ? 0.82 : state === "error" ? 0.36 : 0;
+      const targetEnergy = state === "idle" ? 0 : state === "listening" ? 1 : state === "thinking" ? 0.68 : state === "speaking" ? 0.82 : state === "error" ? 0.36 : 0;
       energy += (targetEnergy - energy) * (1 - Math.exp(-delta * 2.6));
       const time = now / 1000;
       const cx = width / 2;
       const cy = height / 2;
       const radius = Math.min(width, height) * 0.395;
       const motion = reducedMotion ? 0 : 1;
-      const spinRate = state === "thinking" ? 0.52 : state === "listening" ? 0.3 : state === "speaking" ? 0.2 : 0.105;
+      const spinRate = state === "idle" ? 0.105 : state === "thinking" ? 0.52 : state === "listening" ? 0.3 : state === "speaking" ? 0.2 : 0.105;
       rotation += delta * spinRate * motion;
       const breath = 1 + motion * (0.008 * Math.sin(time * 1.05) + energy * 0.012 * Math.sin(time * (state === "speaking" ? 5.2 : 2.7)));
       context.clearRect(0, 0, width, height);
