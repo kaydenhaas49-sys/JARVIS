@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#060a10">
   <meta name="description" content="JARVIS — a personal AI chatbot with voice and local wake-word support.">
   <title>J.A.R.V.I.S. — Personal AI</title>
-  <link rel="stylesheet" href="/chat.css?v=2">
-  <script src="/chat.js?v=2" defer></script>
+  <link rel="stylesheet" href="/chat.css?v=3">
+  <script src="/chat.js?v=3" defer></script>
 </head>
 <body>
   <div class="ambient ambient-a" aria-hidden="true"></div>
@@ -34,8 +34,7 @@
       <section class="conversation" aria-label="Chat with JARVIS">
         <div class="welcome" id="welcomePanel">
           <div class="core" id="coreOrb" data-state="idle" aria-hidden="true">
-            <div class="core-ring ring-one"></div><div class="core-ring ring-two"></div><div class="core-ring ring-three"></div>
-            <div class="core-disc"><span>J</span><i></i></div>
+            <div class="dot-sphere" id="dotSphere"></div>
           </div>
           <div class="welcome-kicker"><span></span> PERSONAL ASSISTANT ONLINE <span></span></div>
           <h1>Good to have you back.</h1>
@@ -45,7 +44,7 @@
         </div>
         <div class="chat-log" id="chatLog" aria-live="polite" aria-label="Conversation"></div>
         <div class="typing-row hidden" id="typingRow" role="status">
-          <span class="typing-orb" aria-hidden="true">J</span><span>JARVIS is thinking</span><i></i><i></i><i></i>
+          <span class="typing-orb" aria-hidden="true"></span><span>JARVIS is thinking</span><i></i><i></i><i></i>
         </div>
       </section>
       <footer class="composer-zone">
