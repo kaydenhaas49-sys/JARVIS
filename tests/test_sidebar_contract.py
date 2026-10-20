@@ -42,8 +42,8 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
                 self.assertNotIn(forbidden.casefold(), self.html.casefold())
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
-        self.assertIn('href="/chat.css?v=5"', self.html)
-        self.assertIn('src="/chat.js?v=5"', self.html)
+        self.assertIn('href="/chat.css?v=6"', self.html)
+        self.assertIn('src="/chat.js?v=6"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
@@ -69,6 +69,16 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertIn('.orb-ring', self.css)
         self.assertIn('.composer-shell:focus-within', self.css)
         self.assertIn('@media (prefers-reduced-motion: reduce)', self.css)
+
+    def test_chat_visuals_react_to_live_activity_and_audio(self) -> None:
+        self.assertIn('id="activeOrbDock"', self.html)
+        self.assertIn('id="liveDotSphere"', self.html)
+        self.assertIn('function startMicVisualization(stream)', self.js)
+        self.assertIn('microphoneAnalyser.getByteTimeDomainData', self.js)
+        self.assertIn('microphoneEnergy', self.js)
+        self.assertIn('body[data-conversation="active"] .active-orb-dock', self.css)
+        self.assertIn('body[data-activity="speaking"] .ambient-c', self.css)
+        self.assertIn('body[data-composing="on"] .composer-shell', self.css)
 
     def test_voice_only_interface_keeps_accessible_labels(self) -> None:
         self.assertIn('aria-label="Start voice input"', self.html)
