@@ -19,6 +19,8 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
     def setUp(self) -> None:
         root = Path(__file__).resolve().parents[1]
         self.html = (root / "static" / "index.html").read_text(encoding="utf-8")
+        self.css = (root / "static" / "chat.css").read_text(encoding="utf-8")
+        self.js = (root / "static" / "chat.js").read_text(encoding="utf-8")
         parser = ChatOnlyParser()
         parser.feed(self.html)
         self.by_id = {attrs.get("id"): (tag, attrs) for tag, attrs in parser.tags if attrs.get("id")}
@@ -40,12 +42,20 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
                 self.assertNotIn(forbidden.casefold(), self.html.casefold())
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
-        self.assertIn('href="/chat.css?v=2"', self.html)
-        self.assertIn('src="/chat.js?v=2"', self.html)
+        self.assertIn('href="/chat.css?v=3"', self.html)
+        self.assertIn('src="/chat.js?v=3"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
                 self.assertNotIn(legacy_asset, self.html)
+
+    def test_welcome_brand_is_a_3d_dot_sphere_not_a_lettermark(self) -> None:
+        self.assertIn('id="dotSphere"', self.html)
+        self.assertNotIn('<span>J</span>', self.html)
+        self.assertNotIn('<span class="typing-orb" aria-hidden="true">J</span>', self.html)
+        self.assertIn('.sphere-point-cloud', self.css)
+        self.assertIn('function createDotSphere()', self.js)
+        self.assertNotIn('textContent = "J"', self.js)
 
     def test_voice_only_interface_keeps_accessible_labels(self) -> None:
         self.assertIn('aria-label="Start voice input"', self.html)
