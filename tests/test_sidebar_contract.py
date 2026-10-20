@@ -56,7 +56,7 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertIn('.sphere-canvas', self.css)
         self.assertIn('820', self.js)
         self.assertIn('createRadialGradient', self.js)
-        self.assertIn('function createDotSphere()', self.js)
+        self.assertIn('function createDotSphere(', self.js)
         self.assertNotIn('textContent = "J"', self.js)
 
     def test_stark_hud_visual_system_is_wired_to_existing_chat(self) -> None:
