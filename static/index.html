@@ -3,64 +3,124 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#060a10">
+  <meta name="theme-color" content="#050b13">
   <meta name="description" content="JARVIS — a personal AI chatbot with voice and local wake-word support.">
-  <title>J.A.R.V.I.S. — Personal AI</title>
-  <link rel="stylesheet" href="/chat.css?v=4">
-  <script src="/chat.js?v=4" defer></script>
+  <title>J.A.R.V.I.S. — Stark Intelligence</title>
+  <link rel="stylesheet" href="/chat.css?v=5">
+  <script src="/chat.js?v=5" defer></script>
 </head>
-<body>
+<body data-activity="idle" data-connection="checking" data-wake="off" data-voice="on">
+  <canvas class="hud-backdrop" id="hudBackdrop" aria-hidden="true"></canvas>
   <div class="ambient ambient-a" aria-hidden="true"></div>
   <div class="ambient ambient-b" aria-hidden="true"></div>
+  <div class="ambient ambient-c" aria-hidden="true"></div>
+  <div class="scan-grain" aria-hidden="true"></div>
+
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <div class="brand-copy"><strong>J.A.R.V.I.S.</strong><span>PERSONAL AI</span></div>
-      </div>
-      <div class="topbar-right">
-        <div class="connection" id="connectionPill" data-state="checking" role="status">
-          <span class="connection-dot"></span><span id="connectionLabel">CONNECTING</span>
+        <span class="brand-mark" aria-hidden="true">
+          <i class="brand-ring ring-outer"></i><i class="brand-ring ring-inner"></i><i class="brand-core"></i>
+          <i class="brand-cross brand-cross-h"></i><i class="brand-cross brand-cross-v"></i>
+        </span>
+        <div class="brand-copy">
+          <strong>J.A.R.V.I.S.</strong>
+          <span>STARK SYSTEMS <b>/</b> PERSONAL INTELLIGENCE</span>
         </div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="connection" id="connectionPill" data-state="checking" role="status" aria-live="polite">
+          <span class="connection-led"><i></i></span>
+          <span class="connection-copy"><small>NEURAL LINK</small><strong id="connectionLabel">CONNECTING</strong></span>
+        </div>
+        <span class="topbar-divider" aria-hidden="true"></span>
         <button class="control-btn wake-btn" id="wakeWordBtn" type="button" aria-pressed="false" title='Enable local "Hey JARVIS" detection'>
-          <span class="control-icon" aria-hidden="true">⌁</span><span id="wakeWordLabel">WAKE OFF</span>
+          <span class="control-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M3 12h2l2-5 3 10 3-13 3 16 2-8h3" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="control-label"><small>HANDS FREE</small><strong id="wakeWordLabel">WAKE OFF</strong></span>
         </button>
         <button class="control-btn voice-btn active" id="voiceOutputBtn" type="button" aria-pressed="true" title="Toggle spoken replies">
-          <span class="control-icon" aria-hidden="true">◖))</span><span id="voiceOutputLabel">VOICE ON</span>
+          <span class="control-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 4V5L8 9H4Z" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/><path d="M16 9a5 5 0 0 1 0 6m2-9a9 9 0 0 1 0 12" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/></svg>
+          </span>
+          <span class="control-label"><small>AUDIO RESPONSE</small><strong id="voiceOutputLabel">VOICE ON</strong></span>
         </button>
       </div>
     </header>
+
     <main class="chat-layout">
+      <div class="top-rule" aria-hidden="true"><span></span><i></i><span></span></div>
       <section class="conversation" aria-label="Chat with JARVIS">
-        <div class="welcome" id="welcomePanel">
-          <div class="core" id="coreOrb" data-state="idle" aria-hidden="true">
-            <div class="dot-sphere" id="dotSphere"></div>
-          </div>
-          <div class="welcome-kicker"><span></span> PERSONAL ASSISTANT ONLINE <span></span></div>
-          <h1>Good to have you back.</h1>
-          <p>What can I do for you?</p>
-          <div class="welcome-status" id="activityStatus" data-state="idle"><span></span><strong id="activityLabel">READY WHEN YOU ARE</strong></div>
-          <div class="wake-hint" id="wakeHint">Type a message, use the microphone, or enable <b>Hey JARVIS</b>.</div>
+        <div class="conversation-hud" aria-hidden="true">
+          <span class="hud-index"><i></i> INTERFACE 01 <b>/</b> LIVE SESSION</span>
+          <span class="hud-session">SECURE LOCAL INSTANCE <i></i></span>
         </div>
+
+        <div class="welcome" id="welcomePanel">
+          <div class="welcome-topline"><span class="welcome-pip"></span> PERSONAL INTELLIGENCE <span class="topline-rule"></span> ONLINE</div>
+
+          <div class="core" id="coreOrb" data-state="idle" aria-hidden="true">
+            <div class="orb-stage">
+              <div class="orb-aura"></div>
+              <div class="orb-ring ring-a"></div>
+              <div class="orb-ring ring-b"></div>
+              <div class="orb-ring ring-c"></div>
+              <div class="orb-tick-ring"></div>
+              <div class="orb-axis axis-x"></div>
+              <div class="orb-axis axis-y"></div>
+              <div class="dot-sphere" id="dotSphere"></div>
+              <div class="orb-scanline"></div>
+            </div>
+            <div class="orb-shadow"></div>
+          </div>
+
+          <div class="welcome-copy">
+            <div class="welcome-kicker">STARK <span>·</span> INTELLIGENCE INTERFACE</div>
+            <h1>Ready when<br><em>you are.</em></h1>
+            <p>Your workspace is standing by.<br class="desktop-break"> What are we working on?</p>
+          </div>
+
+          <div class="welcome-status" id="activityStatus" data-state="idle">
+            <span class="status-pulse"></span>
+            <span class="status-copy"><small>SYSTEM STATE</small><strong id="activityLabel">READY WHEN YOU ARE</strong></span>
+            <span class="status-corner" aria-hidden="true"></span>
+          </div>
+          <div class="wake-hint" id="wakeHint">Type a message, use the microphone, or enable <b>Hey JARVIS</b>.</div>
+          <div class="welcome-footnote" aria-hidden="true"><span>VOICE</span><i></i><span>REASONING</span><i></i><span>ASSISTANCE</span></div>
+        </div>
+
         <div class="chat-log" id="chatLog" aria-live="polite" aria-label="Conversation"></div>
         <div class="typing-row hidden" id="typingRow" role="status">
-          <span class="typing-orb" aria-hidden="true"></span><span>JARVIS is thinking</span><i></i><i></i><i></i>
+          <span class="typing-orb" aria-hidden="true"><i></i></span>
+          <span class="typing-label">JARVIS is thinking</span>
+          <span class="typing-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
         </div>
       </section>
+
       <footer class="composer-zone">
+        <div class="composer-label-row" aria-hidden="true">
+          <span><i></i> COMMAND INPUT</span>
+          <span>ENCRYPTED LOCAL SESSION <b>·</b> READY</span>
+        </div>
         <form class="composer-shell" id="composerForm">
-          <textarea id="messageInput" rows="1" maxlength="20000" placeholder="Message JARVIS…" aria-label="Message JARVIS"></textarea>
-          <button class="mic-btn" id="micBtn" type="button" aria-label="Start voice input" title="Record a voice message">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"></path></svg>
-          </button>
-          <button class="send-btn" id="sendBtn" type="submit" aria-label="Send message" title="Send message">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"></path></svg>
-          </button>
+          <div class="composer-leading" aria-hidden="true"><span class="leading-frame"><i></i></span></div>
+          <textarea id="messageInput" rows="1" maxlength="20000" placeholder="Ask JARVIS anything…" aria-label="Message JARVIS"></textarea>
+          <div class="composer-actions">
+            <button class="mic-btn" id="micBtn" type="button" aria-label="Start voice input" title="Record a voice message">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"></path></svg>
+            </button>
+            <span class="action-separator" aria-hidden="true"></span>
+            <button class="send-btn" id="sendBtn" type="submit" aria-label="Send message" title="Send message">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5"></path></svg>
+            </button>
+          </div>
         </form>
         <div class="composer-footer">
-          <span id="composerStatus">ENTER TO SEND <i>·</i> SHIFT + ENTER FOR NEW LINE</span>
-          <button id="newChatBtn" type="button" class="new-chat-btn">NEW CHAT ↗</button>
-          <span>JARVIS CAN MAKE MISTAKES</span>
+          <span id="composerStatus"><kbd>ENTER</kbd> TO SEND <i>·</i> <kbd>SHIFT + ENTER</kbd> NEW LINE</span>
+          <button id="newChatBtn" type="button" class="new-chat-btn"><span class="new-chat-icon">＋</span> NEW SESSION <span class="new-chat-arrow">↗</span></button>
+          <span class="footer-disclaimer"><i></i> JARVIS CAN MAKE MISTAKES</span>
         </div>
       </footer>
     </main>
