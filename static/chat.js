@@ -229,22 +229,6 @@
       context.arc(cx, cy, radius * 1.22, 0, Math.PI * 2);
       context.fill();
 
-      // Fine orbital lines sit behind the particle shell, like a faint magnetic field.
-      context.save();
-      context.translate(cx, cy);
-      for (let i = 0; i < 3; i += 1) {
-        context.save();
-        context.rotate(rotation * (i % 2 ? -0.38 : 0.27) + i * 1.04);
-        context.scale(1, 0.23 + i * 0.075);
-        context.beginPath();
-        context.arc(0, 0, radius * (1.04 + i * 0.035), 0, Math.PI * 2);
-        context.strokeStyle = i === 0 ? "rgba(123,225,247,.15)" : "rgba(105,159,231,.075)";
-        context.lineWidth = i === 0 ? 0.85 : 0.65;
-        context.stroke();
-        context.restore();
-      }
-      context.restore();
-
       const cosY = Math.cos(rotation);
       const sinY = Math.sin(rotation);
       const tilt = 0.24 + Math.sin(time * 0.38) * 0.06;
