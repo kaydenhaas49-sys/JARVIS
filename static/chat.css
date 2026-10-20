@@ -435,8 +435,8 @@ button:active:not(:disabled) { filter: brightness(1.12); }
   z-index: 0;
   left: 50%;
   top: 50%;
-  width: min(180vmin, 1900px);
-  height: min(180vmin, 1900px);
+  width: min(70vmin, 850px);
+  height: min(70vmin, 850px);
   margin: 0;
   transform: translate(-50%, -50%);
   display: grid;
@@ -462,11 +462,11 @@ button:active:not(:disabled) { filter: brightness(1.12); }
 .background-orb .ring-c { inset: -2%; }
 .background-orb .orb-tick-ring { opacity: .56; }
 .background-orb .orb-shadow { bottom: 6%; }
-.background-orb[data-state="idle"] { opacity: .43; }
-.background-orb[data-state="listening"] { opacity: .69; filter: saturate(1.16) brightness(1.18) drop-shadow(0 0 34px rgba(115,226,241,.18)); }
-.background-orb[data-state="thinking"] { opacity: .60; filter: saturate(1.2) brightness(1.12) drop-shadow(0 0 32px rgba(128,170,255,.17)); }
-.background-orb[data-state="speaking"] { opacity: .72; filter: saturate(1.28) brightness(1.2) drop-shadow(0 0 48px rgba(101,255,207,.2)); }
-.background-orb[data-state="error"] { opacity: .57; filter: saturate(.82) brightness(.95) drop-shadow(0 0 35px rgba(255,90,113,.23)); }
+.background-orb[data-state="idle"] { opacity: .27; }
+.background-orb[data-state="listening"] { opacity: .47; filter: saturate(1.16) brightness(1.18) drop-shadow(0 0 34px rgba(115,226,241,.18)); }
+.background-orb[data-state="thinking"] { opacity: .43; filter: saturate(1.2) brightness(1.12) drop-shadow(0 0 32px rgba(128,170,255,.17)); }
+.background-orb[data-state="speaking"] { opacity: .52; filter: saturate(1.28) brightness(1.2) drop-shadow(0 0 48px rgba(101,255,207,.2)); }
+.background-orb[data-state="error"] { opacity: .40; filter: saturate(.82) brightness(.95) drop-shadow(0 0 35px rgba(255,90,113,.23)); }
 .background-orb[data-pulse="outgoing"] { animation: orb-message-send .76s cubic-bezier(.16,.84,.25,1); }
 .background-orb[data-pulse="incoming"] { animation: orb-message-reply 1.12s cubic-bezier(.16,.84,.25,1); }
 .background-orb[data-pulse="voice"], .background-orb[data-pulse="wake"] { animation: orb-voice-wake .92s ease-out; }
@@ -492,20 +492,20 @@ body[data-orb-pulse="incoming"] .background-orb .orb-aura { background: radial-g
 body[data-orb-pulse="wake"] .background-orb .orb-aura { background: radial-gradient(circle, rgba(255,205,120,.22), rgba(12,58,98,.09) 48%, transparent 73%); }
 body[data-orb-pulse="error"] .background-orb .orb-aura { background: radial-gradient(circle, rgba(255,95,120,.24), rgba(12,35,57,.09) 48%, transparent 73%); }
 @keyframes orb-message-send {
-  0% { transform: translate(-50%,-50%) scale(.96); filter: brightness(.95) saturate(1); }
-  28% { transform: translate(-50%,-50%) scale(1.055); filter: brightness(1.65) saturate(1.5) drop-shadow(0 0 45px rgba(93,225,255,.33)); }
+  0% { transform: translate(-50%,-50%) scale(.985); filter: brightness(.95) saturate(1); }
+  28% { transform: translate(-50%,-50%) scale(1.025); filter: brightness(1.65) saturate(1.5) drop-shadow(0 0 45px rgba(93,225,255,.33)); }
   68% { transform: translate(-50%,-50%) scale(.99); filter: brightness(1.2) saturate(1.2); }
   100% { transform: translate(-50%,-50%) scale(1); }
 }
 @keyframes orb-message-reply {
   0% { transform: translate(-50%,-50%) scale(.985); filter: brightness(1) saturate(1); }
-  24% { transform: translate(-50%,-50%) scale(1.075); filter: brightness(1.8) saturate(1.55) drop-shadow(0 0 62px rgba(160,246,255,.4)); }
-  53% { transform: translate(-50%,-50%) scale(1.025); }
+  24% { transform: translate(-50%,-50%) scale(1.04); filter: brightness(1.8) saturate(1.55) drop-shadow(0 0 62px rgba(160,246,255,.4)); }
+  53% { transform: translate(-50%,-50%) scale(1.015); }
   100% { transform: translate(-50%,-50%) scale(1); }
 }
 @keyframes orb-voice-wake {
   0% { transform: translate(-50%,-50%) scale(1); }
-  38% { transform: translate(-50%,-50%) scale(1.06); filter: brightness(1.55) drop-shadow(0 0 44px rgba(115,226,241,.3)); }
+  38% { transform: translate(-50%,-50%) scale(1.03); filter: brightness(1.55) drop-shadow(0 0 44px rgba(115,226,241,.3)); }
   100% { transform: translate(-50%,-50%) scale(1); }
 }
 @keyframes orb-error-flash {
@@ -513,8 +513,8 @@ body[data-orb-pulse="error"] .background-orb .orb-aura { background: radial-grad
   35% { filter: brightness(1.2) drop-shadow(0 0 70px rgba(255,90,113,.45)); }
 }
 @media (max-width: 700px) {
-  .background-orb { width: 175vmin; height: 175vmin; opacity: .35; }
-  .background-orb[data-state="listening"], .background-orb[data-state="thinking"], .background-orb[data-state="speaking"] { opacity: .53; }
+  .background-orb { width: min(76vw, 420px); height: min(76vw, 420px); opacity: .24; }
+  .background-orb[data-state="listening"], .background-orb[data-state="thinking"], .background-orb[data-state="speaking"] { opacity: .39; }
   .chat-log { padding-left: 1px; padding-right: 1px; }
 }
 @media (prefers-reduced-motion: reduce) {
