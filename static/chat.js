@@ -11,6 +11,7 @@
     activity: $("#activityStatus"), activityLabel: $("#activityLabel"),
     core: $("#coreOrb"), wakeHint: $("#wakeHint"), toast: $("#toastRegion"),
     newChat: $("#newChatBtn"), composerStatus: $("#composerStatus"),
+    dockActivity: $("#dockActivity"), liveCore: $("#liveCoreOrb"),
   };
 
   const STORAGE_KEY = "jarvis-chat-session-v1";
@@ -37,6 +38,16 @@
   let activeAudioUrl = null;
   let speechResolver = null;
   let speechGeneration = 0;
+  let microphoneAudioContext = null;
+  let microphoneAnalyser = null;
+  let microphoneSource = null;
+  let microphoneMeterFrame = 0;
+  let microphoneWaveData = null;
+  let microphoneEnergy = 0;
+  let orbPointerTargetX = 0;
+  let orbPointerTargetY = 0;
+  let orbPointerX = 0;
+  let orbPointerY = 0;
 
 
   function initHudParticles() {
@@ -160,8 +171,9 @@
     if (!reducedMotion) frameId = window.requestAnimationFrame(tick);
   }
 
-  function createDotSphere() {
-    const container = document.getElementById("dotSphere");
+  function createDotSphere(containerId = "dotSphere", pointCount = 820, stateElementId = "coreOrb") {
+    const container = document.getElementById(containerId);
+    const stateElement = document.getElementById(stateElementId);
     if (!container) return;
     if (container._sphereFrame) window.cancelAnimationFrame(container._sphereFrame);
     container.replaceChildren();
@@ -173,7 +185,7 @@
     const context = canvas.getContext("2d", { alpha: true });
     if (!context) return;
 
-    const count = 820;
+    const count = pointCount;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const points = [];
     for (let i = 0; i < count; i += 1) {
@@ -213,18 +225,24 @@
       if (document.hidden) return;
       const delta = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0.016;
       lastFrame = now;
-      const state = ui.core?.dataset.state || "idle";
-      const speed = reducedMotion ? 0 : state === "listening" ? 1.05 : state === "thinking" ? 0.86 : state === "speaking" ? 0.42 : 0.22;
+      const state = stateElement?.dataset.state || "idle";
+      if (containerId === "dotSphere") {
+        const pointerEase = Math.min(1, delta * 6);
+        orbPointerX += (orbPointerTargetX - orbPointerX) * pointerEase;
+        orbPointerY += (orbPointerTargetY - orbPointerY) * pointerEase;
+      }
+      const micBoost = state === "listening" ? microphoneEnergy : 0;
+      const speed = reducedMotion ? 0 : (state === "listening" ? 1.05 : state === "thinking" ? 0.86 : state === "speaking" ? 0.42 : 0.22) + micBoost * 0.72;
       rotation += delta * speed;
       const time = now / 1000;
       const cx = width / 2;
       const cy = height / 2;
       const radius = Math.min(width, height) * 0.385;
-      const breath = reducedMotion ? 1 : 1 + (state === "speaking" ? Math.sin(time * 3.4) * 0.035 : state === "listening" ? Math.sin(time * 6.5) * 0.014 : Math.sin(time * 1.3) * 0.008);
+      const breath = reducedMotion ? 1 : 1 + (state === "speaking" ? Math.sin(time * 3.4) * 0.035 : state === "listening" ? Math.sin(time * 6.5) * (0.014 + micBoost * 0.075) : Math.sin(time * 1.3) * 0.008);
       context.clearRect(0, 0, width, height);
 
       const aura = context.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * 1.22);
-      aura.addColorStop(0, state === "listening" ? "rgba(87,226,255,.15)" : "rgba(59,176,225,.105)");
+      aura.addColorStop(0, state === "listening" ? "rgba(87,226,255," + (0.15 + micBoost * 0.29).toFixed(3) + ")" : "rgba(59,176,225,.105)");
       aura.addColorStop(0.56, "rgba(39,128,203,.045)");
       aura.addColorStop(1, "rgba(26,90,154,0)");
       context.fillStyle = aura;
@@ -248,14 +266,14 @@
       }
       context.restore();
 
-      const cosY = Math.cos(rotation);
-      const sinY = Math.sin(rotation);
-      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06;
+      const cosY = Math.cos(rotation + orbPointerX * 0.28);
+      const sinY = Math.sin(rotation + orbPointerX * 0.28);
+      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06 + orbPointerY * 0.17;
       const cosX = Math.cos(tilt);
       const sinX = Math.sin(tilt);
       const projected = [];
       for (const point of points) {
-        const rippleStrength = state === "listening" ? 0.036 : state === "thinking" ? 0.027 : state === "speaking" ? 0.022 : 0.009;
+        const rippleStrength = state === "listening" ? 0.036 + micBoost * 0.052 : state === "thinking" ? 0.027 : state === "speaking" ? 0.022 : 0.009;
         const ripple = reducedMotion ? 0 : Math.sin(time * (state === "listening" ? 5.6 : 2.1) + point.phase) * rippleStrength;
         const scale = (1 + ripple) * breath;
         const px = point.x * scale;
@@ -321,6 +339,8 @@
     ui.activity.dataset.state = state;
     ui.activityLabel.textContent = label;
     ui.core.dataset.state = state;
+    if (ui.liveCore) ui.liveCore.dataset.state = state;
+    if (ui.dockActivity) ui.dockActivity.textContent = state === "idle" ? "STANDBY" : state.toUpperCase();
     document.body.dataset.activity = state;
   }
 
@@ -396,6 +416,7 @@
     row.append(avatar, body);
     ui.chat.appendChild(row);
     ui.welcome.classList.add("hidden");
+    document.body.dataset.conversation = "active";
     ui.chat.scrollTop = ui.chat.scrollHeight;
     transcript.push({ role, content: String(content || ""), route: route || "" });
     saveTranscript();
@@ -428,7 +449,10 @@
         const bubble = document.createElement("div"); bubble.className = "message-bubble"; bubble.innerHTML = formatMessage(item.content);
         body.append(meta, bubble); row.append(avatar, body); ui.chat.appendChild(row);
       }
-      if (transcript.length) ui.welcome.classList.add("hidden");
+      if (transcript.length) {
+        ui.welcome.classList.add("hidden");
+        document.body.dataset.conversation = "active";
+      }
       ui.chat.scrollTop = ui.chat.scrollHeight;
     } catch (_) {}
   }
@@ -605,6 +629,7 @@
     if (!text || busy) return;
     ui.input.value = "";
     resizeInput();
+    updateComposerReactivity();
     appendMessage("user", text);
     setBusy(true);
     stopSpeech();
@@ -625,6 +650,88 @@
     }
   }
 
+  function updateComposerReactivity() {
+    const hasText = Boolean(ui.input.value.trim());
+    const energy = Math.min(1, ui.input.value.length / 180);
+    document.body.dataset.composing = hasText ? "on" : "off";
+    document.body.style.setProperty("--compose-energy", energy.toFixed(3));
+    document.body.style.setProperty("--compose-aura-opacity", (0.68 + energy * 0.32).toFixed(3));
+    document.body.style.setProperty("--compose-scale", (1 + energy * 0.035).toFixed(3));
+    ui.send.classList.toggle("has-message", hasText);
+    ui.form.dataset.inputState = hasText ? "ready" : "empty";
+  }
+
+  function stopMicVisualization() {
+    if (microphoneMeterFrame) window.cancelAnimationFrame(microphoneMeterFrame);
+    microphoneMeterFrame = 0;
+    if (microphoneSource) { try { microphoneSource.disconnect(); } catch (_) {} }
+    microphoneSource = null;
+    microphoneAnalyser = null;
+    microphoneWaveData = null;
+    const context = microphoneAudioContext;
+    microphoneAudioContext = null;
+    if (context && context.state !== "closed") context.close().catch(() => {});
+    microphoneEnergy = 0;
+    document.body.dataset.mic = "off";
+    document.body.style.setProperty("--mic-energy", "0");
+  }
+
+  function startMicVisualization(stream) {
+    stopMicVisualization();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    try {
+      microphoneAudioContext = new AudioContextClass();
+      microphoneAnalyser = microphoneAudioContext.createAnalyser();
+      microphoneAnalyser.fftSize = 256;
+      microphoneAnalyser.smoothingTimeConstant = 0.68;
+      microphoneSource = microphoneAudioContext.createMediaStreamSource(stream);
+      microphoneSource.connect(microphoneAnalyser);
+      microphoneWaveData = new Uint8Array(microphoneAnalyser.fftSize);
+      document.body.dataset.mic = "on";
+      microphoneAudioContext.resume().catch(() => {});
+
+      const measure = () => {
+        if (!microphoneAnalyser || !microphoneWaveData) return;
+        microphoneAnalyser.getByteTimeDomainData(microphoneWaveData);
+        let sumSquares = 0;
+        for (let i = 0; i < microphoneWaveData.length; i += 1) {
+          const sample = (microphoneWaveData[i] - 128) / 128;
+          sumSquares += sample * sample;
+        }
+        const rms = Math.sqrt(sumSquares / microphoneWaveData.length);
+        const target = Math.max(0, Math.min(1, (rms - 0.012) * 4.6));
+        microphoneEnergy += (target - microphoneEnergy) * (target > microphoneEnergy ? 0.42 : 0.18);
+        document.body.style.setProperty("--mic-energy", microphoneEnergy.toFixed(3));
+        microphoneMeterFrame = window.requestAnimationFrame(measure);
+      };
+      microphoneMeterFrame = window.requestAnimationFrame(measure);
+    } catch (_) {
+      stopMicVisualization();
+    }
+  }
+
+  function wireReactiveInteractions() {
+    ui.core.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "touch") return;
+      const bounds = ui.core.getBoundingClientRect();
+      orbPointerTargetX = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2));
+      orbPointerTargetY = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2));
+      ui.core.dataset.pointer = "active";
+      ui.core.style.setProperty("--orb-tilt-x", (orbPointerTargetX * 3.5).toFixed(2) + "deg");
+      ui.core.style.setProperty("--orb-tilt-y", (-orbPointerTargetY * 3.5).toFixed(2) + "deg");
+    });
+    ui.core.addEventListener("pointerleave", () => {
+      orbPointerTargetX = 0;
+      orbPointerTargetY = 0;
+      ui.core.dataset.pointer = "idle";
+      ui.core.style.setProperty("--orb-tilt-x", "0deg");
+      ui.core.style.setProperty("--orb-tilt-y", "0deg");
+    });
+    ui.input.addEventListener("focus", () => { document.body.dataset.composerFocus = "on"; });
+    ui.input.addEventListener("blur", () => { document.body.dataset.composerFocus = "off"; });
+  }
+
   function resizeInput() {
     ui.input.style.height = "auto";
     ui.input.style.height = Math.min(ui.input.scrollHeight, 190) + "px";
@@ -637,6 +744,7 @@
     }
     try {
       microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      startMicVisualization(microphoneStream);
       recordedChunks = [];
       recordingStartedAt = Date.now();
       const types = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
@@ -648,6 +756,7 @@
         const blob = new Blob(recordedChunks, { type: recorder?.mimeType || type || "audio/webm" });
         const currentRecorder = recorder;
         recorder = null;
+        stopMicVisualization();
         if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
         microphoneStream = null;
         if (recordingTimer) window.clearTimeout(recordingTimer);
@@ -672,7 +781,7 @@
           });
           const result = await postJSON("/api/voice/transcribe", { audio_base64: base64, mime_type: blob.type || currentRecorder?.mimeType || "audio/webm" });
           if (!String(result.text || "").trim()) { showToast("I couldn't make out the audio. Try again a little closer to the mic.", "error"); setActivity("idle", "READY WHEN YOU ARE"); return; }
-          ui.input.value = result.text; resizeInput();
+          ui.input.value = result.text; resizeInput(); updateComposerReactivity();
           await sendMessage(result.text);
         } catch (error) {
           setActivity("idle", "READY WHEN YOU ARE"); showToast("Voice input failed: " + error.message, "error");
@@ -687,6 +796,7 @@
       showToast("Listening… tap the microphone again to finish.");
       recordingTimer = window.setTimeout(stopRecording, 12000);
     } catch (error) {
+      stopMicVisualization();
       if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
       microphoneStream = null; recorder = null;
       setActivity("error", "MICROPHONE UNAVAILABLE"); showToast("Couldn't access the microphone: " + error.message, "error");
@@ -697,7 +807,11 @@
     if (recordingTimer) window.clearTimeout(recordingTimer);
     recordingTimer = null;
     if (recorder && recorder.state !== "inactive") recorder.stop();
-    else if (microphoneStream) { microphoneStream.getTracks().forEach((track) => track.stop()); microphoneStream = null; }
+    else {
+      stopMicVisualization();
+      if (microphoneStream) microphoneStream.getTracks().forEach((track) => track.stop());
+      microphoneStream = null;
+    }
   }
 
   async function toggleMic() {
@@ -826,12 +940,13 @@
     sessionStorage.removeItem("jarvis-chat-transcript-v1");
     ui.chat.replaceChildren();
     ui.welcome.classList.remove("hidden");
-    ui.input.value = ""; resizeInput(); ui.input.focus();
+    document.body.dataset.conversation = "welcome";
+    ui.input.value = ""; resizeInput(); updateComposerReactivity(); ui.input.focus();
     setActivity("idle", wakeEnabled ? "WAKE WORD STANDING BY" : "READY WHEN YOU ARE");
   }
 
   ui.form.addEventListener("submit", (event) => { event.preventDefault(); void sendMessage(); });
-  ui.input.addEventListener("input", resizeInput);
+  ui.input.addEventListener("input", () => { resizeInput(); updateComposerReactivity(); });
   ui.input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); }
   });
@@ -853,13 +968,23 @@
   });
   initHudParticles();
   createDotSphere();
+  createDotSphere("liveDotSphere", 190, "liveCoreOrb");
+  wireReactiveInteractions();
   let sphereResizeTimer = null;
   window.addEventListener("resize", () => {
     window.clearTimeout(sphereResizeTimer);
-    sphereResizeTimer = window.setTimeout(createDotSphere, 140);
+    sphereResizeTimer = window.setTimeout(() => {
+      createDotSphere();
+      createDotSphere("liveDotSphere", 190, "liveCoreOrb");
+    }, 140);
   }, { passive: true });
   restoreTranscript();
   resizeInput();
+  updateComposerReactivity();
+  document.body.dataset.voice = voiceReplies ? "on" : "off";
+  ui.voice.classList.toggle("active", voiceReplies);
+  ui.voice.setAttribute("aria-pressed", String(voiceReplies));
+  ui.voiceLabel.textContent = voiceReplies ? "VOICE ON" : "VOICE OFF";
   void refreshConnection();
   void refreshWakeStatus(true);
   ui.input.focus({ preventScroll: true });
