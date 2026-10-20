@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#050b13">
   <meta name="description" content="JARVIS — a personal AI chatbot with voice and local wake-word support.">
   <title>J.A.R.V.I.S. — Stark Intelligence</title>
-  <link rel="stylesheet" href="/chat.css?v=6">
-  <script src="/chat.js?v=6" defer></script>
+  <link rel="stylesheet" href="/chat.css?v=7">
+  <script src="/chat.js?v=7" defer></script>
 </head>
 <body data-activity="idle" data-connection="checking" data-wake="off" data-voice="on" data-mic="off" data-composing="off" data-composer-focus="off" data-conversation="welcome">
   <canvas class="hud-backdrop" id="hudBackdrop" aria-hidden="true"></canvas>
@@ -15,6 +15,25 @@
   <div class="ambient ambient-b" aria-hidden="true"></div>
   <div class="ambient ambient-c" aria-hidden="true"></div>
   <div class="scan-grain" aria-hidden="true"></div>
+  <div class="core background-orb" id="coreOrb" data-state="idle" data-pulse="idle" aria-hidden="true">
+    <div class="orb-stage">
+      <div class="orb-aura"></div>
+      <div class="orb-ring ring-a"></div>
+      <div class="orb-ring ring-b"></div>
+      <div class="orb-ring ring-c"></div>
+      <div class="orb-tick-ring"></div>
+      <div class="orb-axis axis-x"></div>
+      <div class="orb-axis axis-y"></div>
+      <div class="dot-sphere" id="dotSphere"></div>
+      <div class="orb-scanline"></div>
+    </div>
+    <div class="orb-shadow"></div>
+  </div>
+  <div class="sr-only" id="activityStatus" data-state="idle">
+    <span></span><strong id="activityLabel">READY WHEN YOU ARE</strong>
+  </div>
+  <div class="sr-only" id="wakeHint">Type a message, use the microphone, or enable Hey JARVIS.</div>
+
 
   <div class="app">
     <header class="topbar">
@@ -51,55 +70,8 @@
     </header>
 
     <main class="chat-layout">
-      <div class="top-rule" aria-hidden="true"><span></span><i></i><span></span></div>
       <section class="conversation" aria-label="Chat with JARVIS">
-        <div class="conversation-hud" aria-hidden="true">
-          <span class="hud-index"><i></i> INTERFACE 01 <b>/</b> LIVE SESSION</span>
-          <span class="hud-session">SECURE LOCAL INSTANCE <i></i></span>
-        </div>
-
-        <div class="welcome" id="welcomePanel">
-          <div class="welcome-topline"><span class="welcome-pip"></span> PERSONAL INTELLIGENCE <span class="topline-rule"></span> ONLINE</div>
-
-          <div class="core" id="coreOrb" data-state="idle" aria-hidden="true">
-            <div class="orb-stage">
-              <div class="orb-aura"></div>
-              <div class="orb-ring ring-a"></div>
-              <div class="orb-ring ring-b"></div>
-              <div class="orb-ring ring-c"></div>
-              <div class="orb-tick-ring"></div>
-              <div class="orb-axis axis-x"></div>
-              <div class="orb-axis axis-y"></div>
-              <div class="dot-sphere" id="dotSphere"></div>
-              <div class="orb-scanline"></div>
-            </div>
-            <div class="orb-shadow"></div>
-          </div>
-
-          <div class="welcome-copy">
-            <div class="welcome-kicker">STARK <span>·</span> INTELLIGENCE INTERFACE</div>
-            <h1>Ready when<br><em>you are.</em></h1>
-            <p>Your workspace is standing by.<br class="desktop-break"> What are we working on?</p>
-          </div>
-
-          <div class="welcome-status" id="activityStatus" data-state="idle">
-            <span class="status-pulse"></span>
-            <span class="status-copy"><small>SYSTEM STATE</small><strong id="activityLabel">READY WHEN YOU ARE</strong></span>
-            <span class="status-corner" aria-hidden="true"></span>
-          </div>
-          <div class="wake-hint" id="wakeHint">Type a message, use the microphone, or enable <b>Hey JARVIS</b>.</div>
-          <div class="welcome-footnote" aria-hidden="true"><span>VOICE</span><i></i><span>REASONING</span><i></i><span>ASSISTANCE</span></div>
-        </div>
-
-        <aside class="active-orb-dock" id="activeOrbDock" aria-hidden="true">
-          <div class="live-core" id="liveCoreOrb" data-state="idle">
-            <div class="live-orb-aura"></div>
-            <div class="live-orb-ring live-ring-a"></div>
-            <div class="live-orb-ring live-ring-b"></div>
-            <div class="dot-sphere live-dot-sphere" id="liveDotSphere"></div>
-          </div>
-          <div class="dock-state-rail"><i></i><span id="dockActivity">STANDBY</span></div>
-        </aside>
+        <div class="welcome" id="welcomePanel" aria-hidden="true"></div>
         <div class="chat-log" id="chatLog" aria-live="polite" aria-label="Conversation"></div>
         <div class="typing-row hidden" id="typingRow" role="status">
           <span class="typing-orb" aria-hidden="true"><i></i></span>
