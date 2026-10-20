@@ -38,6 +38,128 @@
   let speechResolver = null;
   let speechGeneration = 0;
 
+
+  function initHudParticles() {
+    const canvas = document.getElementById("hudBackdrop");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { alpha: true });
+    if (!ctx) return;
+
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
+    const particleCount = window.innerWidth < 700 ? 34 : 66;
+    const particles = Array.from({ length: particleCount }, (_, index) => ({
+      x: Math.random(),
+      y: Math.random(),
+      vx: (Math.random() - 0.5) * 0.012,
+      vy: (Math.random() - 0.5) * 0.012,
+      radius: 0.35 + Math.random() * 1.1,
+      phase: index * 1.618 + Math.random() * 6,
+      bright: Math.random() > 0.78,
+    }));
+    let width = 1;
+    let height = 1;
+    let dpr = 1;
+    let lastFrame = 0;
+    let frameId = 0;
+    let mouseX = 0.5;
+    let mouseY = 0.5;
+    let pointerActive = false;
+
+    function resize() {
+      width = Math.max(1, window.innerWidth);
+      height = Math.max(1, window.innerHeight);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paint(performance.now(), true);
+    }
+
+    function paint(now, force = false) {
+      if (!force && reducedMotion && lastFrame) return;
+      if (!force && !reducedMotion && now - lastFrame < 31) return;
+      const delta = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0.016;
+      lastFrame = now;
+      ctx.clearRect(0, 0, width, height);
+      const activity = document.body.dataset.activity || "idle";
+      const tint = activity === "listening" ? [255, 196, 107] :
+        activity === "speaking" ? [97, 255, 207] :
+        activity === "thinking" ? [128, 170, 255] :
+        activity === "error" ? [255, 125, 135] : [91, 210, 237];
+      const px = pointerActive ? (mouseX - 0.5) * 18 : 0;
+      const py = pointerActive ? (mouseY - 0.5) * 14 : 0;
+      for (const p of particles) {
+        if (!reducedMotion && !document.hidden) {
+          p.x += p.vx * delta * 20;
+          p.y += p.vy * delta * 20;
+          if (p.x < -0.02) p.x = 1.02;
+          if (p.x > 1.02) p.x = -0.02;
+          if (p.y < -0.02) p.y = 1.02;
+          if (p.y > 1.02) p.y = -0.02;
+        }
+        p.sx = p.x * width + px * p.y;
+        p.sy = p.y * height + py * p.x;
+      }
+
+      const maxDistance = Math.min(160, width * 0.14);
+      for (let i = 0; i < particles.length; i += 1) {
+        const a = particles[i];
+        for (let j = i + 1; j < particles.length; j += 1) {
+          const b = particles[j];
+          const dx = a.sx - b.sx;
+          const dy = a.sy - b.sy;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance >= maxDistance) continue;
+          const alpha = (1 - distance / maxDistance) * (activity === "idle" ? 0.13 : 0.22);
+          ctx.strokeStyle = "rgba(" + tint.join(",") + "," + alpha.toFixed(3) + ")";
+          ctx.lineWidth = 0.55;
+          ctx.beginPath();
+          ctx.moveTo(a.sx, a.sy);
+          ctx.lineTo(b.sx, b.sy);
+          ctx.stroke();
+        }
+      }
+      for (const p of particles) {
+        const twinkle = reducedMotion ? 0.6 : 0.42 + 0.58 * (0.5 + 0.5 * Math.sin(now * 0.0012 + p.phase));
+        const radius = p.radius * (p.bright ? 1.55 : 1);
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(" + tint.join(",") + "," + (twinkle * (p.bright ? 0.76 : 0.32)).toFixed(3) + ")";
+        ctx.arc(p.sx, p.sy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        if (p.bright) {
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(" + tint.join(",") + "," + (twinkle * 0.055).toFixed(3) + ")";
+          ctx.arc(p.sx, p.sy, radius * 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function tick(now) {
+      if (document.hidden) {
+        frameId = window.requestAnimationFrame(tick);
+        return;
+      }
+      paint(now);
+      if (!reducedMotion) frameId = window.requestAnimationFrame(tick);
+    }
+
+    canvas._cleanupHudParticles = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("pointermove", onPointerMove);
+    };
+    function onPointerMove(event) {
+      mouseX = event.clientX / Math.max(1, width);
+      mouseY = event.clientY / Math.max(1, height);
+      pointerActive = true;
+    }
+    window.addEventListener("resize", resize, { passive: true });
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    resize();
+    if (!reducedMotion) frameId = window.requestAnimationFrame(tick);
+  }
+
   function createDotSphere() {
     const container = document.getElementById("dotSphere");
     if (!container) return;
@@ -199,6 +321,7 @@
     ui.activity.dataset.state = state;
     ui.activityLabel.textContent = label;
     ui.core.dataset.state = state;
+    document.body.dataset.activity = state;
   }
 
   function showToast(message, kind = "") {
@@ -593,6 +716,7 @@
   function renderWakeStatus() {
     if (!wakeStatus) return;
     wakeEnabled = Boolean(wakeStatus.enabled);
+    document.body.dataset.wake = wakeEnabled ? "on" : "off";
     const available = wakeStatus.available !== false;
     const label = wakeStatus.error ? "WAKE ERROR" : !available ? "WAKE UNAVAILABLE" : !wakeEnabled ? "WAKE OFF" : !wakeStatus.running ? "WAKE STARTING" : wakeStatus.armed ? "WAKE ON" : wakeStatus.capturing_command ? "HEARING…" : "WAKE PAUSED";
     ui.wakeLabel.textContent = label;
@@ -683,10 +807,12 @@
     try {
       await getJSON("/api/ping");
       ui.connection.dataset.state = "connected";
-      ui.connectionLabel.textContent = "MODEL READY";
+      document.body.dataset.connection = "connected";
+      ui.connectionLabel.textContent = "ONLINE";
     } catch (_) {
       ui.connection.dataset.state = "disconnected";
-      ui.connectionLabel.textContent = "MODEL OFFLINE";
+      document.body.dataset.connection = "disconnected";
+      ui.connectionLabel.textContent = "OFFLINE";
     }
   }
 
@@ -716,6 +842,7 @@
     ui.voice.classList.toggle("active", voiceReplies);
     ui.voice.setAttribute("aria-pressed", String(voiceReplies));
     ui.voiceLabel.textContent = voiceReplies ? "VOICE ON" : "VOICE OFF";
+    document.body.dataset.voice = voiceReplies ? "on" : "off";
     if (!voiceReplies) stopSpeech();
   });
   ui.wake.addEventListener("click", () => void toggleWakeWord());
@@ -724,6 +851,7 @@
     if (document.hidden) stopWakePolling();
     else void refreshWakeStatus(false);
   });
+  initHudParticles();
   createDotSphere();
   let sphereResizeTimer = null;
   window.addEventListener("resize", () => {
