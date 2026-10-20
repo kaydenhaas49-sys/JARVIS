@@ -457,6 +457,12 @@ button:active:not(:disabled) { filter: brightness(1.12); }
   background: radial-gradient(circle at 48% 44%, rgba(76,213,249,.27), rgba(18,78,125,.12) 44%, transparent 70%);
   box-shadow: 0 0 115px rgba(29,173,222,.19), inset 0 0 75px rgba(69,198,230,.10);
 }
+/* The sphere is a clean particle globe: no orbiting rings or circular tick marks. */
+.background-orb .orb-ring,
+.background-orb .orb-tick-ring,
+.background-orb .orb-axis {
+  display: none !important;
+}
 .background-orb .ring-a { inset: 3%; }
 .background-orb .ring-b { inset: 8%; }
 .background-orb .ring-c { inset: -2%; }
