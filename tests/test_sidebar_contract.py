@@ -42,8 +42,8 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
                 self.assertNotIn(forbidden.casefold(), self.html.casefold())
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
-        self.assertIn('href="/chat.css?v=6"', self.html)
-        self.assertIn('src="/chat.js?v=6"', self.html)
+        self.assertIn('href="/chat.css?v=7"', self.html)
+        self.assertIn('src="/chat.js?v=7"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
@@ -71,12 +71,19 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertIn('@media (prefers-reduced-motion: reduce)', self.css)
 
     def test_chat_visuals_react_to_live_activity_and_audio(self) -> None:
-        self.assertIn('id="activeOrbDock"', self.html)
-        self.assertIn('id="liveDotSphere"', self.html)
+        self.assertIn('class="core background-orb" id="coreOrb"', self.html)
+        self.assertNotIn('id="activeOrbDock"', self.html)
+        self.assertNotIn('id="liveDotSphere"', self.html)
+        self.assertIn('function pulseOrb(kind = "incoming")', self.js)
+        self.assertIn('pulseOrb("outgoing")', self.js)
+        self.assertIn('pulseOrb("incoming")', self.js)
         self.assertIn('function startMicVisualization(stream)', self.js)
         self.assertIn('microphoneAnalyser.getByteTimeDomainData', self.js)
         self.assertIn('microphoneEnergy', self.js)
-        self.assertIn('body[data-conversation="active"] .active-orb-dock', self.css)
+        self.assertIn('.background-orb {', self.css)
+        self.assertIn('body[data-orb-pulse="incoming"] .background-orb .orb-aura', self.css)
+        self.assertIn('@keyframes orb-message-reply', self.css)
+        self.assertNotIn('Ready when<br>', self.html)
         self.assertIn('body[data-activity="speaking"] .ambient-c', self.css)
         self.assertIn('body[data-composing="on"] .composer-shell', self.css)
 
