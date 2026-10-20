@@ -136,7 +136,7 @@
         context.rotate(rotation * (i % 2 ? -0.19 : 0.14) + i * 0.83);
         context.scale(1, 0.2 + (i % 3) * 0.075);
         context.beginPath();
-        context.ellipse(0, 0, radius * (1.01 + i * 0.025), 0, 0, 0, Math.PI * 2);
+        context.arc(0, 0, radius * (1.01 + i * 0.025), 0, Math.PI * 2);
         context.strokeStyle = i === 0
           ? "rgba(171,245,255," + (0.14 + energy * 0.12) + ")"
           : "rgba(83,194,232," + (0.045 + energy * 0.035) + ")";

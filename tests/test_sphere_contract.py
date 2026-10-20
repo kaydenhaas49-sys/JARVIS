@@ -18,6 +18,8 @@ class DotSphereContractTests(unittest.TestCase):
         self.assertIn("const shellCount = compact ? 1320 : 1880;", self.script)
         self.assertIn("const innerCount = compact ? 300 : 520;", self.script)
         self.assertIn("projected.sort((a, b) => a.depth - b.depth);", self.script)
+        self.assertIn("context.scale(1, 0.2 + (i % 3) * 0.075);", self.script)
+        self.assertIn("context.arc(0, 0, radius * (1.01 + i * 0.025), 0, Math.PI * 2);", self.script)
         self.assertIn('context.globalCompositeOperation = "screen"', self.script)
 
     def test_each_assistant_state_has_its_own_motion_profile(self):
