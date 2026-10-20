@@ -34,6 +34,8 @@ class DotSphereContractTests(unittest.TestCase):
         self.assertIn("if (!reducedMotion && !staticFrame)", self.script)
         self.assertIn('document.addEventListener("visibilitychange"', self.script)
         self.assertIn("ResizeObserver", self.script)
+        self.assertIn('document.removeEventListener("visibilitychange", container._sphereVisibilityHandler)', self.script)
+        self.assertIn('container._sphereMotionQuery.removeEventListener?.("change", container._sphereMotionHandler)', self.script)
 
     def test_sphere_uses_local_canvas_and_cyan_light(self):
         self.assertIn(".sphere-canvas", self.styles)

@@ -43,6 +43,10 @@
     if (!container) return;
     if (container._sphereFrame) window.cancelAnimationFrame(container._sphereFrame);
     container._sphereResizeObserver?.disconnect();
+    if (container._sphereVisibilityHandler) document.removeEventListener("visibilitychange", container._sphereVisibilityHandler);
+    if (container._sphereMotionHandler && container._sphereMotionQuery) {
+      container._sphereMotionQuery.removeEventListener?.("change", container._sphereMotionHandler);
+    }
     container.replaceChildren();
 
     const canvas = document.createElement("canvas");
@@ -251,6 +255,7 @@
     else container._sphereFrame = window.requestAnimationFrame(draw);
     container._sphereVisibilityHandler = onVisibilityChange;
     container._sphereMotionHandler = onMotionPreferenceChange;
+    container._sphereMotionQuery = motionQuery;
     document.addEventListener("visibilitychange", onVisibilityChange);
     motionQuery?.addEventListener?.("change", onMotionPreferenceChange);
     if (typeof ResizeObserver !== "undefined") {
