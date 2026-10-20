@@ -314,18 +314,25 @@
     return data;
   }
 
+  const MAX_QUEUED_WAKE_COMMAND_AGE_MS = 15_000;
+
   function queueWakeCommand(text) {
     const command = String(text || "").trim();
-    if (!command || pendingWakeCommand) return;
-    pendingWakeCommand = command;
+    if (!command) return;
+    if (pendingWakeCommand && Date.now() - pendingWakeCommand.queuedAt <= MAX_QUEUED_WAKE_COMMAND_AGE_MS) return;
+    pendingWakeCommand = { text: command, queuedAt: Date.now() };
     showToast("I heard you. I’ll respond after the current turn finishes.");
   }
 
   function drainPendingWakeCommand() {
     if (!pendingWakeCommand || busy || messagePreparing || sessionRestorePromise) return false;
-    const command = pendingWakeCommand;
+    const pending = pendingWakeCommand;
     pendingWakeCommand = null;
-    void sendMessage(command, { fromWakeWord: true });
+    if (Date.now() - pending.queuedAt > MAX_QUEUED_WAKE_COMMAND_AGE_MS) {
+      showToast("I ignored an old voice command. Please say it again.");
+      return false;
+    }
+    void sendMessage(pending.text, { fromWakeWord: true });
     return true;
   }
 
@@ -340,6 +347,9 @@
   }
 
   async function sendMessage(textOverride, options = {}) {
+    // A fresh typed/manual turn cancels any deferred voice command. Never let a
+    // queued transcription run after the user has moved on to something else.
+    if (!options.fromWakeWord && pendingWakeCommand) pendingWakeCommand = null;
     if (busy || messagePreparing) {
       if (options.fromWakeWord) queueWakeCommand(textOverride);
       else if (messagePreparing) showToast("JARVIS is preparing the current message. Please wait.");
