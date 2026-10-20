@@ -43,10 +43,6 @@
   let microphoneMeterFrame = 0;
   let microphoneWaveData = null;
   let microphoneEnergy = 0;
-  let orbPointerTargetX = 0;
-  let orbPointerTargetY = 0;
-  let orbPointerX = 0;
-  let orbPointerY = 0;
   let orbPulseTimer = 0;
 
 
@@ -57,7 +53,7 @@
     if (!ctx) return;
 
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
-    const particleCount = window.innerWidth < 700 ? 34 : 66;
+    const particleCount = window.innerWidth < 700 ? 54 : 96;
     const particles = Array.from({ length: particleCount }, (_, index) => ({
       x: Math.random(),
       y: Math.random(),
@@ -72,9 +68,6 @@
     let dpr = 1;
     let lastFrame = 0;
     let frameId = 0;
-    let mouseX = 0.5;
-    let mouseY = 0.5;
-    let pointerActive = false;
 
     function resize() {
       width = Math.max(1, window.innerWidth);
@@ -97,8 +90,6 @@
         activity === "speaking" ? [97, 255, 207] :
         activity === "thinking" ? [128, 170, 255] :
         activity === "error" ? [255, 125, 135] : [91, 210, 237];
-      const px = pointerActive ? (mouseX - 0.5) * 18 : 0;
-      const py = pointerActive ? (mouseY - 0.5) * 14 : 0;
       for (const p of particles) {
         if (!reducedMotion && !document.hidden) {
           p.x += p.vx * delta * 20;
@@ -108,8 +99,8 @@
           if (p.y < -0.02) p.y = 1.02;
           if (p.y > 1.02) p.y = -0.02;
         }
-        p.sx = p.x * width + px * p.y;
-        p.sy = p.y * height + py * p.x;
+        p.sx = p.x * width;
+        p.sy = p.y * height;
       }
 
       const maxDistance = Math.min(160, width * 0.14);
@@ -158,20 +149,13 @@
     canvas._cleanupHudParticles = () => {
       if (frameId) window.cancelAnimationFrame(frameId);
       window.removeEventListener("resize", resize);
-      window.removeEventListener("pointermove", onPointerMove);
     };
-    function onPointerMove(event) {
-      mouseX = event.clientX / Math.max(1, width);
-      mouseY = event.clientY / Math.max(1, height);
-      pointerActive = true;
-    }
     window.addEventListener("resize", resize, { passive: true });
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
     resize();
     if (!reducedMotion) frameId = window.requestAnimationFrame(tick);
   }
 
-  function createDotSphere(containerId = "dotSphere", pointCount = 820, stateElementId = "coreOrb") {
+  function createDotSphere(containerId = "dotSphere", pointCount = 2200, stateElementId = "coreOrb") {
     const container = document.getElementById(containerId);
     const stateElement = document.getElementById(stateElementId);
     if (!container) return;
@@ -226,11 +210,6 @@
       const delta = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0.016;
       lastFrame = now;
       const state = stateElement?.dataset.state || "idle";
-      if (containerId === "dotSphere") {
-        const pointerEase = Math.min(1, delta * 6);
-        orbPointerX += (orbPointerTargetX - orbPointerX) * pointerEase;
-        orbPointerY += (orbPointerTargetY - orbPointerY) * pointerEase;
-      }
       const micBoost = state === "listening" ? microphoneEnergy : 0;
       const speed = reducedMotion ? 0 : (state === "listening" ? 1.05 : state === "thinking" ? 0.86 : state === "speaking" ? 0.42 : 0.22) + micBoost * 0.72;
       rotation += delta * speed;
@@ -266,9 +245,9 @@
       }
       context.restore();
 
-      const cosY = Math.cos(rotation + orbPointerX * 0.28);
-      const sinY = Math.sin(rotation + orbPointerX * 0.28);
-      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06 + orbPointerY * 0.17;
+      const cosY = Math.cos(rotation);
+      const sinY = Math.sin(rotation);
+      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06;
       const cosX = Math.cos(tilt);
       const sinX = Math.sin(tilt);
       const projected = [];
@@ -297,15 +276,15 @@
       for (const point of projected) {
         const depth = point.depth;
         const twinkle = reducedMotion ? 0.9 : 0.78 + 0.22 * Math.sin(time * (state === "speaking" ? 5.1 : 2.2) + point.phase);
-        const size = (0.55 + depth * 1.75 + point.sparkle * 0.35) * twinkle;
-        const opacity = Math.min(1, (0.14 + depth * 0.78) * twinkle);
+        const size = (0.72 + depth * 1.85 + point.sparkle * 0.42) * twinkle;
+        const opacity = Math.min(1, (0.24 + depth * 0.76) * twinkle);
         context.globalAlpha = opacity;
         if (depth > 0.77 && point.sparkle > 0.42) {
           context.fillStyle = "#e9fdff";
-          context.shadowColor = state === "listening" ? "rgba(112,240,255,.95)" : "rgba(91,216,245,.72)";
-          context.shadowBlur = depth > 0.9 ? 9 : 5;
+          context.shadowColor = state === "listening" ? "rgba(142,247,255,1)" : "rgba(91,216,245,.9)";
+          context.shadowBlur = depth > 0.9 ? 12 : 7;
         } else {
-          context.fillStyle = depth > 0.52 ? "#83eaf7" : depth > 0.22 ? "#568fc5" : "#496fa9";
+          context.fillStyle = depth > 0.52 ? "#a0f4ff" : depth > 0.22 ? "#70bce6" : "#5787c2";
           context.shadowBlur = 0;
         }
         context.beginPath();
@@ -727,25 +706,7 @@
   }
 
   function wireReactiveInteractions() {
-    function aimOrb(event) {
-      if (event.pointerType === "touch") return;
-      orbPointerTargetX = Math.max(-1, Math.min(1, (event.clientX / Math.max(1, window.innerWidth) - 0.5) * 2));
-      orbPointerTargetY = Math.max(-1, Math.min(1, (event.clientY / Math.max(1, window.innerHeight) - 0.5) * 2));
-      ui.core.dataset.pointer = "active";
-      ui.core.style.setProperty("--orb-tilt-x", (orbPointerTargetX * 5.5).toFixed(2) + "deg");
-      ui.core.style.setProperty("--orb-tilt-y", (-orbPointerTargetY * 5.5).toFixed(2) + "deg");
-    }
-    function resetOrbAim() {
-      orbPointerTargetX = 0;
-      orbPointerTargetY = 0;
-      ui.core.dataset.pointer = "idle";
-      ui.core.style.setProperty("--orb-tilt-x", "0deg");
-      ui.core.style.setProperty("--orb-tilt-y", "0deg");
-    }
-    // The orb is pointer-transparent so chat controls always win; track pointer movement globally.
-    window.addEventListener("pointermove", aimOrb, { passive: true });
-    document.addEventListener("mouseleave", resetOrbAim);
-    window.addEventListener("blur", resetOrbAim);
+    // Keep composer focus states, but the orb no longer reacts to cursor movement.
     ui.input.addEventListener("focus", () => { document.body.dataset.composerFocus = "on"; });
     ui.input.addEventListener("blur", () => { document.body.dataset.composerFocus = "off"; });
   }
