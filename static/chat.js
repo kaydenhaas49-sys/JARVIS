@@ -155,7 +155,7 @@
     if (!reducedMotion) frameId = window.requestAnimationFrame(tick);
   }
 
-  function createDotSphere(containerId = "dotSphere", pointCount = 2200, stateElementId = "coreOrb") {
+  function createDotSphere(containerId = "dotSphere", pointCount = (window.innerWidth < 700 ? 1900 : 3100), stateElementId = "coreOrb") {
     const container = document.getElementById(containerId);
     const stateElement = document.getElementById(stateElementId);
     if (!container) return;
@@ -169,6 +169,7 @@
     const context = canvas.getContext("2d", { alpha: true });
     if (!context) return;
 
+    // A layered cloud: most particles live on the shell, with a second, looser volume inside.
     const count = pointCount;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const points = [];
@@ -176,11 +177,21 @@
       const y = 1 - 2 * ((i + 0.5) / count);
       const ring = Math.sqrt(Math.max(0, 1 - y * y));
       const angle = goldenAngle * i;
+      const sample = ((i * 73) % 997) / 997;
+      const shellPoint = i % 5 !== 0;
+      const surfaceRipple =
+        Math.sin(angle * 3.1 + y * 7.2) * 0.022 +
+        Math.cos(angle * 4.7 - y * 6.3) * 0.013;
+      const radial = shellPoint
+        ? 0.89 + sample * 0.12 + surfaceRipple
+        : 0.40 + sample * 0.47 + surfaceRipple;
       points.push({
         x: Math.cos(angle) * ring,
         y,
         z: Math.sin(angle) * ring,
+        radial,
         phase: i * 2.399963229728653,
+        flowPhase: angle * 3.2 + y * 6.4,
         sparkle: ((i * 37) % 101) / 100,
       });
     }
@@ -211,77 +222,134 @@
       lastFrame = now;
       const state = stateElement?.dataset.state || "idle";
       const micBoost = state === "listening" ? microphoneEnergy : 0;
-      const speed = reducedMotion ? 0 : (state === "listening" ? 1.05 : state === "thinking" ? 0.86 : state === "speaking" ? 0.42 : 0.22) + micBoost * 0.72;
+      const speed = reducedMotion ? 0 : (state === "listening" ? 1.02 : state === "thinking" ? 0.82 : state === "speaking" ? 0.40 : 0.18) + micBoost * 0.7;
       rotation += delta * speed;
       const time = now / 1000;
       const cx = width / 2;
       const cy = height / 2;
       const radius = Math.min(width, height) * 0.455;
-      const breath = reducedMotion ? 1 : 1 + (state === "speaking" ? Math.sin(time * 3.4) * 0.035 : state === "listening" ? Math.sin(time * 6.5) * (0.014 + micBoost * 0.075) : Math.sin(time * 1.3) * 0.008);
+      const breath = reducedMotion ? 1 : 1 + (
+        state === "speaking" ? Math.sin(time * 3.2) * 0.034 :
+        state === "listening" ? Math.sin(time * 6.0) * (0.014 + micBoost * 0.075) :
+        Math.sin(time * 1.25) * 0.007
+      );
       context.clearRect(0, 0, width, height);
 
-      const aura = context.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * 1.22);
-      aura.addColorStop(0, state === "listening" ? "rgba(87,226,255," + (0.15 + micBoost * 0.29).toFixed(3) + ")" : "rgba(59,176,225,.105)");
-      aura.addColorStop(0.56, "rgba(39,128,203,.045)");
+      // Soft volumetric haze, brightest at the heart and fading out naturally.
+      const aura = context.createRadialGradient(cx, cy, radius * 0.02, cx, cy, radius * 1.25);
+      aura.addColorStop(0, state === "listening"
+        ? "rgba(101,231,255," + (0.20 + micBoost * 0.26).toFixed(3) + ")"
+        : "rgba(68,190,241,.16)");
+      aura.addColorStop(0.34, "rgba(33,139,218,.105)");
+      aura.addColorStop(0.72, "rgba(23,89,163,.045)");
       aura.addColorStop(1, "rgba(26,90,154,0)");
       context.fillStyle = aura;
       context.beginPath();
-      context.arc(cx, cy, radius * 1.22, 0, Math.PI * 2);
+      context.arc(cx, cy, radius * 1.25, 0, Math.PI * 2);
+      context.fill();
+
+      const coreGlow = context.createRadialGradient(
+        cx - radius * 0.13, cy - radius * 0.17, radius * 0.015,
+        cx, cy, radius * 0.88
+      );
+      coreGlow.addColorStop(0, "rgba(190,250,255,.17)");
+      coreGlow.addColorStop(0.22, "rgba(89,207,248,.115)");
+      coreGlow.addColorStop(0.58, "rgba(30,112,194,.045)");
+      coreGlow.addColorStop(1, "rgba(12,51,105,0)");
+      context.fillStyle = coreGlow;
+      context.beginPath();
+      context.arc(cx, cy, radius * 0.9, 0, Math.PI * 2);
       context.fill();
 
       const cosY = Math.cos(rotation);
       const sinY = Math.sin(rotation);
-      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06;
+      const tilt = 0.22 + Math.sin(time * 0.34) * 0.055;
       const cosX = Math.cos(tilt);
       const sinX = Math.sin(tilt);
       const projected = [];
+
       for (const point of points) {
-        const rippleStrength = state === "listening" ? 0.036 + micBoost * 0.052 : state === "thinking" ? 0.027 : state === "speaking" ? 0.022 : 0.009;
-        const ripple = reducedMotion ? 0 : Math.sin(time * (state === "listening" ? 5.6 : 2.1) + point.phase) * rippleStrength;
-        const scale = (1 + ripple) * breath;
+        const rippleStrength = state === "listening"
+          ? 0.025 + micBoost * 0.045
+          : state === "thinking" ? 0.021
+          : state === "speaking" ? 0.019
+          : 0.006;
+        const ripple = reducedMotion ? 0 : Math.sin(
+          time * (state === "listening" ? 5.0 : 1.9) + point.phase
+        ) * rippleStrength;
+        const flow = reducedMotion ? 0 : Math.sin(
+          time * (state === "thinking" ? 0.62 : 0.38) + point.flowPhase
+        ) * (state === "idle" ? 0.009 : 0.018);
+        const scale = Math.max(0.30, point.radial + ripple + flow) * breath;
+
+        // A very small local twist makes the surface feel fluid, not like a rigid wireframe.
+        const twist = reducedMotion ? 0 : Math.sin(time * 0.32 + point.flowPhase) * 0.025;
+        const twistCos = Math.cos(twist);
+        const twistSin = Math.sin(twist);
         const px = point.x * scale;
         const py = point.y * scale;
         const pz = point.z * scale;
-        const rx = px * cosY + pz * sinY;
-        const rz = -px * sinY + pz * cosY;
+        const twistedX = px * twistCos - pz * twistSin;
+        const twistedZ = px * twistSin + pz * twistCos;
+        const rx = twistedX * cosY + twistedZ * sinY;
+        const rz = -twistedX * sinY + twistedZ * cosY;
         const ry = py * cosX - rz * sinX;
         const depthZ = py * sinX + rz * cosX;
         const perspective = 1 / (1.12 - depthZ * 0.19);
+
         projected.push({
           x: cx + rx * radius * perspective,
           y: cy + ry * radius * perspective,
           depth: (depthZ + 1) * 0.5,
           phase: point.phase,
           sparkle: point.sparkle,
+          radial: point.radial,
         });
       }
       projected.sort((a, b) => a.depth - b.depth);
 
+      // Draw distant particles first so the brighter near-side points sit naturally in front.
       for (const point of projected) {
         const depth = point.depth;
-        const twinkle = reducedMotion ? 0.9 : 0.78 + 0.22 * Math.sin(time * (state === "speaking" ? 5.1 : 2.2) + point.phase);
-        const size = (0.72 + depth * 1.85 + point.sparkle * 0.42) * twinkle;
-        const opacity = Math.min(1, (0.24 + depth * 0.76) * twinkle);
+        const twinkle = reducedMotion
+          ? 0.9
+          : 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(
+              time * (state === "speaking" ? 4.8 : 2.05) + point.phase
+            ));
+        const size = (0.42 + depth * 1.9 + point.sparkle * 0.46) *
+          twinkle * (0.82 + point.radial * 0.18);
+        const volumeFade = point.radial < 0.78 ? 0.78 : 1;
+        const opacity = Math.min(1, (0.17 + depth * 0.83) * twinkle * volumeFade);
         context.globalAlpha = opacity;
-        if (depth > 0.77 && point.sparkle > 0.42) {
-          context.fillStyle = "#e9fdff";
-          context.shadowColor = state === "listening" ? "rgba(142,247,255,1)" : "rgba(91,216,245,.9)";
-          context.shadowBlur = depth > 0.9 ? 12 : 7;
+
+        if (depth > 0.74 && point.sparkle > 0.43) {
+          context.fillStyle = point.sparkle > 0.78 ? "#f1feff" : "#b5f5ff";
+          context.shadowColor = state === "listening"
+            ? "rgba(146,247,255,1)"
+            : "rgba(88,219,255,.94)";
+          context.shadowBlur = depth > 0.9 ? 11 : 6;
         } else {
-          context.fillStyle = depth > 0.52 ? "#a0f4ff" : depth > 0.22 ? "#70bce6" : "#5787c2";
-          context.shadowBlur = 0;
+          context.fillStyle = depth > 0.58
+            ? "#8feaff"
+            : depth > 0.25 ? "#59b7e9" : "#426eaf";
+          context.shadowBlur = depth > 0.58 && point.radial > 0.86 ? 1.5 : 0;
         }
+
         context.beginPath();
         context.arc(point.x, point.y, size, 0, Math.PI * 2);
         context.fill();
       }
+
       context.globalAlpha = 1;
       context.shadowBlur = 0;
 
-      // A soft highlight on the upper edge gives the sphere a glassy, dimensional finish.
-      const highlight = context.createRadialGradient(cx - radius * 0.35, cy - radius * 0.46, 0, cx - radius * 0.18, cy - radius * 0.12, radius * 1.05);
-      highlight.addColorStop(0, "rgba(204,251,255,.07)");
-      highlight.addColorStop(0.36, "rgba(106,213,245,.025)");
+      // Broad, translucent highlight: a light source in the plasma, not a drawn outline.
+      const highlight = context.createRadialGradient(
+        cx - radius * 0.34, cy - radius * 0.43, 0,
+        cx - radius * 0.16, cy - radius * 0.10, radius * 1.02
+      );
+      highlight.addColorStop(0, "rgba(213,252,255,.095)");
+      highlight.addColorStop(0.32, "rgba(106,213,245,.035)");
       highlight.addColorStop(1, "rgba(106,213,245,0)");
       context.fillStyle = highlight;
       context.beginPath();
