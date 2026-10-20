@@ -442,31 +442,31 @@ button:active:not(:disabled) { filter: brightness(1.12); }
   display: grid;
   place-items: center;
   pointer-events: none;
-  opacity: .43;
-  filter: saturate(.94) brightness(.94);
+  opacity: .38;
+  filter: saturate(1.12) brightness(1.08);
   will-change: transform, filter, opacity;
   transition: opacity .4s ease, filter .4s ease;
 }
 .background-orb .orb-stage {
   transform-style: preserve-3d;
-  transform: rotateX(var(--orb-tilt-y, 0deg)) rotateY(var(--orb-tilt-x, 0deg));
-  transition: transform .2s cubic-bezier(.2,.75,.25,1);
+  transform: rotateX(0deg) rotateY(0deg);
+  transition: none;
 }
 .background-orb .orb-aura {
   inset: 4%;
-  background: radial-gradient(circle at 48% 44%, rgba(50,190,229,.19), rgba(12,58,98,.08) 44%, transparent 70%);
-  box-shadow: 0 0 100px rgba(29,173,222,.10), inset 0 0 65px rgba(69,198,230,.06);
+  background: radial-gradient(circle at 48% 44%, rgba(76,213,249,.27), rgba(18,78,125,.12) 44%, transparent 70%);
+  box-shadow: 0 0 115px rgba(29,173,222,.19), inset 0 0 75px rgba(69,198,230,.10);
 }
 .background-orb .ring-a { inset: 3%; }
 .background-orb .ring-b { inset: 8%; }
 .background-orb .ring-c { inset: -2%; }
-.background-orb .orb-tick-ring { opacity: .56; }
+.background-orb .orb-tick-ring { opacity: .68; }
 .background-orb .orb-shadow { bottom: 6%; }
-.background-orb[data-state="idle"] { opacity: .27; }
-.background-orb[data-state="listening"] { opacity: .47; filter: saturate(1.16) brightness(1.18) drop-shadow(0 0 34px rgba(115,226,241,.18)); }
-.background-orb[data-state="thinking"] { opacity: .43; filter: saturate(1.2) brightness(1.12) drop-shadow(0 0 32px rgba(128,170,255,.17)); }
-.background-orb[data-state="speaking"] { opacity: .52; filter: saturate(1.28) brightness(1.2) drop-shadow(0 0 48px rgba(101,255,207,.2)); }
-.background-orb[data-state="error"] { opacity: .40; filter: saturate(.82) brightness(.95) drop-shadow(0 0 35px rgba(255,90,113,.23)); }
+.background-orb[data-state="idle"] { opacity: .38; }
+.background-orb[data-state="listening"] { opacity: .62; filter: saturate(1.24) brightness(1.28) drop-shadow(0 0 38px rgba(115,226,241,.24)); }
+.background-orb[data-state="thinking"] { opacity: .56; filter: saturate(1.26) brightness(1.23) drop-shadow(0 0 36px rgba(128,170,255,.23)); }
+.background-orb[data-state="speaking"] { opacity: .68; filter: saturate(1.34) brightness(1.3) drop-shadow(0 0 52px rgba(101,255,207,.26)); }
+.background-orb[data-state="error"] { opacity: .50; filter: saturate(.92) brightness(1.04) drop-shadow(0 0 38px rgba(255,90,113,.26)); }
 .background-orb[data-pulse="outgoing"] { animation: orb-message-send .76s cubic-bezier(.16,.84,.25,1); }
 .background-orb[data-pulse="incoming"] { animation: orb-message-reply 1.12s cubic-bezier(.16,.84,.25,1); }
 .background-orb[data-pulse="voice"], .background-orb[data-pulse="wake"] { animation: orb-voice-wake .92s ease-out; }
@@ -513,8 +513,8 @@ body[data-orb-pulse="error"] .background-orb .orb-aura { background: radial-grad
   35% { filter: brightness(1.2) drop-shadow(0 0 70px rgba(255,90,113,.45)); }
 }
 @media (max-width: 700px) {
-  .background-orb { width: min(76vw, 420px); height: min(76vw, 420px); opacity: .24; }
-  .background-orb[data-state="listening"], .background-orb[data-state="thinking"], .background-orb[data-state="speaking"] { opacity: .39; }
+  .background-orb { width: min(76vw, 420px); height: min(76vw, 420px); opacity: .32; }
+  .background-orb[data-state="listening"], .background-orb[data-state="thinking"], .background-orb[data-state="speaking"] { opacity: .52; }
   .chat-log { padding-left: 1px; padding-right: 1px; }
 }
 @media (prefers-reduced-motion: reduce) {
