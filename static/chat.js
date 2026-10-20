@@ -38,6 +38,41 @@
   let speechResolver = null;
   let speechGeneration = 0;
 
+  function createDotSphere() {
+    const container = document.getElementById("dotSphere");
+    if (!container) return;
+    container.replaceChildren();
+    const bounds = container.getBoundingClientRect();
+    const radius = Math.max(76, Math.min(bounds.width, bounds.height) * 0.405);
+    const count = 520;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const cloud = document.createElement("div");
+    cloud.className = "sphere-point-cloud";
+    for (let i = 0; i < count; i += 1) {
+      const y = 1 - (i / (count - 1)) * 2;
+      const ring = Math.sqrt(Math.max(0, 1 - y * y));
+      const angle = goldenAngle * i;
+      const nx = Math.cos(angle) * ring;
+      const nz = Math.sin(angle) * ring;
+      const depth = nz;
+      const dot = document.createElement("i");
+      dot.className = "sphere-dot";
+      dot.setAttribute("aria-hidden", "true");
+      dot.style.left = "calc(50% + " + (nx * radius).toFixed(2) + "px)";
+      dot.style.top = "calc(50% + " + (y * radius).toFixed(2) + "px)";
+      dot.style.transform = "translate(-50%, -50%) translateZ(" + (nz * radius).toFixed(2) + "px)";
+      const size = 1.45 + ((depth + 1) / 2) * 1.65;
+      dot.style.width = size.toFixed(2) + "px";
+      dot.style.height = size.toFixed(2) + "px";
+      dot.style.opacity = (0.2 + ((depth + 1) / 2) * 0.78).toFixed(2);
+      dot.style.background = depth > 0.48 ? "#d9fbff" : depth > -0.15 ? "#73e2f1" : "#6688c6";
+      dot.style.boxShadow = depth > 0.18 ? "0 0 7px rgba(115,226,241,.58)" : "0 0 3px rgba(102,136,198,.28)";
+      dot.style.zIndex = String(Math.round((depth + 1) * 100));
+      cloud.appendChild(dot);
+    }
+    container.appendChild(cloud);
+  }
+
   function setActivity(state, label) {
     ui.activity.dataset.state = state;
     ui.activityLabel.textContent = label;
@@ -93,7 +128,8 @@
     row.className = "message message-" + (role === "user" ? "user" : "assistant");
     const avatar = document.createElement("div");
     avatar.className = "message-avatar";
-    avatar.textContent = role === "user" ? "YOU" : "J";
+    avatar.textContent = role === "user" ? "YOU" : "";
+    if (role !== "user") avatar.classList.add("assistant-avatar");
     avatar.setAttribute("aria-hidden", "true");
     const body = document.createElement("div");
     body.className = "message-content";
@@ -131,7 +167,8 @@
         row.className = "message message-" + item.role;
         const avatar = document.createElement("div");
         avatar.className = "message-avatar";
-        avatar.textContent = item.role === "user" ? "YOU" : "J";
+        avatar.textContent = item.role === "user" ? "YOU" : "";
+        if (item.role !== "user") avatar.classList.add("assistant-avatar");
         avatar.setAttribute("aria-hidden", "true");
         const body = document.createElement("div");
         body.className = "message-content";
@@ -195,7 +232,7 @@
     card.appendChild(actions);
     const wrapper = document.createElement("div");
     wrapper.className = "message message-assistant";
-    const avatar = document.createElement("div"); avatar.className = "message-avatar"; avatar.textContent = "J"; avatar.setAttribute("aria-hidden", "true");
+    const avatar = document.createElement("div"); avatar.className = "message-avatar"; avatar.textContent = ""; avatar.classList.add("assistant-avatar"); avatar.setAttribute("aria-hidden", "true");
     const body = document.createElement("div"); body.className = "message-content";
     body.appendChild(card); wrapper.append(avatar, body); ui.chat.appendChild(wrapper); ui.chat.scrollTop = ui.chat.scrollHeight;
     let done = false;
@@ -565,6 +602,12 @@
     if (document.hidden) stopWakePolling();
     else void refreshWakeStatus(false);
   });
+  createDotSphere();
+  let sphereResizeTimer = null;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(sphereResizeTimer);
+    sphereResizeTimer = window.setTimeout(createDotSphere, 140);
+  }, { passive: true });
   restoreTranscript();
   resizeInput();
   void refreshConnection();
