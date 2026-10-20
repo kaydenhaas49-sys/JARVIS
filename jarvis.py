@@ -2899,13 +2899,19 @@ class JarvisHandler(BaseHTTPRequestHandler):
 
     def _send_json(self, status: int, value: dict[str, Any]) -> None:
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # A browser tab can close while a local model is still responding.
+            # The request is already gone, so do not try to send a second error
+            # response over the same dead connection or print a traceback.
+            logging.debug("Client disconnected before JARVIS could send its response.")
 
     def _require_request_access(self) -> bool:
         """Gate all dashboard/API access when JARVIS is bound to a network interface."""
