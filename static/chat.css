@@ -416,3 +416,107 @@ button:active:not(:disabled) { filter: brightness(1.12); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
   .hud-backdrop { opacity: .35; }
 }
+
+
+/* Full-screen living orb: no welcome copy, no mini-orb. The sphere stays behind the UI. */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.background-orb {
+  position: fixed;
+  z-index: 0;
+  left: 50%;
+  top: 50%;
+  width: min(180vmin, 1900px);
+  height: min(180vmin, 1900px);
+  margin: 0;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: .43;
+  filter: saturate(.94) brightness(.94);
+  will-change: transform, filter, opacity;
+  transition: opacity .4s ease, filter .4s ease;
+}
+.background-orb .orb-stage {
+  transform-style: preserve-3d;
+  transform: rotateX(var(--orb-tilt-y, 0deg)) rotateY(var(--orb-tilt-x, 0deg));
+  transition: transform .2s cubic-bezier(.2,.75,.25,1);
+}
+.background-orb .orb-aura {
+  inset: 4%;
+  background: radial-gradient(circle at 48% 44%, rgba(50,190,229,.19), rgba(12,58,98,.08) 44%, transparent 70%);
+  box-shadow: 0 0 100px rgba(29,173,222,.10), inset 0 0 65px rgba(69,198,230,.06);
+}
+.background-orb .ring-a { inset: 3%; }
+.background-orb .ring-b { inset: 8%; }
+.background-orb .ring-c { inset: -2%; }
+.background-orb .orb-tick-ring { opacity: .56; }
+.background-orb .orb-shadow { bottom: 6%; }
+.background-orb[data-state="idle"] { opacity: .43; }
+.background-orb[data-state="listening"] { opacity: .69; filter: saturate(1.16) brightness(1.18) drop-shadow(0 0 34px rgba(115,226,241,.18)); }
+.background-orb[data-state="thinking"] { opacity: .60; filter: saturate(1.2) brightness(1.12) drop-shadow(0 0 32px rgba(128,170,255,.17)); }
+.background-orb[data-state="speaking"] { opacity: .72; filter: saturate(1.28) brightness(1.2) drop-shadow(0 0 48px rgba(101,255,207,.2)); }
+.background-orb[data-state="error"] { opacity: .57; filter: saturate(.82) brightness(.95) drop-shadow(0 0 35px rgba(255,90,113,.23)); }
+.background-orb[data-pulse="outgoing"] { animation: orb-message-send .76s cubic-bezier(.16,.84,.25,1); }
+.background-orb[data-pulse="incoming"] { animation: orb-message-reply 1.12s cubic-bezier(.16,.84,.25,1); }
+.background-orb[data-pulse="voice"], .background-orb[data-pulse="wake"] { animation: orb-voice-wake .92s ease-out; }
+.background-orb[data-pulse="error"] { animation: orb-error-flash .8s ease-out; }
+.welcome { flex: 1; min-height: 0; padding: 0; margin: 0; display: flex; }
+.welcome:empty { pointer-events: none; }
+.top-rule, .conversation-hud, .welcome-topline, .welcome-copy, .welcome-status, .wake-hint, .welcome-footnote { display: none !important; }
+.chat-layout { z-index: 2; }
+.conversation { z-index: 2; max-width: 1160px; }
+.chat-log { position: relative; z-index: 2; background: transparent; }
+.composer-zone { position: relative; z-index: 3; }
+.message-bubble { background: linear-gradient(135deg, rgba(7,18,30,.91), rgba(4,11,20,.88)); backdrop-filter: blur(9px); }
+.message-user .message-bubble { background: linear-gradient(135deg, rgba(17,35,62,.94), rgba(6,14,27,.89)); }
+body[data-conversation="active"] .active-orb-dock { display: none !important; }
+body[data-conversation="active"] .hud-session { opacity: 1; }
+body[data-conversation="active"] .chat-log { padding-top: 15px; }
+body[data-composing="on"] .background-orb .orb-aura { opacity: calc(.8 + var(--compose-energy, 0) * .2); }
+body[data-wake="on"] .background-orb .orb-tick-ring { opacity: .78; }
+body[data-mic="on"] .background-orb { filter: saturate(1.3) brightness(calc(1.08 + var(--mic-energy, 0) * .32)); }
+body[data-mic="on"] .background-orb .orb-aura { transform: scale(calc(1 + var(--mic-energy, 0) * .09)); }
+body[data-orb-pulse="outgoing"] .background-orb .orb-aura { background: radial-gradient(circle, rgba(95,224,250,.30), rgba(12,58,98,.09) 48%, transparent 73%); }
+body[data-orb-pulse="incoming"] .background-orb .orb-aura { background: radial-gradient(circle, rgba(160,246,255,.28), rgba(12,58,98,.09) 48%, transparent 73%); }
+body[data-orb-pulse="wake"] .background-orb .orb-aura { background: radial-gradient(circle, rgba(255,205,120,.22), rgba(12,58,98,.09) 48%, transparent 73%); }
+body[data-orb-pulse="error"] .background-orb .orb-aura { background: radial-gradient(circle, rgba(255,95,120,.24), rgba(12,35,57,.09) 48%, transparent 73%); }
+@keyframes orb-message-send {
+  0% { transform: translate(-50%,-50%) scale(.96); filter: brightness(.95) saturate(1); }
+  28% { transform: translate(-50%,-50%) scale(1.055); filter: brightness(1.65) saturate(1.5) drop-shadow(0 0 45px rgba(93,225,255,.33)); }
+  68% { transform: translate(-50%,-50%) scale(.99); filter: brightness(1.2) saturate(1.2); }
+  100% { transform: translate(-50%,-50%) scale(1); }
+}
+@keyframes orb-message-reply {
+  0% { transform: translate(-50%,-50%) scale(.985); filter: brightness(1) saturate(1); }
+  24% { transform: translate(-50%,-50%) scale(1.075); filter: brightness(1.8) saturate(1.55) drop-shadow(0 0 62px rgba(160,246,255,.4)); }
+  53% { transform: translate(-50%,-50%) scale(1.025); }
+  100% { transform: translate(-50%,-50%) scale(1); }
+}
+@keyframes orb-voice-wake {
+  0% { transform: translate(-50%,-50%) scale(1); }
+  38% { transform: translate(-50%,-50%) scale(1.06); filter: brightness(1.55) drop-shadow(0 0 44px rgba(115,226,241,.3)); }
+  100% { transform: translate(-50%,-50%) scale(1); }
+}
+@keyframes orb-error-flash {
+  0%,100% { filter: brightness(.9) saturate(.8); }
+  35% { filter: brightness(1.2) drop-shadow(0 0 70px rgba(255,90,113,.45)); }
+}
+@media (max-width: 700px) {
+  .background-orb { width: 175vmin; height: 175vmin; opacity: .35; }
+  .background-orb[data-state="listening"], .background-orb[data-state="thinking"], .background-orb[data-state="speaking"] { opacity: .53; }
+  .chat-log { padding-left: 1px; padding-right: 1px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .background-orb[data-pulse] { animation: none !important; }
+}
