@@ -11,7 +11,6 @@
     activity: $("#activityStatus"), activityLabel: $("#activityLabel"),
     core: $("#coreOrb"), wakeHint: $("#wakeHint"), toast: $("#toastRegion"),
     newChat: $("#newChatBtn"), composerStatus: $("#composerStatus"),
-    dockActivity: $("#dockActivity"), liveCore: $("#liveCoreOrb"),
   };
 
   const STORAGE_KEY = "jarvis-chat-session-v1";
@@ -48,6 +47,7 @@
   let orbPointerTargetY = 0;
   let orbPointerX = 0;
   let orbPointerY = 0;
+  let orbPulseTimer = 0;
 
 
   function initHudParticles() {
@@ -237,7 +237,7 @@
       const time = now / 1000;
       const cx = width / 2;
       const cy = height / 2;
-      const radius = Math.min(width, height) * 0.385;
+      const radius = Math.min(width, height) * 0.455;
       const breath = reducedMotion ? 1 : 1 + (state === "speaking" ? Math.sin(time * 3.4) * 0.035 : state === "listening" ? Math.sin(time * 6.5) * (0.014 + micBoost * 0.075) : Math.sin(time * 1.3) * 0.008);
       context.clearRect(0, 0, width, height);
 
@@ -339,9 +339,21 @@
     ui.activity.dataset.state = state;
     ui.activityLabel.textContent = label;
     ui.core.dataset.state = state;
-    if (ui.liveCore) ui.liveCore.dataset.state = state;
-    if (ui.dockActivity) ui.dockActivity.textContent = state === "idle" ? "STANDBY" : state.toUpperCase();
     document.body.dataset.activity = state;
+  }
+
+  function pulseOrb(kind = "incoming") {
+    if (!ui.core) return;
+    window.clearTimeout(orbPulseTimer);
+    ui.core.dataset.pulse = "idle";
+    // Restart the CSS pulse even when two message events happen close together.
+    void ui.core.offsetWidth;
+    ui.core.dataset.pulse = kind;
+    document.body.dataset.orbPulse = kind;
+    orbPulseTimer = window.setTimeout(() => {
+      ui.core.dataset.pulse = "idle";
+      document.body.dataset.orbPulse = "idle";
+    }, kind === "outgoing" ? 760 : 1120);
   }
 
   function showToast(message, kind = "") {
@@ -562,7 +574,7 @@
       utterance.voice = available.find((voice) => /^en-CA$/i.test(voice.lang)) || available.find((voice) => /^en-(GB|US)/i.test(voice.lang)) || null;
       utterance.lang = utterance.voice?.lang || "en-CA";
       utterance.rate = 1.02; utterance.pitch = .94;
-      utterance.onstart = () => setActivity("speaking", "SPEAKING");
+      utterance.onstart = () => { setActivity("speaking", "SPEAKING"); pulseOrb("voice"); };
       utterance.onend = finish; utterance.onerror = finish;
       const timer = window.setTimeout(finish, 90000);
       window.speechSynthesis.speak(utterance);
@@ -600,7 +612,7 @@
               resolve(Boolean(success));
             };
             speechResolver = () => finish(false);
-            audio.onplay = () => setActivity("speaking", "SPEAKING");
+            audio.onplay = () => { setActivity("speaking", "SPEAKING"); pulseOrb("voice"); };
             audio.onended = () => finish(true); audio.onerror = () => finish(false);
             window.setTimeout(() => finish(false), 90000);
             audio.play().catch(() => finish(false));
@@ -618,6 +630,7 @@
   }
 
   async function handleResult(result) {
+    pulseOrb("incoming");
     const answer = String(result.reply || "I'm here.");
     appendMessage("assistant", answer, result.routed_to === "openclaw" ? "openclaw" : "");
     if (result.pending_action) renderApproval(result.pending_action);
@@ -631,6 +644,7 @@
     resizeInput();
     updateComposerReactivity();
     appendMessage("user", text);
+    pulseOrb("outgoing");
     setBusy(true);
     stopSpeech();
     try {
@@ -640,6 +654,7 @@
     } catch (error) {
       appendMessage("assistant", "I couldn't complete that request.\n\n" + error.message);
       setActivity("error", "CONNECTION ERROR");
+      pulseOrb("error");
       showToast(error.message, "error");
     } finally {
       setBusy(false);
@@ -712,26 +727,28 @@
   }
 
   function wireReactiveInteractions() {
-    ui.core.addEventListener("pointermove", (event) => {
+    function aimOrb(event) {
       if (event.pointerType === "touch") return;
-      const bounds = ui.core.getBoundingClientRect();
-      orbPointerTargetX = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2));
-      orbPointerTargetY = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2));
+      orbPointerTargetX = Math.max(-1, Math.min(1, (event.clientX / Math.max(1, window.innerWidth) - 0.5) * 2));
+      orbPointerTargetY = Math.max(-1, Math.min(1, (event.clientY / Math.max(1, window.innerHeight) - 0.5) * 2));
       ui.core.dataset.pointer = "active";
-      ui.core.style.setProperty("--orb-tilt-x", (orbPointerTargetX * 3.5).toFixed(2) + "deg");
-      ui.core.style.setProperty("--orb-tilt-y", (-orbPointerTargetY * 3.5).toFixed(2) + "deg");
-    });
-    ui.core.addEventListener("pointerleave", () => {
+      ui.core.style.setProperty("--orb-tilt-x", (orbPointerTargetX * 5.5).toFixed(2) + "deg");
+      ui.core.style.setProperty("--orb-tilt-y", (-orbPointerTargetY * 5.5).toFixed(2) + "deg");
+    }
+    function resetOrbAim() {
       orbPointerTargetX = 0;
       orbPointerTargetY = 0;
       ui.core.dataset.pointer = "idle";
       ui.core.style.setProperty("--orb-tilt-x", "0deg");
       ui.core.style.setProperty("--orb-tilt-y", "0deg");
-    });
+    }
+    // The orb is pointer-transparent so chat controls always win; track pointer movement globally.
+    window.addEventListener("pointermove", aimOrb, { passive: true });
+    document.addEventListener("mouseleave", resetOrbAim);
+    window.addEventListener("blur", resetOrbAim);
     ui.input.addEventListener("focus", () => { document.body.dataset.composerFocus = "on"; });
     ui.input.addEventListener("blur", () => { document.body.dataset.composerFocus = "off"; });
   }
-
   function resizeInput() {
     ui.input.style.height = "auto";
     ui.input.style.height = Math.min(ui.input.scrollHeight, 190) + "px";
@@ -788,6 +805,7 @@
         }
       };
       recorder.start();
+      pulseOrb("voice");
       ui.mic.classList.add("listening");
       ui.mic.title = "Stop recording and send";
       ui.mic.setAttribute("aria-label", "Stop recording and send");
@@ -883,6 +901,7 @@
       for (const event of result.events || []) {
         wakeEventCursor = Math.max(wakeEventCursor, Number(event.id) || 0);
         if (event.type === "wake") {
+          pulseOrb("wake");
           setActivity("listening", "WAKE WORD DETECTED");
           showToast('Wake word detected. Listening for your command…');
         } else if (event.type === "command") {
@@ -968,14 +987,12 @@
   });
   initHudParticles();
   createDotSphere();
-  createDotSphere("liveDotSphere", 190, "liveCoreOrb");
   wireReactiveInteractions();
   let sphereResizeTimer = null;
   window.addEventListener("resize", () => {
     window.clearTimeout(sphereResizeTimer);
     sphereResizeTimer = window.setTimeout(() => {
       createDotSphere();
-      createDotSphere("liveDotSphere", 190, "liveCoreOrb");
     }, 140);
   }, { passive: true });
   restoreTranscript();
