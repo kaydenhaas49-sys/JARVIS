@@ -479,6 +479,112 @@ class DesktopAppDiscoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "known web-app list"):
             jarvis.open_web_app("https://example.com")
 
+
+class DesktopAppAliasTests(unittest.TestCase):
+    def test_short_app_names_resolve_to_unambiguous_installed_app_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            applications = Path(temporary) / "applications"
+            applications.mkdir()
+            (applications / "tor-browser.desktop").write_text(
+                "[Desktop Entry]\\nType=Application\\nName=Tor Browser\\n"
+                "Exec=torbrowser-launcher\\n",
+                encoding="utf-8",
+            )
+            (applications / "mozilla-firefox.desktop").write_text(
+                "[Desktop Entry]\\nType=Application\\nName=Mozilla Firefox\\n"
+                "Exec=firefox\\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \\
+                 mock.patch.object(jarvis.platform, "system", return_value="Linux"):
+                self.assertEqual(
+                    jarvis._direct_desktop_app_intent("Open Tor"),
+                    "desktop:tor-browser",
+                )
+                self.assertEqual(
+                    jarvis._direct_desktop_app_intent("Launch Firefox"),
+                    "desktop:mozilla-firefox",
+                )
+                self.assertEqual(
+                    jarvis._direct_desktop_app_intent("Please open Tor Browser"),
+                    "desktop:tor-browser",
+                )
+
+
+class WebAddressRoutingTests(unittest.TestCase):
+    def test_normalizes_bare_addresses_and_preserves_paths_queries_and_fragments(self) -> None:
+        cases = (
+            ("example.com", "https://example.com"),
+            ("www.example.com/docs/page?mode=full#section", "https://www.example.com/docs/page?mode=full#section"),
+            ("https://example.com/a/b?q=one&n=2#top", "https://example.com/a/b?q=one&n=2#top"),
+            ("http://192.168.1.20:8080/status", "http://192.168.1.20:8080/status"),
+            ("localhost:8765/health", "https://localhost:8765/health"),
+        )
+        for supplied, expected in cases:
+            with self.subTest(supplied=supplied):
+                self.assertEqual(jarvis.normalize_web_address(supplied), expected)
+
+    def test_rejects_unsafe_or_malformed_addresses(self) -> None:
+        for supplied in (
+            "",
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "ftp://example.com",
+            "https://user:password@example.com",
+            "https://example.com:99999",
+            "https://example.com/a b",
+            "https://example.com\\\\path",
+        ):
+            with self.subTest(supplied=supplied):
+                with self.assertRaises(ValueError):
+                    jarvis.normalize_web_address(supplied)
+
+    def test_direct_url_intent_accepts_addresses_but_not_regular_phrases(self) -> None:
+        self.assertEqual(
+            jarvis._direct_url_target("Open example.com/docs?view=full"),
+            "example.com/docs?view=full",
+        )
+        self.assertEqual(
+            jarvis._direct_url_target("Please visit https://example.com/path?q=1"),
+            "https://example.com/path?q=1",
+        )
+        self.assertIsNone(jarvis._direct_url_target("Search for example.com"))
+        self.assertIsNone(jarvis._direct_url_target("Open Tor"))
+        self.assertIsNone(jarvis._direct_url_target("Open /etc/passwd"))
+        self.assertEqual(jarvis._direct_web_app_intent("Go to YouTube"), "youtube")
+
+    def test_open_url_uses_an_argument_without_a_shell(self) -> None:
+        process = mock.Mock(pid=555)
+        address = "https://example.com/docs?mode=full"
+        with mock.patch.object(jarvis.shutil, "which", side_effect=lambda name: "/usr/bin/xdg-open" if name == "xdg-open" else None), \\
+             mock.patch.object(jarvis.subprocess, "Popen", return_value=process) as popen, \\
+             mock.patch.object(jarvis, "_log_dashboard_tool_action") as audit:
+            result = jarvis.open_url("example.com/docs?mode=full")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], address)
+        self.assertEqual(result["pid"], 555)
+        self.assertEqual(popen.call_args.args[0], ["/usr/bin/xdg-open", address])
+        self.assertFalse(popen.call_args.kwargs["shell"])
+        audit.assert_called_once_with("Website opened", "example.com")
+
+    def test_direct_chat_address_opens_without_calling_model_or_approval(self) -> None:
+        session = {"messages": [], "updated_at": 0.0}
+        opened = {"ok": True, "url": "https://example.com/docs", "message": "Opening address."}
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \\
+             mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[]), \\
+             mock.patch.object(jarvis.platform, "system", return_value="Linux"), \\
+             mock.patch.object(jarvis, "open_url", return_value=opened) as open_address, \\
+             mock.patch.object(jarvis, "agent_turn") as agent_turn:
+            result = jarvis.handle_chat({
+                "session_id": "direct-address-test",
+                "message": "Go to example.com/docs",
+            })
+        open_address.assert_called_once_with("example.com/docs")
+        agent_turn.assert_not_called()
+        self.assertIsNone(result["pending_action"])
+        self.assertEqual(result["reply"], "Opening address.")
+        self.assertEqual([row["role"] for row in session["messages"]], ["user", "assistant"])
+
 class NetworkAccessTests(unittest.TestCase):
     def test_loopback_bind_addresses_do_not_require_network_auth(self) -> None:
         for host in ("127.0.0.1", "localhost", "::1", "[::1]"):
