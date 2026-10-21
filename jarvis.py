@@ -1403,10 +1403,27 @@ _DIRECT_APP_ALIASES: dict[str, str] = {
     "settings": "settings", "system settings": "settings", "audacity": "audacity",
     "kdenlive": "kdenlive",
 }
+# Short names users naturally say aloud; map them to a canonical installed-app label.
+# The canonical label is still resolved against installed desktop entries before launch.
+_DIRECT_APP_QUERY_ALIASES = {
+    "tor": "tor browser",
+    "torbrowser": "tor browser",
+    "fire fox": "firefox",
+}
 _DIRECT_APP_REQUEST_RE = re.compile(
     r"^(?:(?:hey\s+)?jarvis[,!:]?\s*)?"
     r"(?:(?:can|could|would) you(?: please)?\s+)?(?:please\s+)?"
     r"(?:open(?:\s+up)?|launch|start|bring\s+up)\s+(?:the\s+)?"
+    r"(.+?)(?:\s+(?:for me(?: please)?|please|now))?[.!?]*$",
+    re.IGNORECASE,
+)
+# Common conversational ways to ask JARVIS to navigate somewhere. The destination
+# is still resolved as an installed app, a known web service, or a validated URL.
+_DIRECT_DESTINATION_REQUEST_RE = re.compile(
+    r"^(?:(?:hey\s+)?jarvis[,!:]?\s*)?"
+    r"(?:(?:can|could|would) you(?: please)?\s+)?(?:please\s+)?"
+    r"(?:open(?:\s+up)?|launch|start|bring\s+up|go\s+to|navigate(?:\s+to)?|"
+    r"visit|browse(?:\s+to)?|load|enter|take me to)\s+(?:the\s+)?"
     r"(.+?)(?:\s+(?:for me(?: please)?|please|now))?[.!?]*$",
     re.IGNORECASE,
 )
@@ -1574,6 +1591,20 @@ def _find_discovered_desktop_application(
             score = 85
         elif name.startswith(target + " ") or generic.startswith(target + " "):
             score = 75
+        elif len(target) >= 3 and any(
+            token.startswith(target) for token in (name + " " + generic).split()
+        ):
+            # Match useful partial names such as "firefox" inside "Mozilla Firefox".
+            score = 70
+        elif all(
+            any(token == word or (len(word) >= 3 and token.startswith(word))
+                for token in (name + " " + generic + " " + desktop_id).split())
+            for word in target.split()
+        ):
+            # Accept word-order/label variations only when the best candidate is unambiguous.
+            score = 65
+        elif len(target) >= 4 and difflib.SequenceMatcher(None, target, name).ratio() >= 0.86:
+            score = 55
         elif target in keywords:
             score = 60
         if score:
@@ -1625,31 +1656,126 @@ def _find_catalog_desktop_entry(
 
 
 def _direct_desktop_app_intent(message: str) -> str | None:
-    """Return an app ID only for a simple request naming an installed app or known launcher."""
-    if not isinstance(message, str) or not message.strip() or len(message) > 160:
+    """Resolve a short, standalone request to one installed app without calling the model."""
+    if not isinstance(message, str) or not message.strip() or len(message) > 180:
         return None
-    match = _DIRECT_APP_REQUEST_RE.fullmatch(" ".join(message.strip().split()))
+    match = _DIRECT_DESTINATION_REQUEST_RE.fullmatch(" ".join(message.strip().split()))
     if not match:
         return None
     target = re.sub(r"[.!?]+$", "", match.group(1).strip()).casefold()
-    target = re.sub(r"\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website)$", "", target).strip()
+    target = re.sub(r"\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website|web app)$", "", target).strip()
     known_id = _DIRECT_APP_ALIASES.get(target)
     if known_id:
         return known_id
-    entry = _find_discovered_desktop_application(target)
+    query = _DIRECT_APP_QUERY_ALIASES.get(_normalize_desktop_text(target), target)
+    entry = _find_discovered_desktop_application(query)
     return str(entry["application_id"]) if entry else None
 
 
 def _direct_web_app_intent(message: str) -> str | None:
-    """Map simple explicit website-opening requests to a fixed, trusted URL catalog."""
-    if not isinstance(message, str) or not message.strip() or len(message) > 160:
+    """Map common requests to the fixed, trusted website catalog."""
+    if not isinstance(message, str) or not message.strip() or len(message) > 180:
         return None
-    match = _DIRECT_APP_REQUEST_RE.fullmatch(" ".join(message.strip().split()))
+    match = _DIRECT_DESTINATION_REQUEST_RE.fullmatch(" ".join(message.strip().split()))
     if not match:
         return None
     target = re.sub(r"[.!?]+$", "", match.group(1).strip()).casefold()
-    target = re.sub(r"\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website)$", "", target).strip()
+    target = re.sub(r"\s+(?:in (?:the )?(?:web )?browser|on (?:the )?web|website|web app)$", "", target).strip()
     return _WEB_APP_ALIASES.get(target)
+
+
+def _is_web_address_candidate(value: str) -> bool:
+    """Recognize address-shaped text without mistaking ordinary phrases for websites."""
+    text = str(value or "").strip()
+    if not text or len(text) > 2_048 or any(ord(char) < 32 for char in text):
+        return False
+    if "://" in text or re.match(r"^[a-z][a-z0-9+.-]*:", text, re.IGNORECASE):
+        return True
+    if any(char.isspace() for char in text):
+        return False
+    authority = re.split(r"[/?#]", text, maxsplit=1)[0].strip()
+    if not authority:
+        return False
+    if authority.startswith("["):
+        return True
+    host = re.sub(r":\d+$", "", authority.rsplit("@", 1)[-1])
+    if host.casefold() == "localhost" or "." in host or host.casefold().endswith(".local"):
+        return True
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
+def _direct_url_target(message: str) -> str | None:
+    """Extract a user-requested web address; reject ordinary chat and multi-step requests."""
+    if not isinstance(message, str) or not message.strip() or len(message) > 2_200:
+        return None
+    match = _DIRECT_DESTINATION_REQUEST_RE.fullmatch(" ".join(message.strip().split()))
+    if not match:
+        return None
+    target = match.group(1).strip().strip("\"'<>")
+    target = re.sub(r"\s+(?:for me(?: please)?|please|now)$", "", target, flags=re.IGNORECASE).strip()
+    # Speech transcripts frequently add a final sentence mark after a spoken URL.
+    if not target.endswith(("?", "#")):
+        target = target.rstrip(".,!;")
+    return target if _is_web_address_candidate(target) else None
+
+
+def normalize_web_address(raw: str) -> str:
+    """Validate a browser destination and add HTTPS for a bare hostname or address."""
+    value = str(raw or "").strip()
+    if not value or len(value) > 2_048:
+        raise ValueError("Enter a web address under 2,048 characters.")
+    if any(ord(char) < 32 or char.isspace() for char in value) or "\\" in value:
+        raise ValueError("Web addresses cannot contain spaces, control characters, or backslashes.")
+    explicit_http = value.casefold().startswith(("http://", "https://"))
+    scheme_match = re.match(r"^([a-z][a-z0-9+.-]*):", value, re.IGNORECASE)
+    bare_host_port = bool(re.match(r"^(?:\[[0-9a-f:.]+\]|[^/:?#]+):\d+(?:[/?#]|$)", value, re.IGNORECASE))
+    if value.startswith("//"):
+        value = "https:" + value
+    elif scheme_match and not explicit_http and not bare_host_port:
+        raise ValueError("Only http:// and https:// web addresses are supported.")
+    elif not explicit_http:
+        value = "https://" + value
+
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("That web address has an invalid host or port.") from exc
+    if parsed.scheme.casefold() not in {"http", "https"}:
+        raise ValueError("Only http:// and https:// web addresses are supported.")
+    if not parsed.hostname or not parsed.netloc:
+        raise ValueError("That web address must include a hostname.")
+    if parsed.username is not None or parsed.password is not None or "@" in parsed.netloc:
+        raise ValueError("Web addresses containing usernames or passwords are not allowed.")
+    if port == 0:
+        raise ValueError("Web address ports must be between 1 and 65535.")
+    return parsed._replace(scheme=parsed.scheme.casefold()).geturl()
+
+
+def open_url(url: str) -> dict[str, Any]:
+    """Open a validated HTTP(S) address in the default browser without invoking a shell."""
+    address = normalize_web_address(url)
+    opener = shutil.which("xdg-open") or shutil.which("gio")
+    if not opener:
+        raise ValueError("Neither xdg-open nor gio is installed, so I cannot open the web address.")
+    command = [opener, address] if Path(opener).name == "xdg-open" else [opener, "open", address]
+    try:
+        process = subprocess.Popen(
+            command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            shell=False, close_fds=True, start_new_session=True,
+        )
+    except OSError as exc:
+        raise ValueError(f"Could not open {address} in the browser: {exc}") from exc
+    hostname = urlsplit(address).hostname or address
+    _log_dashboard_tool_action("Website opened", hostname[:200])
+    return {
+        "ok": True, "url": address, "pid": process.pid,
+        "message": f"Opening {address} in your default browser.",
+    }
 
 
 def open_web_app(application_id: str) -> dict[str, Any]:
@@ -1964,7 +2090,7 @@ Kitchen data in kitchen.json, chat archives in chat-history.json, and activity i
 the user explicitly asks to change the active model. These are real persisted records, not pretend actions. For a
 requested recipe, include a name, ingredients and clear steps. Only say a change succeeded when the tool confirms it.
 Delete or overwrite data only on an explicit request in the current turn.
-Desktop app launches can use the fixed launcher catalog or installed Linux desktop-menu entries. Use list_desktop_apps to discover installed apps; launch_app accepts a returned application ID or exact installed app name. Launches do not require approval, but only installed desktop entries and known fixed executable names can be launched. For common web services, use open_web_app with its fixed service ID; never pass arbitrary URLs, paths, arguments, or shell commands. Never compose a shell command to launch software.
+Desktop app launches can use the fixed launcher catalog or installed Linux desktop-menu entries. Use list_desktop_apps to discover installed apps; launch_app accepts a returned application ID or an unambiguous installed app-name match. Launches do not require approval, but only installed desktop entries and known fixed executable names can be launched. For common web services, use open_web_app with its fixed service ID; for other user-requested websites, use open_url with an HTTP/HTTPS address. open_url adds HTTPS to a bare domain, rejects unsafe schemes and embedded credentials, and passes the address as a single argument without a shell. Never pass URLs to launch_app or compose a shell command to launch software.
 Current workspace: """ + str(WORKSPACE)
 
 TOOL_SPECS: list[dict[str, Any]] = [
@@ -1991,6 +2117,13 @@ TOOL_SPECS: list[dict[str, Any]] = [
                 "gmail", "chatgpt", "reddit", "discord_web", "spotify_web", "prime_video"
             ], "description": "Fixed known website ID."}
         }, "required": ["application_id"], "additionalProperties": False},
+    }},
+    {"type": "function", "function": {
+        "name": "open_url",
+        "description": "Open a user-requested website address in the default browser. Accepts full http:// or https:// URLs, or a bare hostname/address such as example.com/path (HTTPS is added automatically). Paths, query strings, and fragments are preserved. Unsafe schemes, embedded usernames/passwords, shell syntax, and invalid addresses are rejected. No shell is used and no approval is required.",
+        "parameters": {"type": "object", "properties": {
+            "url": {"type": "string", "description": "HTTP/HTTPS URL or bare hostname/address, optionally including a path, query string, or fragment."}
+        }, "required": ["url"], "additionalProperties": False},
     }},
     {"type": "function", "function": {
         "name": "get_current_time",
@@ -2504,6 +2637,8 @@ def execute_tool(tool_name: str, arguments: dict[str, Any], session_id: str = ""
         return launch_desktop_app(str(arguments.get("application_id", "")))
     if tool_name == "open_web_app":
         return open_web_app(str(arguments.get("application_id", "")))
+    if tool_name == "open_url":
+        return open_url(str(arguments.get("url", "")))
     if tool_name == "get_current_time":
         return get_current_time()
     if tool_name == "system_status":
@@ -2840,6 +2975,7 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
         return {"session_id": session_id, "reply": reply, "pending_action": None}
     direct_app_id = _direct_desktop_app_intent(content) if not images else None
     direct_web_app_id = _direct_web_app_intent(content) if not images else None
+    direct_url = _direct_url_target(content) if not images else None
     if direct_app_id:
         app_name = str(DESKTOP_APP_CATALOG.get(direct_app_id, {}).get("name") or direct_app_id.removeprefix("desktop:"))
         try:
@@ -2863,6 +2999,15 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
             reply = str(result.get("message") or f"Opening {result.get('application', 'the website')}.")
         except (ValueError, OSError) as exc:
             reply = f"I couldn't open that website: {exc}"
+        session["messages"].append({"role": "assistant", "content": reply})
+        session["updated_at"] = time.time()
+        return {"session_id": session_id, "reply": reply, "pending_action": None}
+    if direct_url:
+        try:
+            result = open_url(direct_url)
+            reply = str(result.get("message") or f"Opening {result.get('url', direct_url)} in your default browser.")
+        except (ValueError, OSError) as exc:
+            reply = f"I couldn't open that address: {exc}"
         session["messages"].append({"role": "assistant", "content": reply})
         session["updated_at"] = time.time()
         return {"session_id": session_id, "reply": reply, "pending_action": None}
