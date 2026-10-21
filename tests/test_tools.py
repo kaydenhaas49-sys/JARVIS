@@ -511,6 +511,32 @@ class DesktopAppAliasTests(unittest.TestCase):
                 )
 
 
+    def test_direct_short_alias_launches_the_installed_app(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            applications = Path(temporary) / "applications"
+            applications.mkdir()
+            (applications / "tor-browser.desktop").write_text(
+                "[Desktop Entry]\\nType=Application\\nName=Tor Browser\\n"
+                "Exec=torbrowser-launcher\\n",
+                encoding="utf-8",
+            )
+            session = {"messages": [], "updated_at": 0.0}
+            opened = {"ok": True, "application": "Tor Browser", "message": "Opening Tor Browser."}
+            with mock.patch.object(jarvis, "_get_session", return_value=session), \\
+                 mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \\
+                 mock.patch.object(jarvis.platform, "system", return_value="Linux"), \\
+                 mock.patch.object(jarvis, "launch_desktop_app", return_value=opened) as launch, \\
+                 mock.patch.object(jarvis, "agent_turn") as agent_turn:
+                result = jarvis.handle_chat({
+                    "session_id": "direct-tor-alias-test",
+                    "message": "Open Tor",
+                })
+        launch.assert_called_once_with("desktop:tor-browser")
+        agent_turn.assert_not_called()
+        self.assertIsNone(result["pending_action"])
+        self.assertEqual(result["reply"], "Opening Tor Browser.")
+
+
 class WebAddressRoutingTests(unittest.TestCase):
     def test_normalizes_bare_addresses_and_preserves_paths_queries_and_fragments(self) -> None:
         cases = (
@@ -582,6 +608,7 @@ class WebAddressRoutingTests(unittest.TestCase):
         open_address.assert_called_once_with("example.com/docs")
         agent_turn.assert_not_called()
         self.assertIsNone(result["pending_action"])
+        self.assertFalse(jarvis.is_approval_required("open_url"))
         self.assertEqual(result["reply"], "Opening address.")
         self.assertEqual([row["role"] for row in session["messages"]], ["user", "assistant"])
 
