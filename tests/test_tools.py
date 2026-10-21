@@ -495,7 +495,7 @@ class DesktopAppAliasTests(unittest.TestCase):
                 "Exec=firefox\n",
                 encoding="utf-8",
             )
-            with mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \\
+            with mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \
                  mock.patch.object(jarvis.platform, "system", return_value="Linux"):
                 self.assertEqual(
                     jarvis._direct_desktop_app_intent("Open Tor"),
@@ -522,10 +522,10 @@ class DesktopAppAliasTests(unittest.TestCase):
             )
             session = {"messages": [], "updated_at": 0.0}
             opened = {"ok": True, "application": "Tor Browser", "message": "Opening Tor Browser."}
-            with mock.patch.object(jarvis, "_get_session", return_value=session), \\
-                 mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \\
-                 mock.patch.object(jarvis.platform, "system", return_value="Linux"), \\
-                 mock.patch.object(jarvis, "launch_desktop_app", return_value=opened) as launch, \\
+            with mock.patch.object(jarvis, "_get_session", return_value=session), \
+                 mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \
+                 mock.patch.object(jarvis.platform, "system", return_value="Linux"), \
+                 mock.patch.object(jarvis, "launch_desktop_app", return_value=opened) as launch, \
                  mock.patch.object(jarvis, "agent_turn") as agent_turn:
                 result = jarvis.handle_chat({
                     "session_id": "direct-tor-alias-test",
@@ -582,8 +582,8 @@ class WebAddressRoutingTests(unittest.TestCase):
     def test_open_url_uses_an_argument_without_a_shell(self) -> None:
         process = mock.Mock(pid=555)
         address = "https://example.com/docs?mode=full"
-        with mock.patch.object(jarvis.shutil, "which", side_effect=lambda name: "/usr/bin/xdg-open" if name == "xdg-open" else None), \\
-             mock.patch.object(jarvis.subprocess, "Popen", return_value=process) as popen, \\
+        with mock.patch.object(jarvis.shutil, "which", side_effect=lambda name: "/usr/bin/xdg-open" if name == "xdg-open" else None), \
+             mock.patch.object(jarvis.subprocess, "Popen", return_value=process) as popen, \
              mock.patch.object(jarvis, "_log_dashboard_tool_action") as audit:
             result = jarvis.open_url("example.com/docs?mode=full")
         self.assertTrue(result["ok"])
@@ -596,10 +596,10 @@ class WebAddressRoutingTests(unittest.TestCase):
     def test_direct_chat_address_opens_without_calling_model_or_approval(self) -> None:
         session = {"messages": [], "updated_at": 0.0}
         opened = {"ok": True, "url": "https://example.com/docs", "message": "Opening address."}
-        with mock.patch.object(jarvis, "_get_session", return_value=session), \\
-             mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[]), \\
-             mock.patch.object(jarvis.platform, "system", return_value="Linux"), \\
-             mock.patch.object(jarvis, "open_url", return_value=opened) as open_address, \\
+        with mock.patch.object(jarvis, "_get_session", return_value=session), \
+             mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[]), \
+             mock.patch.object(jarvis.platform, "system", return_value="Linux"), \
+             mock.patch.object(jarvis, "open_url", return_value=opened) as open_address, \
              mock.patch.object(jarvis, "agent_turn") as agent_turn:
             result = jarvis.handle_chat({
                 "session_id": "direct-address-test",
