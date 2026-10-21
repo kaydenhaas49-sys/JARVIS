@@ -486,13 +486,13 @@ class DesktopAppAliasTests(unittest.TestCase):
             applications = Path(temporary) / "applications"
             applications.mkdir()
             (applications / "tor-browser.desktop").write_text(
-                "[Desktop Entry]\\nType=Application\\nName=Tor Browser\\n"
-                "Exec=torbrowser-launcher\\n",
+                "[Desktop Entry]\nType=Application\nName=Tor Browser\n"
+                "Exec=torbrowser-launcher\n",
                 encoding="utf-8",
             )
             (applications / "mozilla-firefox.desktop").write_text(
-                "[Desktop Entry]\\nType=Application\\nName=Mozilla Firefox\\n"
-                "Exec=firefox\\n",
+                "[Desktop Entry]\nType=Application\nName=Mozilla Firefox\n"
+                "Exec=firefox\n",
                 encoding="utf-8",
             )
             with mock.patch.object(jarvis, "_desktop_application_dirs", return_value=[applications]), \\
@@ -516,8 +516,8 @@ class DesktopAppAliasTests(unittest.TestCase):
             applications = Path(temporary) / "applications"
             applications.mkdir()
             (applications / "tor-browser.desktop").write_text(
-                "[Desktop Entry]\\nType=Application\\nName=Tor Browser\\n"
-                "Exec=torbrowser-launcher\\n",
+                "[Desktop Entry]\nType=Application\nName=Tor Browser\n"
+                "Exec=torbrowser-launcher\n",
                 encoding="utf-8",
             )
             session = {"messages": [], "updated_at": 0.0}
