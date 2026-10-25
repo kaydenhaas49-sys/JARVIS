@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from voice import WakeWordManager, missing_voice_packages, transcribe_audio_bytes
+from voice import STT_MODEL_NAME, WakeWordManager, missing_voice_packages, transcribe_audio_bytes
 from jarvis_tts import status as tts_voice_status, synthesize_wav as synthesize_tts_wav
 
 
@@ -999,8 +999,11 @@ def available_models(base_url: str | None = None) -> dict[str, Any]:
         native = is_ollama_native_api(endpoint)
         request_url = ollama_api_url(endpoint, "tags") if native else endpoint + "/models"
         request = urllib.request.Request(request_url, headers={"Accept": "application/json"})
-        # Never forward a configured credential while probing a different local endpoint.
-        if API_KEY and endpoint == requested:
+        # Only send credentials to the configured model endpoint. A caller can supply
+        # a different base_url to /api/models; that endpoint must never receive our API key.
+        # Auto-detected fallback endpoints also remain unauthenticated unless explicitly
+        # configured as BASE_URL.
+        if API_KEY and endpoint == normalize_model_base_url(BASE_URL):
             request.add_header("Authorization", "Bearer " + API_KEY)
         try:
             with urllib.request.urlopen(request, timeout=3) as response:
@@ -1319,7 +1322,7 @@ VOICE_WAKEWORD = WakeWordManager()
 def voice_status() -> dict[str, Any]:
     status = VOICE_WAKEWORD.status()
     status["speech_to_text_available"] = not missing_voice_packages()
-    status["stt_model"] = os.environ.get("JARVIS_STT_MODEL", "base.en")
+    status["stt_model"] = STT_MODEL_NAME
     return status
 
 
