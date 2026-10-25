@@ -457,7 +457,8 @@
     // Any click anywhere in the interface can call down an electrical strike.
     // Work out the click direction relative to the sphere, then draw the bolt on
     // the sphere canvas so the energy always arcs inward toward the hologram.
-    document.addEventListener("click", (event) => {
+    if (container._lightningClickHandler) document.removeEventListener("click", container._lightningClickHandler);
+    const handleLightningClick = (event) => {
       if (event.button !== 0 || event.detail === 0) return;
       const bounds = container.getBoundingClientRect();
       const cx = bounds.left + bounds.width / 2;
@@ -504,7 +505,9 @@
       void container.offsetWidth;
       container.classList.add("sphere-impact");
       window.setTimeout(() => container.classList.remove("sphere-impact"), 430);
-    }, { passive: true });
+    };
+    container._lightningClickHandler = handleLightningClick;
+    document.addEventListener("click", handleLightningClick, { passive: true });
     resizeCanvas();
     draw(performance.now());
     if (typeof ResizeObserver !== "undefined") {
