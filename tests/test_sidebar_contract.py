@@ -42,8 +42,8 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
                 self.assertNotIn(forbidden.casefold(), self.html.casefold())
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
-        self.assertIn('href="/chat.css?v=4"', self.html)
-        self.assertIn('src="/chat.js?v=4"', self.html)
+        self.assertIn('href="/chat.css?v=5"', self.html)
+        self.assertIn('src="/chat.js?v=5"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
@@ -54,7 +54,10 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertNotIn('<span>J</span>', self.html)
         self.assertNotIn('<span class="typing-orb" aria-hidden="true">J</span>', self.html)
         self.assertIn('.sphere-canvas', self.css)
-        self.assertIn('820', self.js)
+        self.assertIn("const count = 520", self.js)
+        self.assertIn("const orbitBands = [", self.js)
+        self.assertIn("function orbitPoint(", self.js)
+        self.assertIn("A concentrated heart of light", self.js)
         self.assertIn('createRadialGradient', self.js)
         self.assertIn('function createDotSphere()', self.js)
         self.assertNotIn('textContent = "J"', self.js)
