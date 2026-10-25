@@ -1,3 +1,7 @@
+> **Branch scope note:** This plan originated in an earlier full-dashboard build. This branch is intentionally the chat-only JARVIS Next variant. Its active browser assets are static/index.html, static/chat.css, and static/chat.js; the old lcars-reference legacy app and unused full-dashboard CSS/JS have been removed. Treat plan steps referring to the former System Console/sidebar or removed files as historical backlog, not as present features. Inspect the current tree before attempting a task.
+
+---
+
 # JARVIS — GPT-6 Luna Repair, Voice Fix & Sidebar Redesign Brief
 
 ## The actual goal

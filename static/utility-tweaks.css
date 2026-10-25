@@ -1,2 +1,0 @@
-.toast-region { z-index: 100 !important; }
-.utility-overlay button:focus-visible, .utility-overlay input:focus-visible, .utility-overlay textarea:focus-visible { outline: 2px solid var(--lcars-cyan); outline-offset: 2px; }

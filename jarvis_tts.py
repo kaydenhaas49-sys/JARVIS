@@ -1,7 +1,6 @@
 """Local Piper speech synthesis for JARVIS.
 
-The model and its JSON sidecar are kept in lcars-reference/ so the existing
-voice artifact remains easy to identify. Speech stays on this machine.
+The optional Piper model and its JSON sidecar are kept in voice-assets/. Speech stays on this machine.
 """
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ from typing import Any
 
 APP_DIR = Path(__file__).resolve().parent
 MODEL_PATH = Path(os.environ.get(
-    "JARVIS_TTS_MODEL", str(APP_DIR / "lcars-reference" / "jarvis-high.onnx")
+    "JARVIS_TTS_MODEL", str(APP_DIR / "voice-assets" / "jarvis-high.onnx")
 )).expanduser().resolve()
 CONFIG_PATH = Path(str(MODEL_PATH) + ".json")
 _MAX_TEXT_CHARS = 3_500

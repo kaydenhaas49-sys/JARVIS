@@ -1225,11 +1225,11 @@ def _openclaw_request(path: str, method: str = "GET", payload: dict[str, Any] | 
                       timeout: float = 12.0) -> dict[str, Any]:
     status = openclaw_config_status()
     if not status["configured"]:
-        raise ValueError("OpenClaw is not configured. Open System Console → OpenClaw and save the server URL and token first.")
+        raise ValueError("OpenClaw is not configured. Follow OPENCLAW_SETUP.md to configure the private server URL and Gateway token.")
     secret = _read_json_object(OPENCLAW_SECRET_PATH)
     token = secret.get("token")
     if not isinstance(token, str) or not token.strip():
-        raise ValueError("OpenClaw token is missing. Save it again in System Console → OpenClaw.")
+        raise ValueError("OpenClaw token is missing. Follow OPENCLAW_SETUP.md to configure the Gateway token.")
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(
         status["base_url"] + path,
@@ -1288,7 +1288,7 @@ def delegate_to_openclaw(task: str, session_id: str = "") -> dict[str, Any]:
         raise ValueError("Delegated task must contain 1–8,000 characters.")
     status = openclaw_config_status()
     if not status["configured"]:
-        raise ValueError("OpenClaw is not configured. Save and test it in System Console → OpenClaw before delegating.")
+        raise ValueError("OpenClaw is not configured. Follow OPENCLAW_SETUP.md to configure the private server URL and Gateway token before delegating.")
     import hashlib
     stable_user = "jarvis:" + hashlib.sha256((session_id or secrets.token_urlsafe(12)).encode("utf-8")).hexdigest()[:32]
     result = _openclaw_request("/chat/completions", method="POST", payload={
@@ -2967,7 +2967,7 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
         if not openclaw_config_status().get("configured"):
             reply = (
                 "This looks like a job for OpenClaw, but the OpenClaw connection is not configured yet. "
-                "Open System Console → OpenClaw, save the private server URL and Gateway token, test the "
+                "Follow OPENCLAW_SETUP.md to configure the private server URL and Gateway token, then "
                 "connection, then resend this request. I have not sent it anywhere."
             )
             session["messages"].append({"role": "assistant", "content": reply})
