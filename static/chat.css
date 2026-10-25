@@ -526,3 +526,10 @@ body[data-orb-pulse="error"] .background-orb .orb-aura { background: radial-grad
 @media (prefers-reduced-motion: reduce) {
   .background-orb[data-pulse] { animation: none !important; }
 }
+
+/* Keep the background sphere permanently present; activity changes its glow, not visibility. */
+.background-orb {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: .40 !important;
+}
