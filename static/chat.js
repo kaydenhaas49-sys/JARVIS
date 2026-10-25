@@ -394,16 +394,20 @@
     }
 
     function makeBoltPath(start, end, steps, jitter) {
+      // Stepped-leader geometry: uneven segment lengths and sharp, non-periodic
+      // lateral jumps keep the bolt from looking like a smooth zig-zag ribbon.
       const dx = end.x - start.x;
       const dy = end.y - start.y;
       const length = Math.hypot(dx, dy) || 1;
       const nx = -dy / length;
       const ny = dx / length;
       const points = [{ x: start.x, y: start.y }];
-      for (let i = 1; i < steps; i += 1) {
-        const t = i / steps;
-        const taper = Math.sin(Math.PI * t);
-        const offset = (Math.random() - 0.5) * jitter * taper;
+      const count = Math.max(4, steps);
+      let t = 0;
+      for (let i = 1; i < count; i += 1) {
+        t = Math.min(.96, t + (.45 + Math.random() * 1.1) / count);
+        const taper = Math.pow(Math.sin(Math.PI * t), .58);
+        const offset = (Math.random() - .5) * jitter * 1.8 * taper;
         points.push({ x: start.x + dx * t + nx * offset, y: start.y + dy * t + ny * offset });
       }
       points.push({ x: end.x, y: end.y });
@@ -426,19 +430,22 @@
       }
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.shadowColor = "#5b9dff";
-      ctx.shadowBlur = 19 * widthScale;
-      ctx.strokeStyle = "rgba(61,119,255,.8)";
-      ctx.lineWidth = 6 * widthScale;
+      // Three distinct layers: broad ionized corona, blue plasma sheath,
+      // and a very thin white-hot conductive channel.
+      ctx.shadowColor = "#3278ff";
+      ctx.shadowBlur = 24 * widthScale;
+      ctx.strokeStyle = "rgba(35,91,255,.32)";
+      ctx.lineWidth = 9 * widthScale;
       ctx.stroke();
-      ctx.shadowColor = "#8beaff";
-      ctx.shadowBlur = 8 * widthScale;
-      ctx.strokeStyle = "rgba(114,224,255,.98)";
-      ctx.lineWidth = 2 * widthScale;
+      ctx.shadowColor = "#4dbbff";
+      ctx.shadowBlur = 10 * widthScale;
+      ctx.strokeStyle = "rgba(83,190,255,.92)";
+      ctx.lineWidth = 2.6 * widthScale;
       ctx.stroke();
-      ctx.shadowBlur = 3 * widthScale;
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = .75 * widthScale;
+      ctx.shadowColor = "#dffaff";
+      ctx.shadowBlur = 4 * widthScale;
+      ctx.strokeStyle = "rgba(255,255,255,.99)";
+      ctx.lineWidth = .78 * widthScale;
       ctx.stroke();
     }
 
@@ -501,57 +508,57 @@
       const hitDistance = Math.min(shell * 0.63, Math.max(8, distance * 0.72));
       const end = { x: cx + ux * hitDistance, y: cy + uy * hitDistance };
       const start = { x: event.clientX, y: event.clientY };
-      const path = makeBoltPath(start, end, Math.max(10, Math.floor(Math.hypot(end.x - start.x, end.y - start.y) / 13)), 30);
+      const path = makeBoltPath(start, end, Math.max(12, Math.floor(Math.hypot(end.x - start.x, end.y - start.y) / 9)), 23);
       const branchPaths = [];
       const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
       const ndx = (end.x - start.x) / length;
       const ndy = (end.y - start.y) / length;
       const nx = -ndy;
       const ny = ndx;
-      for (let b = 0; b < 5 + Math.floor(Math.random() * 3); b += 1) {
+      for (let b = 0; b < 3 + Math.floor(Math.random() * 3); b += 1) {
         const startAt = 0.18 + Math.random() * 0.66;
         const point = path[Math.min(path.length - 2, Math.floor(startAt * (path.length - 1)))];
         const sign = Math.random() < .5 ? -1 : 1;
-        const branchLength = 18 + Math.random() * Math.min(70, length * .22);
+        const branchLength = 22 + Math.random() * Math.min(94, length * .28);
         const branchEnd = {
           x: point.x + ndx * branchLength * (.25 + Math.random() * .3) + nx * sign * branchLength,
           y: point.y + ndy * branchLength * (.25 + Math.random() * .3) + ny * sign * branchLength,
         };
         branchPaths.push({
           startAt,
-          path: makeBoltPath(point, branchEnd, 3 + Math.floor(Math.random() * 3), branchLength * .35),
+          path: makeBoltPath(point, branchEnd, 4 + Math.floor(Math.random() * 4), branchLength * .48),
         });
       }
       const localEnd = { x: end.x - bounds.left, y: end.y - bounds.top };
       const scarAngle = Math.atan2(bounds.height / 2 - localEnd.y, bounds.width / 2 - localEnd.x);
-      const scarLength = Math.min(58 + Math.random() * 34, shell * .55);
+      const scarLength = Math.min(72 + Math.random() * 54, shell * .68);
       const scarPoints = [{ x: localEnd.x, y: localEnd.y }];
       let scarX = localEnd.x; let scarY = localEnd.y;
-      for (let p = 0; p < 5; p += 1) {
+      for (let p = 0; p < 7; p += 1) {
         const angle = scarAngle + (Math.random() - .5) * 1.25;
-        scarX += Math.cos(angle) * scarLength / 5; scarY += Math.sin(angle) * scarLength / 5;
+        scarX += Math.cos(angle) * scarLength / 7; scarY += Math.sin(angle) * scarLength / 7;
         scarPoints.push({ x: scarX, y: scarY });
       }
       const scarBranches = [];
-      for (let branch = 0; branch < 3; branch += 1) {
+      for (let branch = 0; branch < 5; branch += 1) {
         const base = scarPoints[1 + Math.floor(Math.random() * (scarPoints.length - 2))];
         const angle = scarAngle + (Math.random() < .5 ? -1 : 1) * (.65 + Math.random() * .85);
         scarBranches.push([base, { x: base.x + Math.cos(angle) * (12 + Math.random() * 24), y: base.y + Math.sin(angle) * (12 + Math.random() * 24) }]);
       }
       damageScars.push({ points: scarPoints, branches: scarBranches, bornAt: performance.now(), strength: .65 + damageLevel * .35 });
       if (damageScars.length > 6) damageScars.shift();
-      damageLevel = Math.min(1, damageLevel + .22); damageFlashUntil = performance.now() + 720; lastDamageTime = performance.now();
+      damageLevel = Math.min(1, damageLevel + .30); damageFlashUntil = performance.now() + 1150; lastDamageTime = performance.now();
       lightningStrikes.push({
         startedAt: performance.now(),
-        duration: 430 + Math.random() * 100,
+        duration: 560 + Math.random() * 140,
         path, branchPaths, endX: end.x, endY: end.y,
       });
       if (lightningStrikes.length > 3) lightningStrikes.shift();
       container.classList.remove("sphere-impact");
       void container.offsetWidth;
       container.classList.add("sphere-impact", "system-damaged"); ui.core?.classList.add("system-damaged");
-      window.setTimeout(() => container.classList.remove("sphere-impact"), 430);
-      window.setTimeout(() => { if (performance.now() >= damageFlashUntil) { container.classList.remove("system-damaged"); ui.core?.classList.remove("system-damaged"); } }, 820);
+      window.setTimeout(() => container.classList.remove("sphere-impact"), 520);
+      window.setTimeout(() => { if (performance.now() >= damageFlashUntil) { container.classList.remove("system-damaged"); ui.core?.classList.remove("system-damaged"); } }, 1250);
       // Keep the response purely visual: no toast or text message on impact.
     };
     container._lightningClickHandler = handleLightningClick;
