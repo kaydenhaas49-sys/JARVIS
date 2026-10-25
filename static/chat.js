@@ -552,13 +552,7 @@
       container.classList.add("sphere-impact", "system-damaged"); ui.core?.classList.add("system-damaged");
       window.setTimeout(() => container.classList.remove("sphere-impact"), 430);
       window.setTimeout(() => { if (performance.now() >= damageFlashUntil) { container.classList.remove("system-damaged"); ui.core?.classList.remove("system-damaged"); } }, 820);
-      const reactions = [
-        "Sir, that was an electrical discharge. Systems integrity is degrading.",
-        "Warning: holographic matrix destabilized. I would advise against repeating that.",
-        "Power fluctuation detected. Recalibrating… please stop attacking the interface.",
-        "That was quite unnecessary, sir. I am compensating for the damage now."
-      ];
-      showToast(damageLevel >= .65 ? "CRITICAL: hologram stability at " + Math.round((1 - damageLevel * .55) * 100) + "%. " + reactions[Math.floor(Math.random() * reactions.length)] : reactions[Math.floor(Math.random() * reactions.length)], damageLevel >= .65 ? "error" : "");
+      // Keep the response purely visual: no toast or text message on impact.
     };
     container._lightningClickHandler = handleLightningClick;
     document.addEventListener("click", handleLightningClick, { passive: true });
