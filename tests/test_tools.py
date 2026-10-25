@@ -20,6 +20,13 @@ import voice
 
 
 class VoiceSupportTests(unittest.TestCase):
+    def test_voice_status_reports_the_same_stt_model_used_by_transcription(self) -> None:
+        with mock.patch.object(jarvis.VOICE_WAKEWORD, "status", return_value={}), \
+             mock.patch.object(jarvis, "missing_voice_packages", return_value=[]):
+            status = jarvis.voice_status()
+
+        self.assertEqual(status["stt_model"], voice.STT_MODEL_NAME)
+
     def test_voice_audio_mime_types_map_to_supported_containers(self) -> None:
         for mime_type, suffix in (
             ("audio/webm;codecs=opus", ".webm"),
@@ -264,6 +271,32 @@ class ModelAndMemoryTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     jarvis.normalize_model_base_url(value)
+
+    def test_model_discovery_never_sends_api_key_to_caller_selected_endpoint(self) -> None:
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"data": []}'
+        with mock.patch.object(jarvis, "BASE_URL", "https://trusted-model.example/v1"), \
+             mock.patch.object(jarvis, "API_KEY", "private-test-api-key"), \
+             mock.patch("jarvis.urllib.request.urlopen", return_value=response) as urlopen:
+            result = jarvis.available_models("https://attacker.example/v1")
+
+        self.assertTrue(result["available"])
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://attacker.example/v1/models")
+        self.assertIsNone(request.get_header("Authorization"))
+
+    def test_model_discovery_sends_api_key_only_to_configured_endpoint(self) -> None:
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"data": []}'
+        configured_endpoint = "https://trusted-model.example/v1"
+        with mock.patch.object(jarvis, "BASE_URL", configured_endpoint), \
+             mock.patch.object(jarvis, "API_KEY", "private-test-api-key"), \
+             mock.patch("jarvis.urllib.request.urlopen", return_value=response) as urlopen:
+            jarvis.available_models(configured_endpoint)
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, configured_endpoint + "/models")
+        self.assertEqual(request.get_header("Authorization"), "Bearer private-test-api-key")
 
     def test_model_id_validation(self) -> None:
         self.assertEqual(jarvis.validate_model_id("qwen3-coder:30b"), "qwen3-coder:30b")
