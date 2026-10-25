@@ -42,7 +42,7 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
                 self.assertNotIn(forbidden.casefold(), self.html.casefold())
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
-        self.assertIn('href="/chat.css?v=5"', self.html)
+        self.assertIn('href="/chat.css?v=6"', self.html)
         self.assertIn('src="/chat.js?v=5"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
