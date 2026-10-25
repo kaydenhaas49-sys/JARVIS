@@ -42,8 +42,8 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
                 self.assertNotIn(forbidden.casefold(), self.html.casefold())
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
-        self.assertIn('href="/chat.css?v=9"', self.html)
-        self.assertIn('src="/chat.js?v=10"', self.html)
+        self.assertIn('href="/chat.css?v=10"', self.html)
+        self.assertIn('src="/chat.js?v=11"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
@@ -63,6 +63,10 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertIn('id = "jarvisLightningOverlay"', self.js)
         self.assertIn("event.clientX, y: event.clientY", self.js)
         self.assertIn("function makeBoltPath(", self.js)
+        self.assertIn("Stepped-leader geometry", self.js)
+        self.assertIn("white-hot conductive channel", self.js)
+        self.assertIn(".dot-sphere.system-damaged::after", self.css)
+        self.assertIn("@keyframes jarvis-scan-tear", self.css)
         self.assertIn("function drawBoltPath(", self.js)
         self.assertIn("damageScars", self.js)
         self.assertIn("damageLevel = Math.min(1, damageLevel + .22)", self.js)
