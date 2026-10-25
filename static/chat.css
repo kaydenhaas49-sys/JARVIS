@@ -272,3 +272,18 @@ button:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); ou
 @media (max-width: 600px) {
   .core { width: min(86vw, 54vh, 430px); }
 }
+
+
+/* Electrical damage: the hologram buckles, flickers, and keeps visible fracture scars. */
+.dot-sphere.system-damaged { animation: jarvis-damaged .72s steps(2,end); }
+.dot-sphere.system-damaged::before { background: radial-gradient(circle at 48% 44%, rgba(115,202,255,.22), rgba(34,83,170,.10) 45%, rgba(7,19,29,0) 74%); }
+.core.system-damaged { filter: drop-shadow(0 0 26px rgba(78,165,255,.42)) saturate(.72); }
+@keyframes jarvis-damaged {
+  0%,100% { transform: translate(0,0) skewX(0); filter: brightness(1); }
+  12% { transform: translate(-3px,1px) skewX(-1.5deg); filter: brightness(2.1) hue-rotate(12deg); }
+  25% { transform: translate(2px,-2px) skewX(1deg); filter: brightness(.55) contrast(1.6); }
+  42% { transform: translate(-1px,0) skewX(0); filter: brightness(1.7); }
+  58% { transform: translate(3px,1px) skewX(-.8deg); filter: brightness(.72) hue-rotate(-18deg); }
+  76% { transform: translate(-1px,-1px); filter: brightness(1.25); }
+}
+@media (prefers-reduced-motion: reduce) { .dot-sphere.system-damaged { animation: none; } }
