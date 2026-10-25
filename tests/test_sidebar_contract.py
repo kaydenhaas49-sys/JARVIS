@@ -43,7 +43,7 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
         self.assertIn('href="/chat.css?v=8"', self.html)
-        self.assertIn('src="/chat.js?v=7"', self.html)
+        self.assertIn('src="/chat.js?v=8"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
@@ -59,7 +59,11 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertIn("function orbitPoint(", self.js)
         self.assertIn("A concentrated heart of light", self.js)
         self.assertIn("const lightningStrikes = []", self.js)
-        self.assertIn('document.addEventListener("click"', self.js)
+        self.assertIn('document.addEventListener("click", handleLightningClick', self.js)
+        self.assertIn('id = "jarvisLightningOverlay"', self.js)
+        self.assertIn("event.clientX, y: event.clientY", self.js)
+        self.assertIn("function makeBoltPath(", self.js)
+        self.assertIn("function drawBoltPath(", self.js)
         self.assertIn("Any click anywhere in the interface", self.js)
         self.assertIn("hologram-impact", self.css)
         self.assertIn(".welcome h1", self.css)
