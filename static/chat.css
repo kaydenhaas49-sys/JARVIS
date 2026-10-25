@@ -168,3 +168,33 @@ button:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); ou
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; scroll-behavior:auto!important; transition-duration:.01ms!important; }
 }
+
+
+/* JARVIS holographic form: warm data bands around a luminous central core. */
+.core::after {
+  background: rgba(255, 164, 75, .19);
+  box-shadow: 0 0 28px rgba(255, 156, 66, .09);
+}
+.dot-sphere::before {
+  background: radial-gradient(circle at 48% 44%,
+    rgba(255, 195, 111, .10),
+    rgba(246, 125, 47, .035) 45%,
+    rgba(7, 19, 29, 0) 74%);
+  box-shadow: 0 0 54px rgba(255, 151, 65, .08);
+}
+.sphere-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 7px rgba(255, 163, 81, .07));
+}
+.core[data-state="listening"] {
+  filter: drop-shadow(0 0 16px rgba(255, 187, 97, .20));
+}
+.core[data-state="thinking"] {
+  filter: drop-shadow(0 0 13px rgba(255, 151, 76, .14));
+}
+.core[data-state="speaking"] {
+  filter: drop-shadow(0 0 22px rgba(255, 180, 91, .24));
+}
