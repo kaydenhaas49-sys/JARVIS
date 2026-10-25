@@ -45,30 +45,13 @@
     container._sphereResizeObserver?.disconnect();
     container.replaceChildren();
 
-    document.getElementById("jarvisLightningOverlay")?.remove();
-    const lightningCanvas = document.createElement("canvas");
-    lightningCanvas.id = "jarvisLightningOverlay";
-    lightningCanvas.setAttribute("aria-hidden", "true");
-    lightningCanvas.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:9999";
-    document.body.appendChild(lightningCanvas);
-    const lightningContext = lightningCanvas.getContext("2d", { alpha: true });
-    if (!lightningContext) { lightningCanvas.remove(); return; }
-    const resizeLightningCanvas = () => {
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      lightningCanvas.width = Math.round(window.innerWidth * ratio);
-      lightningCanvas.height = Math.round(window.innerHeight * ratio);
-      lightningCanvas.style.width = window.innerWidth + "px";
-      lightningCanvas.style.height = window.innerHeight + "px";
-      lightningContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-    };
-    resizeLightningCanvas();
 
     const canvas = document.createElement("canvas");
     canvas.className = "sphere-canvas";
     canvas.setAttribute("aria-hidden", "true");
     container.appendChild(canvas);
     const context = canvas.getContext("2d", { alpha: true });
-    if (!context) { lightningCanvas.remove(); return; }
+    if (!context) return;
 
     // JARVIS's Age of Ultron form: a bright central core inside segmented,
     // independently orbiting data bands. Fibonacci points form a translucent shell.
@@ -100,11 +83,6 @@
     let pixelRatio = 1;
     let rotation = 0;
     let lastFrame = 0;
-    const lightningStrikes = [];
-    const damageScars = [];
-    let damageLevel = 0;
-    let damageFlashUntil = 0;
-    let lastDamageTime = 0;
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
 
     function resizeCanvas() {
@@ -165,13 +143,11 @@
       const cx = width / 2;
       const cy = height / 2;
       const radius = Math.min(width, height) * 0.36;
-      if (damageLevel > 0 && now - lastDamageTime > 6500) damageLevel = Math.max(0, damageLevel - delta * 0.025);
-      const damageJolt = now < damageFlashUntil && !reducedMotion ? (Math.random() - 0.5) * 0.018 : 0;
       const activityPulse = state === "speaking" ? (reducedMotion ? 0.025 : 0.055 + Math.sin(time * 8.2) * 0.025)
         : state === "listening" ? (reducedMotion ? 0.025 : 0.025 + Math.sin(time * 5.4) * 0.016)
         : state === "thinking" ? (reducedMotion ? 0.015 : 0.02 + Math.sin(time * 3.1) * 0.008)
         : (reducedMotion ? 0 : Math.sin(time * 1.25) * 0.007);
-      const shellScale = 1 + activityPulse + damageJolt - damageLevel * 0.012;
+      const shellScale = 1 + activityPulse;
       const coreRadius = radius * 0.70;
 
       context.clearRect(0, 0, width, height);
@@ -346,30 +322,8 @@
       context.fill();
 
 
-      // Persistent branching fractures remain where each strike hit the hologram.
-      for (let i = damageScars.length - 1; i >= 0; i -= 1) {
-        const scar = damageScars[i];
-        const age = (now - scar.bornAt) / 1000;
-        if (age > 7) { damageScars.splice(i, 1); continue; }
-        const fade = Math.min(1, (7 - age) / 2) * scar.strength;
-        context.save(); context.globalCompositeOperation = "lighter";
-        context.globalAlpha = fade * (now < damageFlashUntil && !reducedMotion ? (Math.random() > .22 ? 1 : .16) : .7);
-        context.lineCap = "round"; context.lineJoin = "round";
-        const drawFracture = (points, widthScale = 1) => {
-          context.beginPath(); context.moveTo(points[0].x, points[0].y);
-          for (let p = 1; p < points.length; p += 1) context.lineTo(points[p].x, points[p].y);
-          context.strokeStyle = "rgba(70,166,255,.95)"; context.lineWidth = 3.2 * widthScale;
-          context.shadowColor = "#287bff"; context.shadowBlur = 13; context.stroke();
-          context.strokeStyle = "rgba(232,250,255,.98)"; context.lineWidth = .85 * widthScale;
-          context.shadowColor = "#b9f4ff"; context.shadowBlur = 4; context.stroke();
-        };
-        drawFracture(scar.points); scar.branches.forEach((branch) => drawFracture(branch, .48));
-        context.restore();
-      }
-
       // The lightning is rendered on a viewport-wide transparent layer so its
       // first pixel can originate at the actual mouse position anywhere on screen.
-      drawLightning(now);
 
       // Small cardinal markers make the projection feel instrument-built.
       context.shadowBlur = 0;
@@ -386,183 +340,8 @@
         context.stroke();
       }
       context.restore();
-      if (lightningCanvas.isConnected) {
-        // Keep the overlay in sync with viewport changes without adding global listeners.
-        if (lightningCanvas.width !== Math.round(window.innerWidth * pixelRatio) ||
-            lightningCanvas.height !== Math.round(window.innerHeight * pixelRatio)) resizeLightningCanvas();
-      }
     }
 
-    function makeBoltPath(start, end, steps, jitter) {
-      // Stepped-leader geometry: uneven segment lengths and sharp, non-periodic
-      // lateral jumps keep the bolt from looking like a smooth zig-zag ribbon.
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const nx = -dy / length;
-      const ny = dx / length;
-      const points = [{ x: start.x, y: start.y }];
-      const count = Math.max(4, steps);
-      let t = 0;
-      for (let i = 1; i < count; i += 1) {
-        t = Math.min(.96, t + (.45 + Math.random() * 1.1) / count);
-        const taper = Math.pow(Math.sin(Math.PI * t), .58);
-        const offset = (Math.random() - .5) * jitter * 1.8 * taper;
-        points.push({ x: start.x + dx * t + nx * offset, y: start.y + dy * t + ny * offset });
-      }
-      points.push({ x: end.x, y: end.y });
-      return points;
-    }
-
-    function drawBoltPath(ctx, points, progress, widthScale = 1) {
-      if (progress <= 0) return;
-      const last = Math.min(points.length - 1, Math.max(1, Math.ceil((points.length - 1) * progress)));
-      const partial = (points.length - 1) * progress;
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i <= last; i += 1) {
-        if (i === last && partial < i) {
-          const before = points[i - 1];
-          const after = points[i];
-          const t = partial - (i - 1);
-          ctx.lineTo(before.x + (after.x - before.x) * t, before.y + (after.y - before.y) * t);
-        } else ctx.lineTo(points[i].x, points[i].y);
-      }
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      // Three distinct layers: broad ionized corona, blue plasma sheath,
-      // and a very thin white-hot conductive channel.
-      ctx.shadowColor = "#3278ff";
-      ctx.shadowBlur = 24 * widthScale;
-      ctx.strokeStyle = "rgba(35,91,255,.32)";
-      ctx.lineWidth = 9 * widthScale;
-      ctx.stroke();
-      ctx.shadowColor = "#4dbbff";
-      ctx.shadowBlur = 10 * widthScale;
-      ctx.strokeStyle = "rgba(83,190,255,.92)";
-      ctx.lineWidth = 2.6 * widthScale;
-      ctx.stroke();
-      ctx.shadowColor = "#dffaff";
-      ctx.shadowBlur = 4 * widthScale;
-      ctx.strokeStyle = "rgba(255,255,255,.99)";
-      ctx.lineWidth = .78 * widthScale;
-      ctx.stroke();
-    }
-
-    function drawLightning(now) {
-      const ctx = lightningContext;
-      const viewWidth = window.innerWidth;
-      const viewHeight = window.innerHeight;
-      ctx.clearRect(0, 0, viewWidth, viewHeight);
-      for (let i = lightningStrikes.length - 1; i >= 0; i -= 1) {
-        const strike = lightningStrikes[i];
-        const ageMs = now - strike.startedAt;
-        const age = ageMs / strike.duration;
-        if (age >= 1) { lightningStrikes.splice(i, 1); continue; }
-        // A fast leader travels from the cursor to the sphere, followed by
-        // two or three shorter, weaker return-stroke flashes.
-        const leader = Math.min(1, ageMs / 105);
-        const flicker = ageMs < 105 ? 1 : (ageMs < 165 ? .94 : ageMs < 205 ? .38 : ageMs < 240 ? .88 : .18);
-        const fade = Math.max(0, 1 - Math.max(0, age - .34) / .66);
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        ctx.globalAlpha = flicker * fade;
-        drawBoltPath(ctx, strike.path, leader);
-        for (const branch of strike.branchPaths) {
-          const branchProgress = Math.max(0, Math.min(1, (leader - branch.startAt) / (1 - branch.startAt)));
-          drawBoltPath(ctx, branch.path, branchProgress, .48);
-        }
-        const pulse = Math.max(0, 1 - ageMs / 320);
-        if (pulse > 0) {
-          const glow = ctx.createRadialGradient(strike.endX, strike.endY, 0, strike.endX, strike.endY, 52 * pulse + 2);
-          glow.addColorStop(0, "rgba(255,255,255," + (.95 * pulse) + ")");
-          glow.addColorStop(.18, "rgba(115,222,255," + (.75 * pulse) + ")");
-          glow.addColorStop(1, "rgba(40,104,255,0)");
-          ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(strike.endX, strike.endY, 52 * pulse + 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-    }
-
-
-    // Any click anywhere in the interface can call down an electrical strike.
-    // Work out the click direction relative to the sphere, then draw the bolt on
-    // the sphere canvas so the energy always arcs inward toward the hologram.
-    if (container._lightningClickHandler) document.removeEventListener("click", container._lightningClickHandler);
-    const handleLightningClick = (event) => {
-      if (event.button !== 0 || event.detail === 0) return;
-      const bounds = container.getBoundingClientRect();
-      const cx = bounds.left + bounds.width / 2;
-      const cy = bounds.top + bounds.height / 2;
-      const shell = Math.min(bounds.width, bounds.height) * 0.36;
-      const dx = event.clientX - cx;
-      const dy = event.clientY - cy;
-      const distance = Math.hypot(dx, dy) || 1;
-      const ux = dx / distance;
-      const uy = dy / distance;
-      // The endpoint is on the near-facing edge of the hologram, so the bolt
-      // visibly travels from the real cursor position into JARVIS.
-      const hitDistance = Math.min(shell * 0.63, Math.max(8, distance * 0.72));
-      const end = { x: cx + ux * hitDistance, y: cy + uy * hitDistance };
-      const start = { x: event.clientX, y: event.clientY };
-      const path = makeBoltPath(start, end, Math.max(12, Math.floor(Math.hypot(end.x - start.x, end.y - start.y) / 9)), 23);
-      const branchPaths = [];
-      const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
-      const ndx = (end.x - start.x) / length;
-      const ndy = (end.y - start.y) / length;
-      const nx = -ndy;
-      const ny = ndx;
-      for (let b = 0; b < 3 + Math.floor(Math.random() * 3); b += 1) {
-        const startAt = 0.18 + Math.random() * 0.66;
-        const point = path[Math.min(path.length - 2, Math.floor(startAt * (path.length - 1)))];
-        const sign = Math.random() < .5 ? -1 : 1;
-        const branchLength = 22 + Math.random() * Math.min(94, length * .28);
-        const branchEnd = {
-          x: point.x + ndx * branchLength * (.25 + Math.random() * .3) + nx * sign * branchLength,
-          y: point.y + ndy * branchLength * (.25 + Math.random() * .3) + ny * sign * branchLength,
-        };
-        branchPaths.push({
-          startAt,
-          path: makeBoltPath(point, branchEnd, 4 + Math.floor(Math.random() * 4), branchLength * .48),
-        });
-      }
-      const localEnd = { x: end.x - bounds.left, y: end.y - bounds.top };
-      const scarAngle = Math.atan2(bounds.height / 2 - localEnd.y, bounds.width / 2 - localEnd.x);
-      const scarLength = Math.min(72 + Math.random() * 54, shell * .68);
-      const scarPoints = [{ x: localEnd.x, y: localEnd.y }];
-      let scarX = localEnd.x; let scarY = localEnd.y;
-      for (let p = 0; p < 7; p += 1) {
-        const angle = scarAngle + (Math.random() - .5) * 1.25;
-        scarX += Math.cos(angle) * scarLength / 7; scarY += Math.sin(angle) * scarLength / 7;
-        scarPoints.push({ x: scarX, y: scarY });
-      }
-      const scarBranches = [];
-      for (let branch = 0; branch < 5; branch += 1) {
-        const base = scarPoints[1 + Math.floor(Math.random() * (scarPoints.length - 2))];
-        const angle = scarAngle + (Math.random() < .5 ? -1 : 1) * (.65 + Math.random() * .85);
-        scarBranches.push([base, { x: base.x + Math.cos(angle) * (12 + Math.random() * 24), y: base.y + Math.sin(angle) * (12 + Math.random() * 24) }]);
-      }
-      damageScars.push({ points: scarPoints, branches: scarBranches, bornAt: performance.now(), strength: .65 + damageLevel * .35 });
-      if (damageScars.length > 6) damageScars.shift();
-      damageLevel = Math.min(1, damageLevel + .30); damageFlashUntil = performance.now() + 1150; lastDamageTime = performance.now();
-      lightningStrikes.push({
-        startedAt: performance.now(),
-        duration: 560 + Math.random() * 140,
-        path, branchPaths, endX: end.x, endY: end.y,
-      });
-      if (lightningStrikes.length > 3) lightningStrikes.shift();
-      container.classList.remove("sphere-impact");
-      void container.offsetWidth;
-      container.classList.add("sphere-impact", "system-damaged"); ui.core?.classList.add("system-damaged");
-      window.setTimeout(() => container.classList.remove("sphere-impact"), 520);
-      window.setTimeout(() => { if (performance.now() >= damageFlashUntil) { container.classList.remove("system-damaged"); ui.core?.classList.remove("system-damaged"); } }, 1250);
-      // Keep the response purely visual: no toast or text message on impact.
-    };
-    container._lightningClickHandler = handleLightningClick;
-    document.addEventListener("click", handleLightningClick, { passive: true });
     resizeCanvas();
     draw(performance.now());
     if (typeof ResizeObserver !== "undefined") {
