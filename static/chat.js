@@ -42,6 +42,7 @@
     const container = document.getElementById("dotSphere");
     if (!container) return;
     if (container._sphereFrame) window.cancelAnimationFrame(container._sphereFrame);
+    container._sphereResizeObserver?.disconnect();
     container.replaceChildren();
 
     const canvas = document.createElement("canvas");
@@ -51,7 +52,9 @@
     const context = canvas.getContext("2d", { alpha: true });
     if (!context) return;
 
-    const count = 820;
+    // JARVIS's Age of Ultron form: a bright central core inside segmented,
+    // independently orbiting data bands. Fibonacci points form a translucent shell.
+    const count = 520;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const points = [];
     for (let i = 0; i < count; i += 1) {
@@ -66,6 +69,13 @@
         sparkle: ((i * 37) % 101) / 100,
       });
     }
+
+    const orbitBands = [
+      { radius: 0.91, tiltX: 0.58, tiltY: -0.40, phase: 0.2, speed: 0.24, segments: 74, gapEvery: 8, width: 1.25 },
+      { radius: 1.12, tiltX: -0.33, tiltY: 0.72, phase: 1.9, speed: -0.17, segments: 88, gapEvery: 9, width: 1.05 },
+      { radius: 1.27, tiltX: 0.93, tiltY: 0.20, phase: 3.5, speed: 0.11, segments: 64, gapEvery: 7, width: 0.9 },
+      { radius: 0.73, tiltX: -0.72, tiltY: -0.55, phase: 4.4, speed: -0.31, segments: 56, gapEvery: 8, width: 0.8 },
+    ];
 
     let width = 0;
     let height = 0;
@@ -86,56 +96,167 @@
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     }
 
+    function project(x, y, z, cx, cy, scale) {
+      const perspective = 1 / (1.12 - z * 0.16);
+      return {
+        x: cx + x * scale * perspective,
+        y: cy + y * scale * perspective,
+        z,
+        perspective,
+      };
+    }
+
+    function orbitPoint(theta, band, nowSeconds, state, cx, cy, radius) {
+      const activityMultiplier = state === "listening" ? 1.85
+        : state === "thinking" ? 2.65
+        : state === "speaking" ? 1.5 : 1;
+      const motion = reducedMotion ? 0 : nowSeconds * band.speed * activityMultiplier;
+      const angle = theta + motion + band.phase;
+      const wobbleX = reducedMotion ? band.tiltX : band.tiltX + Math.sin(nowSeconds * 0.31 + band.phase) * 0.12;
+      const wobbleY = reducedMotion ? band.tiltY : band.tiltY + Math.cos(nowSeconds * 0.23 + band.phase) * 0.15;
+      const x0 = Math.cos(angle) * radius * band.radius;
+      const y0 = Math.sin(angle) * radius * band.radius;
+
+      const y1 = y0 * Math.cos(wobbleX);
+      const z1 = y0 * Math.sin(wobbleX);
+      const x2 = x0 * Math.cos(wobbleY) + z1 * Math.sin(wobbleY);
+      const z2 = -x0 * Math.sin(wobbleY) + z1 * Math.cos(wobbleY);
+      const roll = reducedMotion ? 0 : Math.sin(nowSeconds * 0.13 + band.phase) * 0.10;
+      const x3 = x2 * Math.cos(roll) - y1 * Math.sin(roll);
+      const y3 = x2 * Math.sin(roll) + y1 * Math.cos(roll);
+      return project(x3, y3, z2 / Math.max(radius, 1), cx, cy, 1);
+    }
+
     function draw(now) {
       container._sphereFrame = window.requestAnimationFrame(draw);
       if (document.hidden) return;
       const delta = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0.016;
       lastFrame = now;
       const state = ui.core?.dataset.state || "idle";
-      const speed = reducedMotion ? 0 : state === "listening" ? 1.05 : state === "thinking" ? 0.86 : state === "speaking" ? 0.42 : 0.22;
+      const speed = reducedMotion ? 0
+        : state === "listening" ? 1.05
+        : state === "thinking" ? 0.82
+        : state === "speaking" ? 0.61 : 0.20;
       rotation += delta * speed;
       const time = now / 1000;
       const cx = width / 2;
       const cy = height / 2;
-      const radius = Math.min(width, height) * 0.385;
-      const breath = reducedMotion ? 1 : 1 + (state === "speaking" ? Math.sin(time * 3.4) * 0.035 : state === "listening" ? Math.sin(time * 6.5) * 0.014 : Math.sin(time * 1.3) * 0.008);
-      context.clearRect(0, 0, width, height);
+      const radius = Math.min(width, height) * 0.285;
+      const activityPulse = state === "speaking" ? (reducedMotion ? 0.025 : 0.055 + Math.sin(time * 8.2) * 0.025)
+        : state === "listening" ? (reducedMotion ? 0.025 : 0.025 + Math.sin(time * 5.4) * 0.016)
+        : state === "thinking" ? (reducedMotion ? 0.015 : 0.02 + Math.sin(time * 3.1) * 0.008)
+        : (reducedMotion ? 0 : Math.sin(time * 1.25) * 0.007);
+      const shellScale = 1 + activityPulse;
+      const coreRadius = radius * 0.70;
 
-      const aura = context.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * 1.22);
-      aura.addColorStop(0, state === "listening" ? "rgba(87,226,255,.15)" : "rgba(59,176,225,.105)");
-      aura.addColorStop(0.56, "rgba(39,128,203,.045)");
-      aura.addColorStop(1, "rgba(26,90,154,0)");
+      context.clearRect(0, 0, width, height);
+      context.save();
+      context.globalCompositeOperation = "lighter";
+
+      const aura = context.createRadialGradient(cx, cy, radius * 0.06, cx, cy, radius * 1.48);
+      aura.addColorStop(0, state === "listening" ? "rgba(255,193,96,.20)" : "rgba(255,174,65,.15)");
+      aura.addColorStop(0.32, "rgba(247,136,42,.07)");
+      aura.addColorStop(0.72, "rgba(79,165,212,.035)");
+      aura.addColorStop(1, "rgba(24,78,117,0)");
       context.fillStyle = aura;
       context.beginPath();
-      context.arc(cx, cy, radius * 1.22, 0, Math.PI * 2);
+      context.arc(cx, cy, radius * 1.48, 0, Math.PI * 2);
       context.fill();
 
-      // Fine orbital lines sit behind the particle shell, like a faint magnetic field.
+      // A few quiet construction arcs give the hologram a technical, calibrated feel.
       context.save();
       context.translate(cx, cy);
       for (let i = 0; i < 3; i += 1) {
+        const tilt = 0.21 + i * 0.19;
         context.save();
-        context.rotate(rotation * (i % 2 ? -0.38 : 0.27) + i * 1.04);
-        context.scale(1, 0.23 + i * 0.075);
+        context.rotate((reducedMotion ? 0 : time * (i % 2 ? -0.045 : 0.035)) + i * 0.94);
+        context.scale(1, tilt);
         context.beginPath();
-        context.arc(0, 0, radius * (1.04 + i * 0.035), 0, Math.PI * 2);
-        context.strokeStyle = i === 0 ? "rgba(123,225,247,.15)" : "rgba(105,159,231,.075)";
-        context.lineWidth = i === 0 ? 0.85 : 0.65;
+        context.arc(0, 0, radius * (1.33 + i * 0.045), 0, Math.PI * 2);
+        context.strokeStyle = "rgba(111,196,226,.09)";
+        context.lineWidth = 0.65;
         context.stroke();
         context.restore();
       }
       context.restore();
 
-      const cosY = Math.cos(rotation);
-      const sinY = Math.sin(rotation);
-      const tilt = 0.24 + Math.sin(time * 0.38) * 0.06;
+      // Segmented orbital data bands. Their changing plane and individual speeds
+      // create the layered mechanical motion of the film's JARVIS hologram.
+      for (let b = 0; b < orbitBands.length; b += 1) {
+        const band = orbitBands[b];
+        const step = (Math.PI * 2) / band.segments;
+        const drawBandPoint = (theta) => {
+          const point = orbitPoint(theta, band, time, state, cx, cy, radius);
+          return {
+            x: cx + (point.x - cx) * shellScale,
+            y: cy + (point.y - cy) * shellScale,
+            z: point.z,
+            perspective: point.perspective,
+          };
+        };
+        for (let i = 0; i < band.segments; i += 1) {
+          if ((i + b * 3) % band.gapEvery === band.gapEvery - 1) continue;
+          const a = i * step;
+          const p1 = drawBandPoint(a);
+          const p2 = drawBandPoint(a + step * 0.79);
+          const depth = (p1.z + p2.z) * 0.5;
+          const alpha = 0.17 + ((depth + 1) * 0.5) * 0.60;
+          const isHighlight = (i + b * 7) % 13 === 0 || depth > 0.64;
+          context.beginPath();
+          context.moveTo(p1.x, p1.y);
+          context.lineTo(p2.x, p2.y);
+          context.strokeStyle = isHighlight
+            ? "rgba(255,226,164," + Math.min(0.96, alpha + 0.18) + ")"
+            : "rgba(255,167,81," + alpha + ")";
+          context.lineWidth = band.width * (isHighlight ? 1.18 : 1);
+          context.lineCap = "round";
+          context.shadowColor = isHighlight ? "rgba(255,198,111,.8)" : "rgba(248,136,58,.52)";
+          context.shadowBlur = isHighlight ? 5 : 2;
+          context.stroke();
+        }
+
+        // Bright packets travel around the bands like data moving between layers.
+        const packetCount = b === 2 ? 2 : 3;
+        for (let p = 0; p < packetCount; p += 1) {
+          const direction = band.speed >= 0 ? 1 : -1;
+          const theta = time * band.speed * (state === "listening" ? 2.3 : state === "thinking" ? 3 : state === "speaking" ? 1.7 : 1)
+            + band.phase + p * (Math.PI * 2 / packetCount) * direction;
+          const point = orbitPoint(theta, band, time * 0.72, state, cx, cy, radius);
+          const x = cx + (point.x - cx) * shellScale;
+          const y = cy + (point.y - cy) * shellScale;
+          const r = (p === 0 ? 2.2 : 1.35) * Math.max(0.7, point.perspective);
+          context.beginPath();
+          context.arc(x, y, r, 0, Math.PI * 2);
+          context.fillStyle = p === 0 ? "rgba(255,244,210,.98)" : "rgba(255,185,97,.85)";
+          context.shadowColor = "rgba(255,194,105,.98)";
+          context.shadowBlur = p === 0 ? 12 : 6;
+          context.fill();
+          // Tiny trailing data ticks reinforce the sense of something flowing.
+          for (let trail = 1; trail <= 2; trail += 1) {
+            const previous = orbitPoint(theta - direction * trail * 0.055, band, time * 0.72, state, cx, cy, radius);
+            context.beginPath();
+            context.arc(cx + (previous.x - cx) * shellScale, cy + (previous.y - cy) * shellScale, Math.max(0.55, r * (0.55 - trail * 0.12)), 0, Math.PI * 2);
+            context.fillStyle = "rgba(255,171,82," + (0.7 / trail) + ")";
+            context.shadowBlur = 3;
+            context.fill();
+          }
+        }
+      }
+      context.restore();
+
+      // The spherical shell is a volume of luminous data points, not a solid ball.
+      const cosY = Math.cos(rotation * 0.8);
+      const sinY = Math.sin(rotation * 0.8);
+      const tilt = 0.25 + (reducedMotion ? 0 : Math.sin(time * 0.34) * 0.045);
       const cosX = Math.cos(tilt);
       const sinX = Math.sin(tilt);
       const projected = [];
       for (const point of points) {
-        const rippleStrength = state === "listening" ? 0.036 : state === "thinking" ? 0.027 : state === "speaking" ? 0.022 : 0.009;
-        const ripple = reducedMotion ? 0 : Math.sin(time * (state === "listening" ? 5.6 : 2.1) + point.phase) * rippleStrength;
-        const scale = (1 + ripple) * breath;
+        const rippleStrength = state === "listening" ? 0.025
+          : state === "thinking" ? 0.019
+          : state === "speaking" ? 0.032 : 0.008;
+        const ripple = reducedMotion ? 0 : Math.sin(time * (state === "speaking" ? 7.4 : state === "listening" ? 4.8 : 1.8) + point.phase) * rippleStrength;
+        const scale = (1 + ripple) * shellScale;
         const px = point.x * scale;
         const py = point.y * scale;
         const pz = point.z * scale;
@@ -145,8 +266,8 @@
         const depthZ = py * sinX + rz * cosX;
         const perspective = 1 / (1.12 - depthZ * 0.19);
         projected.push({
-          x: cx + rx * radius * perspective,
-          y: cy + ry * radius * perspective,
+          x: cx + rx * coreRadius * perspective,
+          y: cy + ry * coreRadius * perspective,
           depth: (depthZ + 1) * 0.5,
           phase: point.phase,
           sparkle: point.sparkle,
@@ -156,16 +277,16 @@
 
       for (const point of projected) {
         const depth = point.depth;
-        const twinkle = reducedMotion ? 0.9 : 0.78 + 0.22 * Math.sin(time * (state === "speaking" ? 5.1 : 2.2) + point.phase);
-        const size = (0.55 + depth * 1.75 + point.sparkle * 0.35) * twinkle;
-        const opacity = Math.min(1, (0.14 + depth * 0.78) * twinkle);
+        const twinkle = reducedMotion ? 0.92 : 0.76 + 0.24 * Math.sin(time * (state === "speaking" ? 8 : 2.1) + point.phase);
+        const size = (0.45 + depth * 1.15 + point.sparkle * 0.26) * twinkle;
+        const opacity = Math.min(0.98, (0.13 + depth * 0.82) * twinkle);
         context.globalAlpha = opacity;
-        if (depth > 0.77 && point.sparkle > 0.42) {
-          context.fillStyle = "#e9fdff";
-          context.shadowColor = state === "listening" ? "rgba(112,240,255,.95)" : "rgba(91,216,245,.72)";
-          context.shadowBlur = depth > 0.9 ? 9 : 5;
+        if (depth > 0.78 && point.sparkle > 0.39) {
+          context.fillStyle = "#fff1cf";
+          context.shadowColor = "rgba(255,197,112,.95)";
+          context.shadowBlur = depth > 0.9 ? 8 : 4;
         } else {
-          context.fillStyle = depth > 0.52 ? "#83eaf7" : depth > 0.22 ? "#568fc5" : "#496fa9";
+          context.fillStyle = depth > 0.52 ? "#ffbf70" : depth > 0.22 ? "#d88748" : "#7a8b9b";
           context.shadowBlur = 0;
         }
         context.beginPath();
@@ -175,21 +296,50 @@
       context.globalAlpha = 1;
       context.shadowBlur = 0;
 
-      // A soft highlight on the upper edge gives the sphere a glassy, dimensional finish.
-      const highlight = context.createRadialGradient(cx - radius * 0.35, cy - radius * 0.46, 0, cx - radius * 0.18, cy - radius * 0.12, radius * 1.05);
-      highlight.addColorStop(0, "rgba(204,251,255,.07)");
-      highlight.addColorStop(0.36, "rgba(106,213,245,.025)");
-      highlight.addColorStop(1, "rgba(106,213,245,0)");
-      context.fillStyle = highlight;
+      // A concentrated heart of light sits at the center of the orbital assembly.
+      const corePulse = reducedMotion ? 1 : 1 + Math.sin(time * (state === "speaking" ? 8.2 : 2.1)) * (state === "speaking" ? 0.10 : 0.035);
+      const heartRadius = radius * 0.105 * corePulse;
+      const heartGlow = context.createRadialGradient(cx, cy, 0, cx, cy, heartRadius * 4.7);
+      heartGlow.addColorStop(0, "rgba(255,250,220,.96)");
+      heartGlow.addColorStop(0.14, "rgba(255,202,125,.74)");
+      heartGlow.addColorStop(0.42, "rgba(255,147,68,.18)");
+      heartGlow.addColorStop(1, "rgba(255,147,68,0)");
+      context.fillStyle = heartGlow;
       context.beginPath();
-      context.arc(cx, cy, radius, 0, Math.PI * 2);
+      context.arc(cx, cy, heartRadius * 4.7, 0, Math.PI * 2);
       context.fill();
+      context.beginPath();
+      context.arc(cx, cy, heartRadius, 0, Math.PI * 2);
+      context.fillStyle = "rgba(255,244,206,.97)";
+      context.shadowColor = "rgba(255,175,84,.98)";
+      context.shadowBlur = 13;
+      context.fill();
+      context.beginPath();
+      context.arc(cx, cy, heartRadius * 0.42, 0, Math.PI * 2);
+      context.fillStyle = "#ffffff";
+      context.shadowBlur = 5;
+      context.fill();
+
+      // Small cardinal markers make the projection feel instrument-built.
+      context.shadowBlur = 0;
+      context.lineWidth = 0.8;
+      context.strokeStyle = "rgba(255,205,137,.43)";
+      const markRadius = radius * 0.58;
+      for (let i = 0; i < 8; i += 1) {
+        const angle = i * Math.PI / 4 + (reducedMotion ? 0 : time * 0.035);
+        const r1 = markRadius;
+        const r2 = markRadius + (i % 2 === 0 ? 7 : 4);
+        context.beginPath();
+        context.moveTo(cx + Math.cos(angle) * r1, cy + Math.sin(angle) * r1);
+        context.lineTo(cx + Math.cos(angle) * r2, cy + Math.sin(angle) * r2);
+        context.stroke();
+      }
+      context.restore();
     }
 
     resizeCanvas();
     draw(performance.now());
     if (typeof ResizeObserver !== "undefined") {
-      container._sphereResizeObserver?.disconnect();
       container._sphereResizeObserver = new ResizeObserver(resizeCanvas);
       container._sphereResizeObserver.observe(container);
     }
