@@ -82,6 +82,7 @@
     let pixelRatio = 1;
     let rotation = 0;
     let lastFrame = 0;
+    const lightningStrikes = [];
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
 
     function resizeCanvas() {
@@ -141,7 +142,7 @@
       const time = now / 1000;
       const cx = width / 2;
       const cy = height / 2;
-      const radius = Math.min(width, height) * 0.285;
+      const radius = Math.min(width, height) * 0.36;
       const activityPulse = state === "speaking" ? (reducedMotion ? 0.025 : 0.055 + Math.sin(time * 8.2) * 0.025)
         : state === "listening" ? (reducedMotion ? 0.025 : 0.025 + Math.sin(time * 5.4) * 0.016)
         : state === "thinking" ? (reducedMotion ? 0.015 : 0.02 + Math.sin(time * 3.1) * 0.008)
