@@ -43,7 +43,7 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
 
     def test_only_the_minimal_chat_frontend_is_loaded(self) -> None:
         self.assertIn('href="/chat.css?v=9"', self.html)
-        self.assertIn('src="/chat.js?v=9"', self.html)
+        self.assertIn('src="/chat.js?v=10"', self.html)
         for legacy_asset in ('src="/app.js', 'src="/advanced-tools.js', 'src="/hud-status.js',
                              'src="/jarvis-orb.js'):
             with self.subTest(legacy_asset=legacy_asset):
@@ -66,7 +66,8 @@ class ChatOnlyInterfaceTests(unittest.TestCase):
         self.assertIn("function drawBoltPath(", self.js)
         self.assertIn("damageScars", self.js)
         self.assertIn("damageLevel = Math.min(1, damageLevel + .22)", self.js)
-        self.assertIn("hologram stability", self.js)
+        self.assertIn("Keep the response purely visual", self.js)
+        self.assertNotIn("hologram stability", self.js)
         self.assertIn(".dot-sphere.system-damaged", self.css)
         self.assertIn("Any click anywhere in the interface", self.js)
         self.assertIn("hologram-impact", self.css)
