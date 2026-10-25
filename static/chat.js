@@ -403,28 +403,33 @@
     }
 
 
-    canvas.style.cursor = "crosshair";
-    canvas.addEventListener("click", (event) => {
+    // Any click anywhere in the interface can call down an electrical strike.
+    // Work out the click direction relative to the sphere, then draw the bolt on
+    // the sphere canvas so the energy always arcs inward toward the hologram.
+    document.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.detail === 0) return;
       const bounds = canvas.getBoundingClientRect();
       const x = event.clientX - bounds.left - width / 2;
       const y = event.clientY - bounds.top - height / 2;
       const angle = Math.atan2(y, x);
       const shell = Math.min(width, height) * 0.36;
+      const fromOutside = shell * (1.42 + Math.random() * 0.18);
+      const hitRadius = shell * (0.56 + Math.random() * 0.12);
       lightningStrikes.push({
         startedAt: performance.now(),
-        duration: 600 + Math.random() * 180,
-        startX: width / 2 + Math.cos(angle) * shell * 1.48,
-        startY: height / 2 + Math.sin(angle) * shell * 1.48,
-        endX: width / 2 + Math.cos(angle) * shell * 0.63,
-        endY: height / 2 + Math.sin(angle) * shell * 0.63,
-        branches: 3 + Math.floor(Math.random() * 4),
+        duration: 520 + Math.random() * 260,
+        startX: width / 2 + Math.cos(angle) * fromOutside,
+        startY: height / 2 + Math.sin(angle) * fromOutside,
+        endX: width / 2 + Math.cos(angle) * hitRadius,
+        endY: height / 2 + Math.sin(angle) * hitRadius,
+        branches: 4 + Math.floor(Math.random() * 4),
       });
-      if (lightningStrikes.length > 3) lightningStrikes.shift();
+      if (lightningStrikes.length > 4) lightningStrikes.shift();
       container.classList.remove("sphere-impact");
       void container.offsetWidth;
       container.classList.add("sphere-impact");
       window.setTimeout(() => container.classList.remove("sphere-impact"), 430);
-    });
+    }, { passive: true });
 
     resizeCanvas();
     draw(performance.now());
