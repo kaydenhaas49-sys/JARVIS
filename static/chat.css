@@ -223,14 +223,8 @@ button:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); ou
   overflow: visible;
   touch-action: manipulation;
 }
-.dot-sphere.sphere-impact {
-  animation: hologram-impact .42s ease-out;
-}
-@keyframes hologram-impact {
-  0% { filter: brightness(1.85) drop-shadow(0 0 28px rgba(82, 205, 255, .95)); transform: scale(1.025); }
-  38% { filter: brightness(1.35) drop-shadow(0 0 38px rgba(69, 167, 255, .65)); transform: scale(.99); }
-  100% { filter: brightness(1) drop-shadow(0 0 0 rgba(69, 167, 255, 0)); transform: scale(1); }
-}
+
+
 .core[data-state="thinking"] { filter: drop-shadow(0 0 20px rgba(76, 166, 255, .25)); }
 .core[data-state="listening"] { filter: drop-shadow(0 0 26px rgba(255, 181, 82, .24)); }
 .core[data-state="speaking"] { filter: drop-shadow(0 0 30px rgba(255, 181, 82, .30)); }
@@ -257,12 +251,8 @@ button:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); ou
   transition: filter .16s ease, transform .16s ease;
 }
 .dot-sphere { overflow: visible; touch-action: manipulation; }
-.dot-sphere.sphere-impact { animation: hologram-impact .43s ease-out; }
-@keyframes hologram-impact {
-  0% { filter: brightness(1.85) drop-shadow(0 0 28px rgba(82,205,255,.95)); transform: scale(1.025); }
-  38% { filter: brightness(1.35) drop-shadow(0 0 38px rgba(69,167,255,.65)); transform: scale(.99); }
-  100% { filter: brightness(1) drop-shadow(0 0 0 rgba(69,167,255,0)); transform: scale(1); }
-}
+
+
 .core[data-state="thinking"] { filter: drop-shadow(0 0 20px rgba(76,166,255,.25)); }
 .core[data-state="listening"] { filter: drop-shadow(0 0 26px rgba(255,181,82,.24)); }
 .core[data-state="speaking"] { filter: drop-shadow(0 0 30px rgba(255,181,82,.30)); }
@@ -271,66 +261,4 @@ button:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); ou
 }
 @media (max-width: 600px) {
   .core { width: min(86vw, 54vh, 430px); }
-}
-
-
-/* Electrical damage: the hologram buckles, flickers, and keeps visible fracture scars. */
-.dot-sphere.system-damaged { animation: jarvis-damaged .72s steps(2,end); }
-.dot-sphere.system-damaged::before { background: radial-gradient(circle at 48% 44%, rgba(115,202,255,.22), rgba(34,83,170,.10) 45%, rgba(7,19,29,0) 74%); }
-.core.system-damaged { filter: drop-shadow(0 0 26px rgba(78,165,255,.42)) saturate(.72); }
-@keyframes jarvis-damaged {
-  0%,100% { transform: translate(0,0) skewX(0); filter: brightness(1); }
-  12% { transform: translate(-3px,1px) skewX(-1.5deg); filter: brightness(2.1) hue-rotate(12deg); }
-  25% { transform: translate(2px,-2px) skewX(1deg); filter: brightness(.55) contrast(1.6); }
-  42% { transform: translate(-1px,0) skewX(0); filter: brightness(1.7); }
-  58% { transform: translate(3px,1px) skewX(-.8deg); filter: brightness(.72) hue-rotate(-18deg); }
-  76% { transform: translate(-1px,-1px); filter: brightness(1.25); }
-}
-@media (prefers-reduced-motion: reduce) { .dot-sphere.system-damaged { animation: none; } }
-
-
-/* Cinematic electrical failure: hard scanline tears, power sag, and unstable recovery. */
-.dot-sphere.system-damaged {
-  animation: jarvis-damaged 1.08s steps(2, end);
-  filter: contrast(1.18) saturate(.72);
-}
-.dot-sphere.system-damaged::after {
-  content: "";
-  position: absolute;
-  inset: 8% 0;
-  pointer-events: none;
-  opacity: .52;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 7px,
-    rgba(142,220,255,.18) 8px,
-    rgba(255,255,255,.06) 9px,
-    transparent 12px 19px
-  );
-  mix-blend-mode: screen;
-  animation: jarvis-scan-tear .22s steps(2, end) infinite;
-}
-.core.system-damaged {
-  filter: drop-shadow(0 0 32px rgba(75,164,255,.62)) saturate(.55) contrast(1.12);
-}
-@keyframes jarvis-scan-tear {
-  0% { transform: translateX(-2px) scaleY(.98); clip-path: inset(4% 0 82% 0); opacity:.25; }
-  24% { transform: translateX(3px); clip-path: inset(26% 0 55% 0); opacity:.8; }
-  49% { transform: translateX(-5px) scaleY(1.02); clip-path: inset(61% 0 27% 0); opacity:.35; }
-  73% { transform: translateX(2px); clip-path: inset(80% 0 8% 0); opacity:.7; }
-  100% { transform: translateX(0); clip-path: inset(0 0 0 0); opacity:.2; }
-}
-@keyframes jarvis-damaged {
-  0%,100% { transform: translate(0,0) skewX(0); filter: brightness(1) contrast(1); }
-  7% { transform: translate(-4px,1px) skewX(-2deg); filter: brightness(2.5) contrast(1.7) hue-rotate(15deg); }
-  14% { transform: translate(3px,-2px) skewX(1.5deg); filter: brightness(.25) contrast(2.2); }
-  22% { transform: translate(-1px,1px); filter: brightness(1.9) contrast(1.5); }
-  31% { transform: translate(5px,0) skewX(-1deg); filter: brightness(.48) contrast(1.8); }
-  43% { transform: translate(-2px,-1px); filter: brightness(1.6) hue-rotate(-22deg); }
-  57% { transform: translate(1px,2px) skewX(1.2deg); filter: brightness(.32) contrast(2); }
-  68% { transform: translate(-3px,0); filter: brightness(1.4); }
-  81% { transform: translate(2px,-1px); filter: brightness(.68) contrast(1.4); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dot-sphere.system-damaged::after { animation: none; }
 }
