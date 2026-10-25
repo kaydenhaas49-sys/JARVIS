@@ -101,6 +101,10 @@
     let rotation = 0;
     let lastFrame = 0;
     const lightningStrikes = [];
+    const damageScars = [];
+    let damageLevel = 0;
+    let damageFlashUntil = 0;
+    let lastDamageTime = 0;
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
 
     function resizeCanvas() {
@@ -161,11 +165,13 @@
       const cx = width / 2;
       const cy = height / 2;
       const radius = Math.min(width, height) * 0.36;
+      if (damageLevel > 0 && now - lastDamageTime > 6500) damageLevel = Math.max(0, damageLevel - delta * 0.025);
+      const damageJolt = now < damageFlashUntil && !reducedMotion ? (Math.random() - 0.5) * 0.018 : 0;
       const activityPulse = state === "speaking" ? (reducedMotion ? 0.025 : 0.055 + Math.sin(time * 8.2) * 0.025)
         : state === "listening" ? (reducedMotion ? 0.025 : 0.025 + Math.sin(time * 5.4) * 0.016)
         : state === "thinking" ? (reducedMotion ? 0.015 : 0.02 + Math.sin(time * 3.1) * 0.008)
         : (reducedMotion ? 0 : Math.sin(time * 1.25) * 0.007);
-      const shellScale = 1 + activityPulse;
+      const shellScale = 1 + activityPulse + damageJolt - damageLevel * 0.012;
       const coreRadius = radius * 0.70;
 
       context.clearRect(0, 0, width, height);
@@ -340,6 +346,27 @@
       context.fill();
 
 
+      // Persistent branching fractures remain where each strike hit the hologram.
+      for (let i = damageScars.length - 1; i >= 0; i -= 1) {
+        const scar = damageScars[i];
+        const age = (now - scar.bornAt) / 1000;
+        if (age > 7) { damageScars.splice(i, 1); continue; }
+        const fade = Math.min(1, (7 - age) / 2) * scar.strength;
+        context.save(); context.globalCompositeOperation = "lighter";
+        context.globalAlpha = fade * (now < damageFlashUntil && !reducedMotion ? (Math.random() > .22 ? 1 : .16) : .7);
+        context.lineCap = "round"; context.lineJoin = "round";
+        const drawFracture = (points, widthScale = 1) => {
+          context.beginPath(); context.moveTo(points[0].x, points[0].y);
+          for (let p = 1; p < points.length; p += 1) context.lineTo(points[p].x, points[p].y);
+          context.strokeStyle = "rgba(70,166,255,.95)"; context.lineWidth = 3.2 * widthScale;
+          context.shadowColor = "#287bff"; context.shadowBlur = 13; context.stroke();
+          context.strokeStyle = "rgba(232,250,255,.98)"; context.lineWidth = .85 * widthScale;
+          context.shadowColor = "#b9f4ff"; context.shadowBlur = 4; context.stroke();
+        };
+        drawFracture(scar.points); scar.branches.forEach((branch) => drawFracture(branch, .48));
+        context.restore();
+      }
+
       // The lightning is rendered on a viewport-wide transparent layer so its
       // first pixel can originate at the actual mouse position anywhere on screen.
       drawLightning(now);
@@ -495,6 +522,25 @@
           path: makeBoltPath(point, branchEnd, 3 + Math.floor(Math.random() * 3), branchLength * .35),
         });
       }
+      const localEnd = { x: end.x - bounds.left, y: end.y - bounds.top };
+      const scarAngle = Math.atan2(bounds.height / 2 - localEnd.y, bounds.width / 2 - localEnd.x);
+      const scarLength = Math.min(58 + Math.random() * 34, shell * .55);
+      const scarPoints = [{ x: localEnd.x, y: localEnd.y }];
+      let scarX = localEnd.x; let scarY = localEnd.y;
+      for (let p = 0; p < 5; p += 1) {
+        const angle = scarAngle + (Math.random() - .5) * 1.25;
+        scarX += Math.cos(angle) * scarLength / 5; scarY += Math.sin(angle) * scarLength / 5;
+        scarPoints.push({ x: scarX, y: scarY });
+      }
+      const scarBranches = [];
+      for (let branch = 0; branch < 3; branch += 1) {
+        const base = scarPoints[1 + Math.floor(Math.random() * (scarPoints.length - 2))];
+        const angle = scarAngle + (Math.random() < .5 ? -1 : 1) * (.65 + Math.random() * .85);
+        scarBranches.push([base, { x: base.x + Math.cos(angle) * (12 + Math.random() * 24), y: base.y + Math.sin(angle) * (12 + Math.random() * 24) }]);
+      }
+      damageScars.push({ points: scarPoints, branches: scarBranches, bornAt: performance.now(), strength: .65 + damageLevel * .35 });
+      if (damageScars.length > 6) damageScars.shift();
+      damageLevel = Math.min(1, damageLevel + .22); damageFlashUntil = performance.now() + 720; lastDamageTime = performance.now();
       lightningStrikes.push({
         startedAt: performance.now(),
         duration: 430 + Math.random() * 100,
@@ -503,8 +549,16 @@
       if (lightningStrikes.length > 3) lightningStrikes.shift();
       container.classList.remove("sphere-impact");
       void container.offsetWidth;
-      container.classList.add("sphere-impact");
+      container.classList.add("sphere-impact", "system-damaged"); ui.core?.classList.add("system-damaged");
       window.setTimeout(() => container.classList.remove("sphere-impact"), 430);
+      window.setTimeout(() => { if (performance.now() >= damageFlashUntil) { container.classList.remove("system-damaged"); ui.core?.classList.remove("system-damaged"); } }, 820);
+      const reactions = [
+        "Sir, that was an electrical discharge. Systems integrity is degrading.",
+        "Warning: holographic matrix destabilized. I would advise against repeating that.",
+        "Power fluctuation detected. Recalibrating… please stop attacking the interface.",
+        "That was quite unnecessary, sir. I am compensating for the damage now."
+      ];
+      showToast(damageLevel >= .65 ? "CRITICAL: hologram stability at " + Math.round((1 - damageLevel * .55) * 100) + "%. " + reactions[Math.floor(Math.random() * reactions.length)] : reactions[Math.floor(Math.random() * reactions.length)], damageLevel >= .65 ? "error" : "");
     };
     container._lightningClickHandler = handleLightningClick;
     document.addEventListener("click", handleLightningClick, { passive: true });
