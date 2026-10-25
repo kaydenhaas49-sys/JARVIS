@@ -321,6 +321,70 @@
       context.shadowBlur = 5;
       context.fill();
 
+
+      // Brief electrical discharges strike the shell when it is clicked.
+      for (let s = lightningStrikes.length - 1; s >= 0; s -= 1) {
+        const strike = lightningStrikes[s];
+        const age = (now - strike.startedAt) / strike.duration;
+        if (age >= 1) { lightningStrikes.splice(s, 1); continue; }
+        const fade = Math.sin(Math.PI * Math.max(0, age));
+        const dx = strike.endX - strike.startX;
+        const dy = strike.endY - strike.startY;
+        const length = Math.hypot(dx, dy) || 1;
+        const nx = -dy / length;
+        const ny = dx / length;
+        const points = [{ x: strike.startX, y: strike.startY }];
+        const steps = Math.max(9, Math.floor(length / 8));
+        for (let i = 1; i < steps; i += 1) {
+          const t = i / steps;
+          const offset = (Math.random() - 0.5) * 25 * Math.sin(Math.PI * t);
+          points.push({ x: strike.startX + dx * t + nx * offset, y: strike.startY + dy * t + ny * offset });
+        }
+        points.push({ x: strike.endX, y: strike.endY });
+        context.save();
+        context.globalCompositeOperation = "lighter";
+        context.globalAlpha = fade;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.shadowColor = "#42baff";
+        context.shadowBlur = 20;
+        context.strokeStyle = "rgba(28,132,255,.9)";
+        context.lineWidth = 6;
+        context.beginPath();
+        points.forEach((p, i) => i ? context.lineTo(p.x, p.y) : context.moveTo(p.x, p.y));
+        context.stroke();
+        context.shadowBlur = 8;
+        context.strokeStyle = "#8eeaff";
+        context.lineWidth = 1.8;
+        context.stroke();
+        context.strokeStyle = "#ffffff";
+        context.lineWidth = 0.7;
+        context.stroke();
+        for (let b = 1; b <= strike.branches; b += 1) {
+          const index = Math.min(points.length - 2, Math.floor(b * points.length / (strike.branches + 2)));
+          const p = points[index];
+          const sign = b % 2 ? 1 : -1;
+          const bx = p.x + nx * sign * (10 + Math.random() * 22);
+          const by = p.y + ny * sign * (10 + Math.random() * 22);
+          context.beginPath();
+          context.moveTo(p.x, p.y);
+          context.lineTo((p.x + bx) / 2 + (Math.random() - .5) * 8, (p.y + by) / 2 + (Math.random() - .5) * 8);
+          context.lineTo(bx, by);
+          context.strokeStyle = "#67d9ff";
+          context.lineWidth = 1;
+          context.stroke();
+        }
+        const glow = context.createRadialGradient(strike.endX, strike.endY, 0, strike.endX, strike.endY, 30);
+        glow.addColorStop(0, "rgba(255,255,255,.95)");
+        glow.addColorStop(.2, "rgba(105,220,255,.8)");
+        glow.addColorStop(1, "rgba(40,125,255,0)");
+        context.fillStyle = glow;
+        context.beginPath();
+        context.arc(strike.endX, strike.endY, 30, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+
       // Small cardinal markers make the projection feel instrument-built.
       context.shadowBlur = 0;
       context.lineWidth = 0.8;
@@ -337,6 +401,30 @@
       }
       context.restore();
     }
+
+
+    canvas.style.cursor = "crosshair";
+    canvas.addEventListener("click", (event) => {
+      const bounds = canvas.getBoundingClientRect();
+      const x = event.clientX - bounds.left - width / 2;
+      const y = event.clientY - bounds.top - height / 2;
+      const angle = Math.atan2(y, x);
+      const shell = Math.min(width, height) * 0.36;
+      lightningStrikes.push({
+        startedAt: performance.now(),
+        duration: 600 + Math.random() * 180,
+        startX: width / 2 + Math.cos(angle) * shell * 1.48,
+        startY: height / 2 + Math.sin(angle) * shell * 1.48,
+        endX: width / 2 + Math.cos(angle) * shell * 0.63,
+        endY: height / 2 + Math.sin(angle) * shell * 0.63,
+        branches: 3 + Math.floor(Math.random() * 4),
+      });
+      if (lightningStrikes.length > 3) lightningStrikes.shift();
+      container.classList.remove("sphere-impact");
+      void container.offsetWidth;
+      container.classList.add("sphere-impact");
+      window.setTimeout(() => container.classList.remove("sphere-impact"), 430);
+    });
 
     resizeCanvas();
     draw(performance.now());
