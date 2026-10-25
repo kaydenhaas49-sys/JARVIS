@@ -2967,8 +2967,8 @@ def handle_chat(payload: dict[str, Any]) -> dict[str, Any]:
         if not openclaw_config_status().get("configured"):
             reply = (
                 "This looks like a job for OpenClaw, but the OpenClaw connection is not configured yet. "
-                "Follow OPENCLAW_SETUP.md to configure the private server URL and Gateway token, then "
-                "connection, then resend this request. I have not sent it anywhere."
+                "Follow OPENCLAW_SETUP.md to configure the private server URL and Gateway token. "
+                "Then resend this request. I have not sent it anywhere."
             )
             session["messages"].append({"role": "assistant", "content": reply})
             session["updated_at"] = time.time()
